@@ -35,7 +35,14 @@
         <div class="header-titles">
           <div class="header-main-title-row">
             <h1 class="header-title">Tiffin Tracker</h1>
-            <span class="month-pill" id="headerMonthPill">OCT 2026</span>
+            <div class="month-selector-group">
+              <button id="headerPrevMonthBtn" class="month-nav-arrow" title="Previous Month">‹</button>
+              <button id="headerMonthPickerBtn" class="month-pill-btn" title="Choose Month & Year">
+                <span id="headerMonthText">OCT 2026</span>
+                <span class="month-caret">▾</span>
+              </button>
+              <button id="headerNextMonthBtn" class="month-nav-arrow" title="Next Month">›</button>
+            </div>
           </div>
           <button id="headerUserIdentityPill" class="user-identity-badge" title="Tap to switch your name">
             <span class="user-avatar-dot"></span>
@@ -180,6 +187,43 @@
           </button>
         </div>
 
+        <!-- Quick Amul Milk Logger for Selected Date (Options: 0.5, 1, 2) -->
+        <div class="card amul-quick-card">
+          <div class="card-header-compact">
+            <div class="card-title-wrap">
+              <span class="icon-bullet">🥛</span>
+              <h3 class="card-title">Amul Milk for <span id="loggerAmulDayLabel">Today</span></h3>
+            </div>
+            <span class="helper-text" id="loggerAmulRateBadge">₹35 / pkt</span>
+          </div>
+          <div class="amul-options-grid">
+            <div class="amul-person-box">
+              <div class="amul-person-header">
+                <span class="stepper-name">Anjan</span>
+                <span class="amul-current-selected" id="loggerDayAnjanVal">0 pkt</span>
+              </div>
+              <div class="amul-pill-group" data-person="anjan">
+                <button class="amul-pill-btn" data-qty="0">Off</button>
+                <button class="amul-pill-btn" data-qty="0.5">0.5</button>
+                <button class="amul-pill-btn" data-qty="1">1</button>
+                <button class="amul-pill-btn" data-qty="2">2</button>
+              </div>
+            </div>
+            <div class="amul-person-box">
+              <div class="amul-person-header">
+                <span class="stepper-name">Saurabh</span>
+                <span class="amul-current-selected" id="loggerDaySaurabhVal">0 pkt</span>
+              </div>
+              <div class="amul-pill-group" data-person="saurabh">
+                <button class="amul-pill-btn" data-qty="0">Off</button>
+                <button class="amul-pill-btn" data-qty="0.5">0.5</button>
+                <button class="amul-pill-btn" data-qty="1">1</button>
+                <button class="amul-pill-btn" data-qty="2">2</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Roommates Daily Meal Cards -->
         <div class="roommates-logger-grid" id="roommatesLoggerGrid">
           <!-- Dynamically populated Roommate Meal Cards -->
@@ -313,7 +357,7 @@
         <div class="card sheet-wrapper-card">
           <div class="sheet-toolbar">
             <div class="sheet-info">
-              <h2 class="section-title">October 2026 Master Matrix</h2>
+              <h2 class="section-title" id="sheetMatrixTitle">October 2026 Master Matrix</h2>
               <p class="section-subtitle">Click meal cells to cycle: <span class="kbd">Off</span> ➜ <span class="kbd">Half</span> ➜ <span class="kbd">Full</span>. Click sabzi cell to edit dish name.</p>
             </div>
             <div class="sheet-actions">
@@ -324,10 +368,22 @@
             </div>
           </div>
 
+          <!-- Roommate Column Filter Chips for Mobile & Focused View -->
+          <div class="sheet-filter-chips" id="sheetFilterChips">
+            <button class="sheet-filter-btn active" data-filter="all">All Flatmates</button>
+            <button class="sheet-filter-btn" data-filter="anjan">Anjan</button>
+            <button class="sheet-filter-btn" data-filter="saurabh">Saurabh</button>
+            <button class="sheet-filter-btn" data-filter="alok">Alok</button>
+            <button class="sheet-filter-btn" data-filter="rohit">Rohit</button>
+            <button class="sheet-filter-btn" data-filter="salman">Salman</button>
+            <button class="sheet-filter-btn" data-filter="chetan">Chetan</button>
+            <button class="sheet-filter-btn" data-filter="hitesh">Hitesh</button>
+          </div>
+
           <!-- Spreadsheet Scroll Container (Sticky Layout Optimized) -->
           <div class="sheet-scroll-container">
             <table class="master-table" id="masterSheetTable">
-              <thead>
+              <thead id="masterSheetHead">
                 <!-- Top Group Header -->
                 <tr class="header-group-row">
                   <th class="th-sticky th-date">Date</th>
@@ -343,7 +399,7 @@
                 </tr>
                 <!-- Sub Columns Header -->
                 <tr class="header-sub-row">
-                  <th class="th-sticky th-date-sub">31 Days</th>
+                  <th class="th-sticky th-date-sub" id="sheetDaysSubLabel">31 Days</th>
                   <th class="th-sticky th-menu-sub">Dish</th>
                   <th>Lunch</th><th>Dinner</th>
                   <th>Lunch</th><th>Dinner</th>
@@ -492,8 +548,8 @@
             <div class="card-title-wrap">
               <span class="icon-bullet">🥛</span>
               <div>
-                <h2 class="card-title">October Amul Milk Tracker</h2>
-                <p class="card-desc">Tracks daily milk packets consumed</p>
+                <h2 class="card-title" id="amulSectionTitle">October Amul Milk Tracker</h2>
+                <p class="card-desc">Tracks daily milk packets consumed (Options: 0.5, 1, or 2 packets)</p>
               </div>
             </div>
             <div class="milk-rate-chip">
@@ -521,24 +577,35 @@
             </div>
           </div>
 
-          <!-- Quick Milk Logging for Selected Date -->
+          <!-- Quick Milk Logging for Selected Date with EXACT 3 options: 0.5, 1, 2 -->
           <div class="card-inner-box">
-            <h4 class="inner-box-title">Log Milk Packets for <span id="amulCurrentDayLabel">Today</span>:</h4>
-            <div class="milk-steppers-grid">
-              <div class="stepper-item">
-                <span class="stepper-name">Anjan</span>
-                <div class="stepper-controls">
-                  <button class="step-btn" data-person="anjan" data-delta="-1">-</button>
-                  <span class="step-value" id="amulDayAnjanVal">1</span>
-                  <button class="step-btn" data-person="anjan" data-delta="1">+</button>
+            <div class="card-header-compact" style="margin-bottom:6px;">
+              <h4 class="inner-box-title" style="margin:0;">Select Milk Packets for <span id="amulCurrentDayLabel">Today</span>:</h4>
+              <span class="helper-text">Options: 0.5, 1, or 2 (Tap active to clear)</span>
+            </div>
+            <div class="amul-options-grid">
+              <div class="amul-person-box">
+                <div class="amul-person-header">
+                  <span class="stepper-name">Anjan</span>
+                  <span class="amul-current-selected" id="amulDayAnjanVal">0 pkt</span>
+                </div>
+                <div class="amul-pill-group" data-person="anjan">
+                  <button class="amul-pill-btn" data-qty="0">Off</button>
+                  <button class="amul-pill-btn" data-qty="0.5">0.5</button>
+                  <button class="amul-pill-btn" data-qty="1">1</button>
+                  <button class="amul-pill-btn" data-qty="2">2</button>
                 </div>
               </div>
-              <div class="stepper-item">
-                <span class="stepper-name">Saurabh</span>
-                <div class="stepper-controls">
-                  <button class="step-btn" data-person="saurabh" data-delta="-1">-</button>
-                  <span class="step-value" id="amulDaySaurabhVal">1</span>
-                  <button class="step-btn" data-person="saurabh" data-delta="1">+</button>
+              <div class="amul-person-box">
+                <div class="amul-person-header">
+                  <span class="stepper-name">Saurabh</span>
+                  <span class="amul-current-selected" id="amulDaySaurabhVal">0 pkt</span>
+                </div>
+                <div class="amul-pill-group" data-person="saurabh">
+                  <button class="amul-pill-btn" data-qty="0">Off</button>
+                  <button class="amul-pill-btn" data-qty="0.5">0.5</button>
+                  <button class="amul-pill-btn" data-qty="1">1</button>
+                  <button class="amul-pill-btn" data-qty="2">2</button>
                 </div>
               </div>
             </div>
@@ -687,6 +754,10 @@
       <button class="m-nav-tab" data-tab="split">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         <span>Split</span>
+      </button>
+      <button class="m-nav-tab" data-tab="amul">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12l2 6v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9l2-6z"/><line x1="4" y1="9" x2="20" y2="9"/></svg>
+        <span>Amul</span>
       </button>
       <button class="m-nav-tab" data-tab="upi">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
@@ -936,6 +1007,35 @@
         <div class="modal-footer">
           <button id="copyRoomShareLinkBtn" class="primary-btn w-full glow-btn">
             <span>Copy Live Room Link for Flatmates</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- MODAL 5: MONTH & YEAR PICKER               -->
+    <!-- ========================================== -->
+    <div id="monthPickerModal" class="modal-backdrop">
+      <div class="modal-box modal-sm">
+        <div class="modal-header">
+          <div class="card-title-wrap">
+            <span class="icon-bullet">📅</span>
+            <h3 class="modal-title">Select Month & Year</h3>
+          </div>
+          <button class="modal-close-btn" id="closeMonthPickerBtn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="year-selector-row">
+            <button id="pickerPrevYearBtn" class="icon-btn circle-btn" title="Previous Year">‹</button>
+            <strong id="pickerYearVal" class="picker-year-display">2026</strong>
+            <button id="pickerNextYearBtn" class="icon-btn circle-btn" title="Next Year">›</button>
+          </div>
+          <div class="months-picker-grid" id="monthsPickerGrid">
+            <!-- 12 months buttons rendered dynamically -->
+          </div>
+          <button id="jumpCurrentRealMonthBtn" class="secondary-btn btn-sm w-full mt-3">
+            📅 Jump to Current Month
           </button>
         </div>
       </div>

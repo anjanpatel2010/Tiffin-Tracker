@@ -6,19 +6,40 @@
 (function () {
   'use strict';
 
-  // --- Dynamic Date Initialization ---
+  // --- Month & Calendar Constants ---
+  const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const MONTH_SHORTS = [
+    'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+    'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'
+  ];
+  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  function getDaysInMonth(year, month) {
+    return new Date(year, month, 0).getDate();
+  }
+
+  // Active Month & Year (Defaults to October 2026 for existing ledger)
+  let currentYear = 2026;
+  let currentMonth = 10; // 1-indexed (10 = October)
+
   const now = new Date();
-  const isCurrentMonthOctober = (now.getMonth() === 9); // Month 9 = October in JS
-  const dynamicToday = isCurrentMonthOctober ? Math.min(Math.max(now.getDate(), 1), 31) : (now.getDate() <= 31 ? now.getDate() : 1);
+  function getDynamicTodayForMonth(year, month) {
+    if (now.getFullYear() === year && (now.getMonth() + 1) === month) {
+      return Math.min(Math.max(now.getDate(), 1), getDaysInMonth(year, month));
+    }
+    return 1;
+  }
 
   // --- Configuration & Constants ---
   const CONFIG = {
-    year: 2026,
-    month: 10, // October
-    daysInMonth: 31,
-    todayDay: dynamicToday,
+    year: currentYear,
+    month: currentMonth,
+    daysInMonth: getDaysInMonth(currentYear, currentMonth),
+    todayDay: getDynamicTodayForMonth(currentYear, currentMonth),
     adminPassword: 'Flower',
-    storageKey: 'tiffin_tracker_oct2026_data_v3',
     defaultRoom: 'flat-oct-2026-tiffin',
     defaultRates: {
       half: 80,
@@ -43,20 +64,27 @@
     { id: 'hitesh', name: 'Hitesh', slots: ['lunch', 'dinner'], avatarColor: '#06b6d4' }
   ];
 
-  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  function getStorageKey(year, month) {
+    if (year === 2026 && month === 10) return 'tiffin_tracker_oct2026_data_v3';
+    return `tiffin_tracker_ledger_${year}_${month}`;
+  }
 
-  // Default initial ledger dataset seeded with actual data from Oct 26.html & Amul.html
-  function getDefaultData() {
+  // Generate blank month dataset (with verified baseline data for Oct 2026)
+  function getDefaultDataForMonth(year, month) {
+    const daysInM = getDaysInMonth(year, month);
+    const monthName = MONTH_NAMES[month - 1];
+    const monthShort = MONTH_SHORTS[month - 1].slice(0, 3);
     const days = {};
-    for (let d = 1; d <= CONFIG.daysInMonth; d++) {
-      const dateObj = new Date(CONFIG.year, CONFIG.month - 1, d);
+
+    for (let d = 1; d <= daysInM; d++) {
+      const dateObj = new Date(year, month - 1, d);
       const dayOfWeek = DAY_NAMES[dateObj.getDay()];
 
       days[d] = {
         day: d,
         dayOfWeek: dayOfWeek,
-        dateFormatted: `${dayOfWeek}, ${d} October, ${CONFIG.year}`,
-        dateShort: `${d} Oct`,
+        dateFormatted: `${dayOfWeek}, ${d} ${monthName}, ${year}`,
+        dateShort: `${d} ${monthShort}`,
         sabzi: '',
         meals: {
           anjan: { lunch: '', dinner: '' },
@@ -74,61 +102,62 @@
       };
     }
 
-    // Oct 5 entries from Oct 26.html & Amul.html
-    days[5].sabzi = 'Bhindi';
-    days[5].meals.anjan.dinner = 'Half';
-    days[5].meals.alok.dinner = 'Half';
-    days[5].meals.rohit.dinner = 'Half';
-    days[5].meals.chetan.dinner = 'Half';
-    days[5].amul.anjan = 1;
-    days[5].amul.saurabh = 1;
+    // Seed October 2026 historical verified records
+    if (year === 2026 && month === 10) {
+      if (days[5]) {
+        days[5].sabzi = 'Bhindi';
+        days[5].meals.anjan.dinner = 'Half';
+        days[5].meals.alok.dinner = 'Half';
+        days[5].meals.rohit.dinner = 'Half';
+        days[5].meals.chetan.dinner = 'Half';
+        days[5].amul.anjan = 1;
+        days[5].amul.saurabh = 1;
+      }
+      if (days[6]) {
+        days[6].sabzi = 'Tinde';
+        days[6].meals.anjan.dinner = 'Half';
+        days[6].meals.saurabh.dinner = 'Half';
+        days[6].meals.alok.dinner = 'Half';
+        days[6].meals.rohit.dinner = 'Half';
+        days[6].amul.anjan = 1;
+        days[6].amul.saurabh = 1;
+      }
+    }
 
-    // Oct 6 entries from Oct 26.html & Amul.html
-    days[6].sabzi = 'Tinde';
-    days[6].meals.anjan.dinner = 'Half';
-    days[6].meals.saurabh.dinner = 'Half';
-    days[6].meals.alok.dinner = 'Half';
-    days[6].meals.rohit.dinner = 'Half';
-    days[6].amul.anjan = 1;
-    days[6].amul.saurabh = 1;
+    const rates = (typeof appState !== 'undefined' && appState?.rates) ? { ...appState.rates } : { ...CONFIG.defaultRates };
+    const provider = (typeof appState !== 'undefined' && appState?.provider) ? { ...appState.provider } : { ...CONFIG.defaultProvider };
 
     return {
       version: 3,
+      year: year,
+      month: month,
       lastModified: new Date().toISOString(),
-      rates: { ...CONFIG.defaultRates },
-      provider: { ...CONFIG.defaultProvider },
+      rates: rates,
+      provider: provider,
       days: days,
       activePoll: null,
       auditLog: [
         {
-          id: 'log_init',
+          id: 'log_init_' + year + '_' + month,
           timestamp: Date.now(),
           timeFormatted: formatLogTime(Date.now()),
           author: 'System',
           action: 'Ledger Initialized',
-          details: 'Initialized October 2026 ledger with verified baseline data.'
+          details: `Initialized ledger for ${monthName} ${year}.`
         }
       ]
     };
   }
 
-  // Application State
-  let appState = loadState();
-  let selectedDay = CONFIG.todayDay;
-  let selectedUpiRoommate = 'anjan';
-  let customUpiAmount = null;
-  let pendingPasswordCallback = null;
-
-  // Load state from localStorage or URL hash or fallback to default
-  function loadState() {
-    // 1. Try URL hash state
-    if (window.location.hash && window.location.hash.startsWith('#data=')) {
+  function loadStateForMonth(year, month) {
+    // 1. Try URL hash state for Oct 2026 initial import
+    if (year === 2026 && month === 10 && window.location.hash && window.location.hash.startsWith('#data=')) {
       try {
         const encoded = window.location.hash.slice(6);
         const jsonStr = decodeURIComponent(atob(encoded));
         const parsed = JSON.parse(jsonStr);
         if (parsed && parsed.days) {
-          saveStateToStorage(parsed);
+          saveStateForMonth(year, month, parsed);
           return parsed;
         }
       } catch (err) {
@@ -138,11 +167,11 @@
 
     // 2. Try localStorage
     try {
-      const stored = localStorage.getItem(CONFIG.storageKey);
+      const key = getStorageKey(year, month);
+      const stored = localStorage.getItem(key);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed && parsed.days) {
-          // Merge defaults if new fields missing
           parsed.rates = { ...CONFIG.defaultRates, ...(parsed.rates || {}) };
           parsed.provider = { ...CONFIG.defaultProvider, ...(parsed.provider || {}) };
           if (!parsed.auditLog) parsed.auditLog = [];
@@ -153,18 +182,40 @@
       console.warn('localStorage error', e);
     }
 
-    // 3. Fallback to default
-    return getDefaultData();
+    // 3. Fallback to default month generator
+    return getDefaultDataForMonth(year, month);
   }
 
-  function saveStateToStorage(stateObj) {
+  function saveStateForMonth(year, month, stateObj) {
     stateObj.lastModified = new Date().toISOString();
+    stateObj.year = year;
+    stateObj.month = month;
     try {
-      localStorage.setItem(CONFIG.storageKey, JSON.stringify(stateObj));
+      const key = getStorageKey(year, month);
+      localStorage.setItem(key, JSON.stringify(stateObj));
+      if (year === 2026 && month === 10) {
+        localStorage.setItem('tiffin_tracker_oct2026_data_v3', JSON.stringify(stateObj));
+      }
     } catch (e) {
       console.warn('Storage quota exceeded', e);
     }
   }
+
+  function saveStateToStorage(stateObj) {
+    saveStateForMonth(currentYear, currentMonth, stateObj);
+  }
+
+  function loadState() {
+    return loadStateForMonth(currentYear, currentMonth);
+  }
+
+  // Application State
+  let appState = loadState();
+  let selectedDay = CONFIG.todayDay;
+  let selectedUpiRoommate = 'anjan';
+  let customUpiAmount = null;
+  let pendingPasswordCallback = null;
+  let activeSheetFilter = 'all'; // 'all' or roommate ID
 
   function logActivity(author, action, details) {
     if (!appState.auditLog) appState.auditLog = [];
@@ -177,7 +228,7 @@
       details: details
     };
     appState.auditLog.unshift(entry);
-    if (appState.auditLog.length > 250) appState.auditLog.pop(); // Keep last 250
+    if (appState.auditLog.length > 250) appState.auditLog.pop();
   }
 
   function formatLogTime(ts) {
@@ -191,6 +242,63 @@
     if (actionPayload && typeof SyncEngine !== 'undefined' && SyncEngine.broadcast) {
       SyncEngine.broadcast(actionPayload);
     }
+  }
+
+  function switchMonth(targetYear, targetMonth) {
+    if (targetYear === currentYear && targetMonth === currentMonth) return;
+    saveStateToStorage(appState);
+
+    currentYear = targetYear;
+    currentMonth = targetMonth;
+    CONFIG.year = currentYear;
+    CONFIG.month = currentMonth;
+    CONFIG.daysInMonth = getDaysInMonth(currentYear, currentMonth);
+    CONFIG.todayDay = getDynamicTodayForMonth(currentYear, currentMonth);
+
+    appState = loadStateForMonth(currentYear, currentMonth);
+    selectedDay = CONFIG.todayDay;
+
+    updateMonthUI();
+    populateDateSelectors();
+    renderAll();
+    showToast(`📅 Switched to ${MONTH_NAMES[currentMonth - 1]} ${currentYear}`);
+  }
+
+  function updateMonthUI() {
+    const monthText = document.getElementById('headerMonthText');
+    const sheetTitle = document.getElementById('sheetMatrixTitle');
+    const sheetDaysSub = document.getElementById('sheetDaysSubLabel');
+    const amulTitle = document.getElementById('amulSectionTitle');
+
+    const mName = MONTH_NAMES[currentMonth - 1];
+    const mShort = MONTH_SHORTS[currentMonth - 1];
+
+    if (monthText) monthText.textContent = `${mShort} ${currentYear}`;
+    if (sheetTitle) sheetTitle.textContent = `${mName} ${currentYear} Master Matrix`;
+    if (sheetDaysSub) sheetDaysSub.textContent = `${CONFIG.daysInMonth} Days`;
+    if (amulTitle) amulTitle.textContent = `${mName} Amul Milk Tracker`;
+  }
+
+  function populateDateSelectors() {
+    const daySelect = document.getElementById('daySelectInput');
+    const pollDaySelect = document.getElementById('pollDaySelect');
+
+    const fillSelect = (sel) => {
+      if (!sel) return;
+      sel.innerHTML = '';
+      for (let d = 1; d <= CONFIG.daysInMonth; d++) {
+        const opt = document.createElement('option');
+        opt.value = d;
+        const dateObj = new Date(currentYear, currentMonth - 1, d);
+        const dayName = DAY_NAMES[dateObj.getDay()].slice(0, 3);
+        opt.textContent = `${d} ${MONTH_SHORTS[currentMonth - 1]} (${dayName})`;
+        sel.appendChild(opt);
+      }
+      sel.value = selectedDay;
+    };
+
+    fillSelect(daySelect);
+    fillSelect(pollDaySelect);
   }
 
   // ==========================================================================
@@ -342,6 +450,8 @@
       action.author = this.identity;
       action.timestamp = Date.now();
       action.sourceId = this.getClientId();
+      action.year = action.year || currentYear;
+      action.month = action.month || currentMonth;
 
       this.updateStatusUI('syncing', 'Syncing...');
       try {
@@ -364,6 +474,8 @@
       await this.broadcast({
         type: 'full_sync',
         reason: reason || 'Manual broadcast',
+        year: currentYear,
+        month: currentMonth,
         state: appState
       });
       showToast('Broadcasted complete ledger to all flatmates');
@@ -379,6 +491,23 @@
 
       if (action.sourceId && action.sourceId === this.getClientId()) {
         return; // Ignore self-echo
+      }
+
+      // If action belongs to a different month, persist silently in background
+      if (action.year && action.month && (action.year !== currentYear || action.month !== currentMonth)) {
+        try {
+          const otherState = loadStateForMonth(action.year, action.month);
+          if (action.type === 'meal_update' && otherState.days[action.day]) {
+            otherState.days[action.day].meals[action.person][action.slot] = action.value;
+          } else if (action.type === 'sabzi_update' && otherState.days[action.day]) {
+            otherState.days[action.day].sabzi = action.sabzi;
+          } else if (action.type === 'amul_update' && otherState.days[action.day]) {
+            if (!otherState.days[action.day].amul) otherState.days[action.day].amul = { anjan: 0, saurabh: 0 };
+            otherState.days[action.day].amul[action.person] = action.value;
+          }
+          saveStateForMonth(action.year, action.month, otherState);
+        } catch (e) {}
+        return;
       }
 
       let modified = false;
@@ -642,7 +771,7 @@
       dayTagPill.style.display = (selectedDay === CONFIG.todayDay) ? 'inline-flex' : 'none';
     }
     if (jumpLabel) {
-      jumpLabel.textContent = `Jump to Today (Oct ${CONFIG.todayDay})`;
+      jumpLabel.textContent = `Jump to Today (${MONTH_SHORTS[currentMonth - 1]} ${CONFIG.todayDay})`;
     }
 
     const dayCost = getDayTotalCost(selectedDay);
@@ -664,14 +793,31 @@
     // Populate Date Dropdown if empty
     const select = document.getElementById('daySelectInput');
     if (select && select.options.length === 0) {
-      for (let d = 1; d <= CONFIG.daysInMonth; d++) {
-        const opt = document.createElement('option');
-        opt.value = d;
-        opt.textContent = `${d} Oct (${DAY_NAMES[new Date(CONFIG.year, CONFIG.month - 1, d).getDay()].slice(0, 3)})`;
-        select.appendChild(opt);
-      }
+      populateDateSelectors();
     }
     if (select) select.value = selectedDay;
+
+    // Quick Amul Milk Card on Logger Tab
+    const loggerDayLabel = document.getElementById('loggerAmulDayLabel');
+    if (loggerDayLabel) loggerDayLabel.textContent = dayData.dateShort;
+    const loggerAmulRateBadge = document.getElementById('loggerAmulRateBadge');
+    if (loggerAmulRateBadge) loggerAmulRateBadge.textContent = `₹${rates.amulPacket || 35} / pkt`;
+
+    const anjanPkt = Number(dayData.amul?.anjan) || 0;
+    const saurabhPkt = Number(dayData.amul?.saurabh) || 0;
+    const loggerAnjanVal = document.getElementById('loggerDayAnjanVal');
+    const loggerSaurabhVal = document.getElementById('loggerDaySaurabhVal');
+    if (loggerAnjanVal) loggerAnjanVal.textContent = anjanPkt ? `${anjanPkt} pkt` : '0 pkt';
+    if (loggerSaurabhVal) loggerSaurabhVal.textContent = saurabhPkt ? `${saurabhPkt} pkt` : '0 pkt';
+
+    document.querySelectorAll('.amul-quick-card .amul-pill-group').forEach(group => {
+      const p = group.getAttribute('data-person');
+      const curVal = Number(dayData.amul?.[p]) || 0;
+      group.querySelectorAll('.amul-pill-btn').forEach(b => {
+        const qty = parseFloat(b.getAttribute('data-qty'));
+        b.classList.toggle('active', qty === curVal);
+      });
+    });
 
     // Roommate Cards Grid
     const container = document.getElementById('roommatesLoggerGrid');
@@ -895,6 +1041,7 @@
 
   // 3. Master Sheet Matrix Render
   function renderMasterSheet() {
+    const thead = document.getElementById('masterSheetHead');
     const tbody = document.getElementById('masterSheetBody');
     const tfoot = document.getElementById('masterSheetFooter');
     if (!tbody || !tfoot) return;
@@ -902,6 +1049,58 @@
     const searchTerm = (document.getElementById('sheetSearchInput')?.value || '').toLowerCase().trim();
     tbody.innerHTML = '';
     const rates = getRates();
+    const grandFlatTotal = getFlatTotals().tiffinTotal;
+
+    const isAll = (activeSheetFilter === 'all');
+    const activePerson = !isAll ? ROOMMATES.find(x => x.id === activeSheetFilter) : null;
+
+    // Render Table Header dynamically
+    if (thead) {
+      if (isAll) {
+        thead.innerHTML = `
+          <tr class="header-group-row">
+            <th class="th-sticky th-date">Date</th>
+            <th class="th-sticky th-menu">Sabzi / Note</th>
+            <th colspan="2" class="th-person">Anjan</th>
+            <th colspan="2" class="th-person">Saurabh</th>
+            <th colspan="3" class="th-person">Alok</th>
+            <th colspan="2" class="th-person">Rohit</th>
+            <th colspan="2" class="th-person">Salman</th>
+            <th colspan="2" class="th-person">Chetan</th>
+            <th colspan="2" class="th-person">Hitesh</th>
+            <th class="th-day-total">Day Total</th>
+          </tr>
+          <tr class="header-sub-row">
+            <th class="th-sticky th-date-sub">${CONFIG.daysInMonth} Days</th>
+            <th class="th-sticky th-menu-sub">Dish</th>
+            <th>Lunch</th><th>Dinner</th>
+            <th>Lunch</th><th>Dinner</th>
+            <th>Lunch</th><th>Dinner</th><th>Special</th>
+            <th>Lunch</th><th>Dinner</th>
+            <th>Lunch</th><th>Dinner</th>
+            <th>Lunch</th><th>Dinner</th>
+            <th>Lunch</th><th>Dinner</th>
+            <th>Amount</th>
+          </tr>
+        `;
+      } else if (activePerson) {
+        const colSpan = activePerson.hasSpecial ? 3 : 2;
+        thead.innerHTML = `
+          <tr class="header-group-row">
+            <th class="th-sticky th-date">Date</th>
+            <th class="th-sticky th-menu">Sabzi / Note</th>
+            <th colspan="${colSpan}" class="th-person" style="background:${activePerson.avatarColor}; color:#ffffff">${activePerson.name}</th>
+            <th class="th-day-total">Day Total</th>
+          </tr>
+          <tr class="header-sub-row">
+            <th class="th-sticky th-date-sub">${CONFIG.daysInMonth} Days</th>
+            <th class="th-sticky th-menu-sub">Dish</th>
+            <th>Lunch</th><th>Dinner</th>${activePerson.hasSpecial ? '<th>Special</th>' : ''}
+            <th>Amount</th>
+          </tr>
+        `;
+      }
+    }
 
     for (let d = 1; d <= CONFIG.daysInMonth; d++) {
       const dayData = appState.days[d];
@@ -931,42 +1130,63 @@
         return `<td class="cell-interactive ${valClass}" data-day="${d}" data-person="${person}" data-slot="${slot}" title="Click to cycle meal for ${person}">${displayVal}</td>`;
       };
 
-      tr.innerHTML = `
-        <td class="td-sticky-date" title="${dayData.dateFormatted}">
-          ${dayData.dayOfWeek.slice(0, 3)}, ${d} Oct
-        </td>
-        <td class="td-sticky-menu" data-day="${d}" title="Click to edit sabzi">
-          ${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}
-        </td>
-        <!-- Anjan -->
-        ${makeCell('anjan', 'lunch')}
-        ${makeCell('anjan', 'dinner')}
-        <!-- Saurabh -->
-        ${makeCell('saurabh', 'lunch')}
-        ${makeCell('saurabh', 'dinner')}
-        <!-- Alok -->
-        ${makeCell('alok', 'lunch')}
-        ${makeCell('alok', 'dinner')}
-        <td class="cell-interactive ${dayData.meals.alok.dinner === 'Special' ? 'val-special' : 'val-off'}" data-day="${d}" data-person="alok" data-slot="special">
-          ${dayData.meals.alok.dinner === 'Special' || dayData.meals.alok.lunch === 'Special' ? `Sp (₹${rates.special})` : '-'}
-        </td>
-        <!-- Rohit -->
-        ${makeCell('rohit', 'lunch')}
-        ${makeCell('rohit', 'dinner')}
-        <!-- Salman -->
-        ${makeCell('salman', 'lunch')}
-        ${makeCell('salman', 'dinner')}
-        <!-- Chetan -->
-        ${makeCell('chetan', 'lunch')}
-        ${makeCell('chetan', 'dinner')}
-        <!-- Hitesh -->
-        ${makeCell('hitesh', 'lunch')}
-        ${makeCell('hitesh', 'dinner')}
-        <!-- Day Total -->
-        <td style="font-weight:700; font-family:var(--font-mono); color:${dayTotal > 0 ? 'var(--emerald)' : 'var(--text-dim)'}">
-          ₹${dayTotal}
-        </td>
-      `;
+      if (isAll) {
+        tr.innerHTML = `
+          <td class="td-sticky-date" title="${dayData.dateFormatted}">
+            ${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}
+          </td>
+          <td class="td-sticky-menu" data-day="${d}" title="Click to edit sabzi">
+            ${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}
+          </td>
+          <!-- Anjan -->
+          ${makeCell('anjan', 'lunch')}
+          ${makeCell('anjan', 'dinner')}
+          <!-- Saurabh -->
+          ${makeCell('saurabh', 'lunch')}
+          ${makeCell('saurabh', 'dinner')}
+          <!-- Alok -->
+          ${makeCell('alok', 'lunch')}
+          ${makeCell('alok', 'dinner')}
+          <td class="cell-interactive ${dayData.meals.alok.dinner === 'Special' ? 'val-special' : 'val-off'}" data-day="${d}" data-person="alok" data-slot="special">
+            ${dayData.meals.alok.dinner === 'Special' || dayData.meals.alok.lunch === 'Special' ? `Sp (₹${rates.special})` : '-'}
+          </td>
+          <!-- Rohit -->
+          ${makeCell('rohit', 'lunch')}
+          ${makeCell('rohit', 'dinner')}
+          <!-- Salman -->
+          ${makeCell('salman', 'lunch')}
+          ${makeCell('salman', 'dinner')}
+          <!-- Chetan -->
+          ${makeCell('chetan', 'lunch')}
+          ${makeCell('chetan', 'dinner')}
+          <!-- Hitesh -->
+          ${makeCell('hitesh', 'lunch')}
+          ${makeCell('hitesh', 'dinner')}
+          <!-- Day Total -->
+          <td style="font-weight:700; font-family:var(--font-mono); color:${dayTotal > 0 ? 'var(--emerald)' : 'var(--text-dim)'}">
+            ₹${dayTotal}
+          </td>
+        `;
+      } else if (activePerson) {
+        tr.innerHTML = `
+          <td class="td-sticky-date" title="${dayData.dateFormatted}">
+            ${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}
+          </td>
+          <td class="td-sticky-menu" data-day="${d}" title="Click to edit sabzi">
+            ${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}
+          </td>
+          ${makeCell(activePerson.id, 'lunch')}
+          ${makeCell(activePerson.id, 'dinner')}
+          ${activePerson.hasSpecial ? `
+            <td class="cell-interactive ${dayData.meals.alok.dinner === 'Special' || dayData.meals.alok.lunch === 'Special' ? 'val-special' : 'val-off'}" data-day="${d}" data-person="alok" data-slot="special">
+              ${dayData.meals.alok.dinner === 'Special' || dayData.meals.alok.lunch === 'Special' ? `Sp (₹${rates.special})` : '-'}
+            </td>
+          ` : ''}
+          <td style="font-weight:700; font-family:var(--font-mono); color:${dayTotal > 0 ? 'var(--emerald)' : 'var(--text-dim)'}">
+            ₹${dayTotal}
+          </td>
+        `;
+      }
 
       tbody.appendChild(tr);
     }
@@ -987,6 +1207,8 @@
           logActivity(SyncEngine.identity, 'Meal Update', `Alok Dinner: ${nextVal || 'Off'} (Day ${d})`);
           persistAndBroadcast({
             type: 'meal_update',
+            year: currentYear,
+            month: currentMonth,
             day: d,
             person: 'alok',
             slot: 'dinner',
@@ -1014,6 +1236,8 @@
         logActivity(SyncEngine.identity, 'Meal Update', `${capitalize(person)} ${slot}: ${nextVal || 'Off'} (Day ${d})`);
         persistAndBroadcast({
           type: 'meal_update',
+          year: currentYear,
+          month: currentMonth,
           day: d,
           person: person,
           slot: slot,
@@ -1028,44 +1252,58 @@
         triggerHaptic();
         const d = parseInt(menuCell.getAttribute('data-day'));
         const currentSabzi = appState.days[d].sabzi || '';
-        const newDish = prompt(`Enter Sabzi / Dish for ${d} October:`, currentSabzi);
+        const newDish = prompt(`Enter Sabzi / Dish for ${d} ${MONTH_NAMES[currentMonth - 1]}:`, currentSabzi);
         if (newDish !== null) {
           appState.days[d].sabzi = newDish.trim();
           logActivity(SyncEngine.identity, 'Updated Sabzi from Sheet', `Day ${d}: "${newDish.trim()}"`);
           persistAndBroadcast({
             type: 'sabzi_update',
+            year: currentYear,
+            month: currentMonth,
             day: d,
             sabzi: newDish.trim()
           });
-          showToast(`Updated dish for ${d} Oct`);
+          showToast(`Updated dish for ${d} ${MONTH_SHORTS[currentMonth - 1]}`);
         }
       });
     });
 
     // Master Sheet Footer Totals
-    const anjanTotal = getRoommateMonthlyStats('anjan').tiffinTotal;
-    const saurabhTotal = getRoommateMonthlyStats('saurabh').tiffinTotal;
-    const alokTotal = getRoommateMonthlyStats('alok').tiffinTotal;
-    const rohitTotal = getRoommateMonthlyStats('rohit').tiffinTotal;
-    const salmanTotal = getRoommateMonthlyStats('salman').tiffinTotal;
-    const chetanTotal = getRoommateMonthlyStats('chetan').tiffinTotal;
-    const hiteshTotal = getRoommateMonthlyStats('hitesh').tiffinTotal;
-    const grandFlatTotal = getFlatTotals().tiffinTotal;
+    if (isAll) {
+      const anjanTotal = getRoommateMonthlyStats('anjan').tiffinTotal;
+      const saurabhTotal = getRoommateMonthlyStats('saurabh').tiffinTotal;
+      const alokTotal = getRoommateMonthlyStats('alok').tiffinTotal;
+      const rohitTotal = getRoommateMonthlyStats('rohit').tiffinTotal;
+      const salmanTotal = getRoommateMonthlyStats('salman').tiffinTotal;
+      const chetanTotal = getRoommateMonthlyStats('chetan').tiffinTotal;
+      const hiteshTotal = getRoommateMonthlyStats('hitesh').tiffinTotal;
 
-    tfoot.innerHTML = `
-      <tr>
-        <td class="td-sticky-date" style="font-weight:800; color:var(--text-main);">Total</td>
-        <td class="td-sticky-menu">—</td>
-        <td colspan="2">₹${anjanTotal}</td>
-        <td colspan="2">₹${saurabhTotal}</td>
-        <td colspan="3">₹${alokTotal}</td>
-        <td colspan="2">₹${rohitTotal}</td>
-        <td colspan="2">₹${salmanTotal}</td>
-        <td colspan="2">₹${chetanTotal}</td>
-        <td colspan="2">₹${hiteshTotal}</td>
-        <td style="font-size:1rem; color:var(--emerald);">₹${grandFlatTotal}</td>
-      </tr>
-    `;
+      tfoot.innerHTML = `
+        <tr>
+          <td class="td-sticky-date" style="font-weight:800; color:var(--text-main);">Total</td>
+          <td class="td-sticky-menu">—</td>
+          <td colspan="2">₹${anjanTotal}</td>
+          <td colspan="2">₹${saurabhTotal}</td>
+          <td colspan="3">₹${alokTotal}</td>
+          <td colspan="2">₹${rohitTotal}</td>
+          <td colspan="2">₹${salmanTotal}</td>
+          <td colspan="2">₹${chetanTotal}</td>
+          <td colspan="2">₹${hiteshTotal}</td>
+          <td style="font-size:1rem; color:var(--emerald);">₹${grandFlatTotal}</td>
+        </tr>
+      `;
+    } else if (activePerson) {
+      const pStats = getRoommateMonthlyStats(activePerson.id);
+      const colSpan = activePerson.hasSpecial ? 3 : 2;
+      tfoot.innerHTML = `
+        <tr>
+          <td class="td-sticky-date" style="font-weight:800; color:var(--text-main);">Total</td>
+          <td class="td-sticky-menu">—</td>
+          <td colspan="${colSpan}" style="font-size:0.95rem; font-weight:800; color:var(--accent-light);">₹${pStats.tiffinTotal}</td>
+          <td style="font-size:1rem; color:var(--emerald);">₹${grandFlatTotal}</td>
+        </tr>
+      `;
+    }
   }
 
   // 4. Analytics & Split Render
@@ -1219,16 +1457,32 @@
     const amulDayLabel = document.getElementById('amulCurrentDayLabel');
     if (amulDayLabel) amulDayLabel.textContent = dayData.dateShort;
 
+    const anjanDayPkt = Number(dayData.amul?.anjan) || 0;
+    const saurabhDayPkt = Number(dayData.amul?.saurabh) || 0;
+
     const dayAnjanVal = document.getElementById('amulDayAnjanVal');
     const daySaurabhVal = document.getElementById('amulDaySaurabhVal');
-    if (dayAnjanVal) dayAnjanVal.textContent = dayData.amul?.anjan || 0;
-    if (daySaurabhVal) daySaurabhVal.textContent = dayData.amul?.saurabh || 0;
+    if (dayAnjanVal) dayAnjanVal.textContent = anjanDayPkt ? `${anjanDayPkt} pkt` : '0 pkt';
+    if (daySaurabhVal) daySaurabhVal.textContent = saurabhDayPkt ? `${saurabhDayPkt} pkt` : '0 pkt';
+
+    // Highlight active pills in dedicated Amul tab
+    document.querySelectorAll('#view-amul .amul-pill-group').forEach(group => {
+      const p = group.getAttribute('data-person');
+      const curVal = Number(dayData.amul?.[p]) || 0;
+      group.querySelectorAll('.amul-pill-btn').forEach(b => {
+        const qty = parseFloat(b.getAttribute('data-qty'));
+        b.classList.toggle('active', qty === curVal);
+      });
+    });
 
     // Monthly totals
     const anjanStats = getRoommateMonthlyStats('anjan');
     const saurabhStats = getRoommateMonthlyStats('saurabh');
     const totalMilkPackets = anjanStats.milkPackets + saurabhStats.milkPackets;
     const grandMilkCost = anjanStats.milkTotal + saurabhStats.milkTotal;
+
+    const formatRupees = (val) => (val % 1 === 0 ? `₹${val}` : `₹${val.toFixed(1)}`);
+    const formatPkts = (val) => (val % 1 === 0 ? `${val} packets` : `${val.toFixed(1)} packets`);
 
     const elAnjanTot = document.getElementById('amulAnjanTotal');
     const elAnjanPkts = document.getElementById('amulAnjanPackets');
@@ -1237,12 +1491,12 @@
     const elGrandTot = document.getElementById('amulGrandTotal');
     const elGrandPkts = document.getElementById('amulTotalPackets');
 
-    if (elAnjanTot) elAnjanTot.textContent = `₹${anjanStats.milkTotal}`;
-    if (elAnjanPkts) elAnjanPkts.textContent = `${anjanStats.milkPackets} packets`;
-    if (elSaurabhTot) elSaurabhTot.textContent = `₹${saurabhStats.milkTotal}`;
-    if (elSaurabhPkts) elSaurabhPkts.textContent = `${saurabhStats.milkPackets} packets`;
-    if (elGrandTot) elGrandTot.textContent = `₹${grandMilkCost}`;
-    if (elGrandPkts) elGrandPkts.textContent = `${totalMilkPackets} packets`;
+    if (elAnjanTot) elAnjanTot.textContent = formatRupees(anjanStats.milkTotal);
+    if (elAnjanPkts) elAnjanPkts.textContent = formatPkts(anjanStats.milkPackets);
+    if (elSaurabhTot) elSaurabhTot.textContent = formatRupees(saurabhStats.milkTotal);
+    if (elSaurabhPkts) elSaurabhPkts.textContent = formatPkts(saurabhStats.milkPackets);
+    if (elGrandTot) elGrandTot.textContent = formatRupees(grandMilkCost);
+    if (elGrandPkts) elGrandPkts.textContent = formatPkts(totalMilkPackets);
 
     // Table
     const tbody = document.getElementById('amulTableBody');
@@ -1250,22 +1504,53 @@
       tbody.innerHTML = '';
       for (let d = 1; d <= CONFIG.daysInMonth; d++) {
         const dData = appState.days[d];
-        const anjanPkt = dData?.amul?.anjan || 0;
-        const saurabhPkt = dData?.amul?.saurabh || 0;
+        const anjanPkt = Number(dData?.amul?.anjan) || 0;
+        const saurabhPkt = Number(dData?.amul?.saurabh) || 0;
         const dayCost = (anjanPkt + saurabhPkt) * (Number(rates.amulPacket) || 35);
 
         const tr = document.createElement('tr');
         if (d === selectedDay) tr.style.backgroundColor = 'rgba(6, 182, 212, 0.12)';
         tr.innerHTML = `
           <td class="td-sticky-date">${dData.dateShort}</td>
-          <td>${anjanPkt || '-'}</td>
-          <td>${saurabhPkt || '-'}</td>
+          <td class="cell-interactive ${anjanPkt > 0 ? 'val-special' : 'val-off'} cell-amul-interactive" data-day="${d}" data-person="anjan" title="Click to cycle: Off -> 0.5 -> 1 -> 2 -> Off">
+            ${anjanPkt ? `${anjanPkt} pkt` : '-'}
+          </td>
+          <td class="cell-interactive ${saurabhPkt > 0 ? 'val-special' : 'val-off'} cell-amul-interactive" data-day="${d}" data-person="saurabh" title="Click to cycle: Off -> 0.5 -> 1 -> 2 -> Off">
+            ${saurabhPkt ? `${saurabhPkt} pkt` : '-'}
+          </td>
           <td style="font-family:var(--font-mono); font-weight:700; color:${dayCost > 0 ? 'var(--cyan)' : 'var(--text-dim)'}">
-            ${dayCost > 0 ? `₹${dayCost}` : '-'}
+            ${dayCost > 0 ? formatRupees(dayCost) : '-'}
           </td>
         `;
         tbody.appendChild(tr);
       }
+
+      // Cell Click to Cycle: 0 -> 0.5 -> 1 -> 2 -> 0
+      tbody.querySelectorAll('.cell-amul-interactive').forEach(cell => {
+        cell.addEventListener('click', () => {
+          triggerHaptic();
+          const d = parseInt(cell.getAttribute('data-day'));
+          const p = cell.getAttribute('data-person');
+          const cur = Number(appState.days[d]?.amul?.[p]) || 0;
+          let next = 0;
+          if (cur === 0) next = 0.5;
+          else if (cur === 0.5) next = 1;
+          else if (cur === 1) next = 2;
+          else next = 0;
+
+          if (!appState.days[d].amul) appState.days[d].amul = { anjan: 0, saurabh: 0 };
+          appState.days[d].amul[p] = next;
+          logActivity(SyncEngine.identity, 'Milk Packets', `${capitalize(p)}: ${next} pkt (Day ${d})`);
+          persistAndBroadcast({
+            type: 'amul_update',
+            year: currentYear,
+            month: currentMonth,
+            day: d,
+            person: p,
+            value: next
+          });
+        });
+      });
     }
   }
 
@@ -1274,8 +1559,9 @@
     const totals = getFlatTotals();
     const rates = getRates();
     const provider = appState.provider || CONFIG.defaultProvider;
+    const mNameUpper = MONTH_NAMES[currentMonth - 1].toUpperCase();
 
-    let text = `🍛 *OCTOBER 2026 TIFFIN EXPENSE SUMMARY*\n`;
+    let text = `🍛 *${mNameUpper} ${currentYear} TIFFIN EXPENSE SUMMARY*\n`;
     text += `Flat Tiffin Ledger • Cook: ${provider.name}\n`;
     text += `Rate: Half ₹${rates.half} | Full ₹${rates.full} | Special ₹${rates.special}\n`;
     text += `──────────────────────\n`;
@@ -1765,27 +2051,147 @@
   }
 
   function setupAmulControls() {
-    const stepperBtns = document.querySelectorAll('.step-btn');
-    stepperBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        triggerHaptic();
-        const person = btn.getAttribute('data-person');
-        const delta = parseInt(btn.getAttribute('data-delta'));
-        const cur = appState.days[selectedDay].amul?.[person] || 0;
-        const nextVal = Math.max(0, cur + delta);
-        if (!appState.days[selectedDay].amul) {
-          appState.days[selectedDay].amul = { anjan: 0, saurabh: 0 };
-        }
-        appState.days[selectedDay].amul[person] = nextVal;
-        logActivity(SyncEngine.identity, 'Milk Stepper', `${capitalize(person)}: ${nextVal} packets (Day ${selectedDay})`);
-        persistAndBroadcast({
-          type: 'amul_update',
-          day: selectedDay,
-          person: person,
-          value: nextVal
-        });
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.amul-pill-btn');
+      if (!btn) return;
+      triggerHaptic();
+
+      const group = btn.closest('.amul-pill-group');
+      if (!group) return;
+      const person = group.getAttribute('data-person');
+      const targetQty = parseFloat(btn.getAttribute('data-qty'));
+      const cur = Number(appState.days[selectedDay]?.amul?.[person]) || 0;
+      const nextVal = (targetQty === cur && targetQty !== 0) ? 0 : targetQty;
+
+      if (!appState.days[selectedDay].amul) {
+        appState.days[selectedDay].amul = { anjan: 0, saurabh: 0 };
+      }
+      appState.days[selectedDay].amul[person] = nextVal;
+      logActivity(SyncEngine.identity, 'Milk Packets', `${capitalize(person)}: ${nextVal} pkt (Day ${selectedDay})`);
+      persistAndBroadcast({
+        type: 'amul_update',
+        year: currentYear,
+        month: currentMonth,
+        day: selectedDay,
+        person: person,
+        value: nextVal
       });
     });
+  }
+
+  // --- Sheet Column Filter Controls ---
+  function setupSheetFilterControls() {
+    const filterBtns = document.querySelectorAll('#sheetFilterChips .sheet-filter-btn');
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        triggerHaptic();
+        filterBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeSheetFilter = btn.getAttribute('data-filter');
+        renderMasterSheet();
+      });
+    });
+  }
+
+  // --- Month & Year Picker Controls ---
+  let modalDisplayedYear = currentYear;
+
+  function setupMonthControls() {
+    const prevBtn = document.getElementById('headerPrevMonthBtn');
+    const nextBtn = document.getElementById('headerNextMonthBtn');
+    const pickerBtn = document.getElementById('headerMonthPickerBtn');
+    const modal = document.getElementById('monthPickerModal');
+    const closeBtn = document.getElementById('closeMonthPickerBtn');
+    const prevYearBtn = document.getElementById('pickerPrevYearBtn');
+    const nextYearBtn = document.getElementById('pickerNextYearBtn');
+    const yearDisplay = document.getElementById('pickerYearVal');
+    const monthsGrid = document.getElementById('monthsPickerGrid');
+    const jumpCurrentBtn = document.getElementById('jumpCurrentRealMonthBtn');
+
+    if (prevBtn) {
+      prevBtn.addEventListener('click', () => {
+        triggerHaptic();
+        let y = currentYear;
+        let m = currentMonth - 1;
+        if (m < 1) { m = 12; y--; }
+        switchMonth(y, m);
+      });
+    }
+
+    if (nextBtn) {
+      nextBtn.addEventListener('click', () => {
+        triggerHaptic();
+        let y = currentYear;
+        let m = currentMonth + 1;
+        if (m > 12) { m = 1; y++; }
+        switchMonth(y, m);
+      });
+    }
+
+    function renderMonthPickerGrid() {
+      if (!yearDisplay || !monthsGrid) return;
+      yearDisplay.textContent = modalDisplayedYear;
+      monthsGrid.innerHTML = '';
+
+      MONTH_SHORTS.forEach((shortName, idx) => {
+        const mNum = idx + 1;
+        const btn = document.createElement('button');
+        btn.className = 'month-select-btn';
+        if (modalDisplayedYear === currentYear && mNum === currentMonth) {
+          btn.classList.add('active');
+        }
+        btn.textContent = shortName;
+        btn.addEventListener('click', () => {
+          triggerHaptic();
+          switchMonth(modalDisplayedYear, mNum);
+          if (modal) modal.classList.remove('active');
+        });
+        monthsGrid.appendChild(btn);
+      });
+    }
+
+    if (pickerBtn && modal) {
+      pickerBtn.addEventListener('click', () => {
+        triggerHaptic();
+        modalDisplayedYear = currentYear;
+        renderMonthPickerGrid();
+        modal.classList.add('active');
+      });
+    }
+
+    if (closeBtn && modal) {
+      closeBtn.addEventListener('click', () => {
+        modal.classList.remove('active');
+      });
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('active');
+      });
+    }
+
+    if (prevYearBtn) {
+      prevYearBtn.addEventListener('click', () => {
+        triggerHaptic();
+        modalDisplayedYear--;
+        renderMonthPickerGrid();
+      });
+    }
+
+    if (nextYearBtn) {
+      nextYearBtn.addEventListener('click', () => {
+        triggerHaptic();
+        modalDisplayedYear++;
+        renderMonthPickerGrid();
+      });
+    }
+
+    if (jumpCurrentBtn) {
+      jumpCurrentBtn.addEventListener('click', () => {
+        triggerHaptic();
+        const d = new Date();
+        switchMonth(d.getFullYear(), d.getMonth() + 1);
+        if (modal) modal.classList.remove('active');
+      });
+    }
   }
 
   // --- Settings & Pricing Modal Setup ---
@@ -2293,6 +2699,8 @@
   document.addEventListener('DOMContentLoaded', () => {
     setupTheme();
     setupNavigation();
+    setupMonthControls();
+    setupSheetFilterControls();
     setupDateControls();
     setupSabziControls();
     setupFastActions();
@@ -2305,6 +2713,9 @@
     setupExportAndSharing();
     setupOnboarding();
     registerServiceWorker();
+
+    updateMonthUI();
+    populateDateSelectors();
 
     // Start Real-Time Cloud Sync Engine
     SyncEngine.init();
