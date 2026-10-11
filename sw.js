@@ -1,19 +1,21 @@
-const CACHE_NAME = 'tiffin-tracker-v1';
+const CACHE_NAME = 'tiffin-tracker-v2.1';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css',
-  './app.js',
-  './qr.js',
+  './styles.css?v=2.1',
+  './app.js?v=2.1',
+  './qr.js?v=2.1',
   './manifest.json',
   './icon.svg'
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-  );
   self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).catch(err => {
+      console.warn('Cache addAll warning:', err);
+    })
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -21,18 +23,56 @@ self.addEventListener('activate', (e) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((k) => {
-          if (k !== CACHE_NAME) return caches.delete(k);
+          if (k !== CACHE_NAME) {
+            console.log('Purging old cache:', k);
+            return caches.delete(k);
+          }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (e) => {
+  if (e.request.method !== 'GET') return;
+
+  const url = new URL(e.request.url);
+
+  // Network-First for core navigation and code (HTML, JS, CSS) so updates appear immediately
+  const isCoreAsset = e.request.mode === 'navigate' ||
+                      e.request.destination === 'document' ||
+                      url.pathname.endsWith('.html') ||
+                      url.pathname.endsWith('.js') ||
+                      url.pathname.endsWith('.css');
+
+  if (isCoreAsset) {
+    e.respondWith(
+      fetch(e.request)
+        .then((networkRes) => {
+          if (networkRes && networkRes.status === 200) {
+            const clone = networkRes.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+          }
+          return networkRes;
+        })
+        .catch(() => {
+          return caches.match(e.request).then((cached) => cached || caches.match('./index.html'));
+        })
+    );
+    return;
+  }
+
+  // Cache-First for static media assets (icons, manifest)
   e.respondWith(
-    caches.match(e.request).then((res) => {
-      return res || fetch(e.request).catch(() => caches.match('./index.html'));
+    caches.match(e.request).then((cachedRes) => {
+      if (cachedRes) return cachedRes;
+      return fetch(e.request).then((networkRes) => {
+        if (networkRes && networkRes.status === 200) {
+          const clone = networkRes.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+        }
+        return networkRes;
+      });
     })
   );
 });

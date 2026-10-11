@@ -2316,6 +2316,32 @@
         if (onbModal) onbModal.classList.add('active');
       });
     }
+
+    // Force App Update & Cache Purge
+    const forceUpdateBtn = document.getElementById('forceUpdateAppBtn');
+    if (forceUpdateBtn) {
+      forceUpdateBtn.addEventListener('click', async () => {
+        triggerHaptic();
+        showToast('Purging offline cache & fetching newest version...', 'info');
+        try {
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+          }
+          if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (let reg of regs) {
+              await reg.unregister();
+            }
+          }
+        } catch (err) {
+          console.warn('Cache purge error:', err);
+        }
+        setTimeout(() => {
+          window.location.reload(true);
+        }, 400);
+      });
+    }
   }
 
   function loadSettingsValues() {
@@ -2690,8 +2716,37 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+
       navigator.serviceWorker.register('sw.js')
-        .catch(err => console.log('Service Worker skipped:', err));
+        .then((reg) => {
+          // Immediately query server for sw.js byte-difference
+          reg.update().catch(() => {});
+
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            if (newWorker) {
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  showToast('App updated to latest version! Reloading...', 'success');
+                  setTimeout(() => {
+                    if (!refreshing) {
+                      refreshing = true;
+                      window.location.reload();
+                    }
+                  }, 800);
+                }
+              });
+            }
+          });
+        })
+        .catch(err => console.log('Service Worker registration skipped:', err));
     }
   }
 

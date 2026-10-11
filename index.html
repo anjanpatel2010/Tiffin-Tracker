@@ -18,9 +18,12 @@
   <!-- Inter & Plus Jakarta Sans Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <!-- Cache Invalidation -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2.1">
 </head>
 <body>
   <!-- App Container -->
@@ -860,6 +863,14 @@
                 <span>📖 View App Walkthrough & Guide</span>
               </button>
             </div>
+            <div class="mt-3 pt-3" style="border-top: 1px dashed var(--border-color, #27272a);">
+              <button id="forceUpdateAppBtn" class="primary-btn btn-sm w-full" style="background: linear-gradient(135deg, #1d4ed8, #2563eb);">
+                <span>🔄 Force Reload & Fetch Latest App</span>
+              </button>
+              <p class="helper-text text-center mt-1" style="font-size: 0.72rem; color: var(--text-muted, #71717a);">
+                Clears offline caches and forces the newest version from server.
+              </p>
+            </div>
           </div>
 
           <!-- Sub Tab 4: Audit / Activity Log -->
@@ -1053,8 +1064,8 @@
   </div>
 
   <!-- QR Generator Script -->
-  <script src="qr.js"></script>
+  <script src="qr.js?v=2.1"></script>
   <!-- Main Application Logic -->
-  <script src="app.js"></script>
+  <script src="app.js?v=2.1"></script>
 </body>
 </html>

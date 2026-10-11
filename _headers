@@ -1,0 +1,24 @@
+# Netlify Cache Control Headers
+
+# Service worker must never be cached
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Expires: 0
+
+# Manifest
+/manifest.json
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# HTML Shell and documents must always revalidate
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Scripts and Styles - always revalidate
+/*.css
+  Cache-Control: public, max-age=0, must-revalidate
+
+/*.js
+  Cache-Control: public, max-age=0, must-revalidate
