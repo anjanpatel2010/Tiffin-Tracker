@@ -576,7 +576,13 @@
           logActivity(action.author, 'Cast Vote', `Voted "${action.option}" (${action.portion})`);
           modified = true;
           if (!isCatchUp) {
-            showToast(`🗳️ ${action.author} voted for ${action.option}`);
+            const myId = (SyncEngine.identity || '').toLowerCase();
+            const hasMyVote = !!(appState.activePoll.votes && appState.activePoll.votes[myId]);
+            if (hasMyVote) {
+              showToast(`🗳️ ${action.author} voted for ${action.option}`);
+            } else {
+              showToast(`🗳️ ${action.author} cast their vote!`);
+            }
           }
         }
       } else if (action.type === 'poll_finalized') {
@@ -790,22 +796,19 @@
       daySummary.textContent = `${dayMealsCount} meal${dayMealsCount === 1 ? '' : 's'} logged • ₹${dayCost}`;
     }
 
-    // Sabzi / Menu Note UI (Banner vs Input vs Quick Chips)
+    // Sabzi / Menu Note UI (Banner vs Input)
     const sabziBanner = document.getElementById('sabziDisplayBanner');
     const sabziDishSpan = document.getElementById('sabziDisplayDish');
     const sabziInputRow = document.getElementById('sabziInputRow');
-    const menuQuickChips = document.getElementById('menuQuickChips');
 
     const hasSabzi = !!(dayData.sabzi && dayData.sabzi.trim());
     if (hasSabzi) {
       if (sabziDishSpan) sabziDishSpan.textContent = dayData.sabzi;
       if (sabziBanner) sabziBanner.style.display = 'flex';
       if (sabziInputRow && document.activeElement !== sabziInput) sabziInputRow.style.display = 'none';
-      if (menuQuickChips) menuQuickChips.style.display = 'none';
     } else {
       if (sabziBanner) sabziBanner.style.display = 'none';
       if (sabziInputRow) sabziInputRow.style.display = 'flex';
-      if (menuQuickChips) menuQuickChips.style.display = 'flex';
     }
 
     if (sabziInput && document.activeElement !== sabziInput) {
@@ -958,15 +961,54 @@
     if (questionText) questionText.textContent = `What should we cook for ${poll.mealSlot || 'Dinner'}?`;
     if (metaText) metaText.textContent = `Launched by ${poll.author || 'Flatmate'} • Live across all phones`;
 
+    const myId = (SyncEngine.identity || 'anjan').toLowerCase();
+    const myVote = (poll.votes && poll.votes[myId]) ? poll.votes[myId] : null;
+    const hasVoted = !!myVote;
+
+    const blindNotice = document.getElementById('pollBlindNotice');
+    const myVoteBox = document.getElementById('myVoteBox');
+    const myVotedSummary = document.getElementById('myVotedSummaryBox');
+    const myVotedChoiceText = document.getElementById('myVotedChoiceText');
+    const myVoteIdentityLabel = document.getElementById('myVoteIdentityLabel');
+    const pollResultsTray = document.getElementById('pollResultsTray');
+    const votersBreakdownCard = document.getElementById('votersBreakdownCard');
+    const finalizeActions = document.getElementById('pollFinalizeActions');
+
+    if (myVoteIdentityLabel) myVoteIdentityLabel.textContent = SyncEngine.identity || 'You';
+
+    // Blind Voting Enforcement:
+    // If user hasn't voted yet, hide the results, tally, and others' choices!
+    if (!hasVoted) {
+      if (blindNotice) blindNotice.style.display = 'flex';
+      if (myVoteBox) myVoteBox.style.display = 'block';
+      if (myVotedSummary) myVotedSummary.style.display = 'none';
+      if (pollResultsTray) pollResultsTray.style.display = 'none';
+      if (votersBreakdownCard) votersBreakdownCard.style.display = 'none';
+      if (finalizeActions) finalizeActions.style.display = 'none';
+    } else {
+      if (blindNotice) blindNotice.style.display = 'none';
+      if (myVoteBox) myVoteBox.style.display = 'none';
+      if (myVotedSummary) {
+        myVotedSummary.style.display = 'block';
+        if (myVotedChoiceText) {
+          const portionText = myVote.portion === 'No' ? 'No Tiffin' : myVote.portion;
+          const dishText = (myVote.portion === 'No' && (!myVote.option || myVote.option === 'No Tiffin')) ? 'Opted out' : escapeHtml(myVote.option);
+          myVotedChoiceText.textContent = `You voted: ${dishText} • ${portionText}`;
+        }
+      }
+      if (pollResultsTray) pollResultsTray.style.display = 'block';
+      if (votersBreakdownCard) votersBreakdownCard.style.display = 'block';
+      if (finalizeActions) finalizeActions.style.display = 'block';
+    }
+
     // Radio Options for Current User to Vote
     const radioGrid = document.getElementById('pollOptionsRadioGrid');
     if (radioGrid) {
       radioGrid.innerHTML = '';
-      const myId = (SyncEngine.identity || 'anjan').toLowerCase();
-      const currentVote = (poll.votes && poll.votes[myId]) ? poll.votes[myId].option : null;
+      const currentVoteOption = myVote ? myVote.option : null;
 
       poll.options.forEach((optText, idx) => {
-        const isSelected = currentVote === optText;
+        const isSelected = currentVoteOption === optText;
         const label = document.createElement('label');
         label.className = `poll-radio-label ${isSelected ? 'selected' : ''}`;
         label.innerHTML = `
@@ -980,6 +1022,12 @@
         radioGrid.appendChild(label);
       });
     }
+
+    // Set portion buttons active state
+    const currentPortion = myVote ? myVote.portion : 'Half';
+    document.querySelectorAll('#pollPortionToggle .seg-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-portion') === currentPortion);
+    });
 
     // Live Tally Progress Bars
     const resultsContainer = document.getElementById('pollResultsBars');
@@ -1028,7 +1076,11 @@
         const chip = document.createElement('div');
         chip.className = 'voter-chip';
         if (v) {
-          chip.innerHTML = `<span>✓</span> <strong>${r.name}:</strong> <span>${escapeHtml(v.option)} (${v.portion})</span>`;
+          const portionDisp = v.portion === 'No' ? 'No Tiffin' : v.portion;
+          const choiceDisp = (v.portion === 'No' && (!v.option || v.option === 'No Tiffin'))
+            ? 'No Tiffin'
+            : `${escapeHtml(v.option)} (${portionDisp})`;
+          chip.innerHTML = `<span>✓</span> <strong>${r.name}:</strong> <span>${choiceDisp}</span>`;
           chip.style.borderColor = 'rgba(16, 185, 129, 0.4)';
         } else {
           chip.innerHTML = `<span style="opacity:0.5">○</span> <span style="opacity:0.7">${r.name}: Pending</span>`;
@@ -1779,53 +1831,15 @@
         triggerHaptic();
         const banner = document.getElementById('sabziDisplayBanner');
         const inputRow = document.getElementById('sabziInputRow');
-        const chips = document.getElementById('menuQuickChips');
         if (banner) banner.style.display = 'none';
         if (inputRow) inputRow.style.display = 'flex';
-        if (chips) chips.style.display = 'flex';
         if (sabziInput) sabziInput.focus();
       });
     }
-
-    // 1-Tap Quick Dish Chips
-    document.querySelectorAll('.menu-chip-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        triggerHaptic();
-        const dish = btn.getAttribute('data-dish');
-        if (!dish) return;
-        appState.days[selectedDay].sabzi = dish;
-        if (sabziInput) sabziInput.value = dish;
-        renderDailyLogger();
-        renderMasterSheet();
-        logActivity(SyncEngine.identity, 'Sabzi Update', `Day ${selectedDay} dish set to "${dish}"`);
-        persistAndBroadcast({
-          type: 'sabzi_update',
-          day: selectedDay,
-          sabzi: dish
-        });
-        showToast(`🍲 Menu set to ${dish}`);
-      });
-    });
   }
 
   function setupFastActions() {
-    const markAllDinnerHalfBtn = document.getElementById('markAllDinnerHalfBtn');
     const clearTodayBtn = document.getElementById('clearTodayMealsBtn');
-
-    if (markAllDinnerHalfBtn) {
-      markAllDinnerHalfBtn.addEventListener('click', () => {
-        triggerHaptic();
-        ROOMMATES.forEach(r => {
-          appState.days[selectedDay].meals[r.id].dinner = 'Half';
-        });
-        logActivity(SyncEngine.identity, 'Bulk Action', `Marked Dinner Half for all on Day ${selectedDay}`);
-        persistAndBroadcast({
-          type: 'bulk_dinner_half',
-          day: selectedDay
-        });
-        showToast('Marked dinner Half for all roommates');
-      });
-    }
 
     if (clearTodayBtn) {
       clearTodayBtn.addEventListener('click', () => {
@@ -1853,6 +1867,7 @@
     const optContainer = document.getElementById('pollOptionInputsContainer');
     const launchPollBtn = document.getElementById('launchPollBtn');
     const submitVoteBtn = document.getElementById('submitVoteBtn');
+    const changeVoteBtn = document.getElementById('changeVoteBtn');
     const finalizePollBtn = document.getElementById('finalizePollBtn');
     const portionButtons = document.querySelectorAll('#pollPortionToggle .seg-btn');
 
@@ -1865,6 +1880,16 @@
         selectedPortion = btn.getAttribute('data-portion');
       });
     });
+
+    if (changeVoteBtn) {
+      changeVoteBtn.addEventListener('click', () => {
+        triggerHaptic();
+        const myVoteBox = document.getElementById('myVoteBox');
+        const myVotedSummary = document.getElementById('myVotedSummaryBox');
+        if (myVoteBox) myVoteBox.style.display = 'block';
+        if (myVotedSummary) myVotedSummary.style.display = 'none';
+      });
+    }
 
     if (addOptBtn && optContainer) {
       addOptBtn.addEventListener('click', () => {
@@ -1916,6 +1941,7 @@
           poll: newPoll
         });
         showToast('🚀 Poll launched to all roommates!');
+        renderPollView();
       });
     }
 
@@ -1924,31 +1950,35 @@
         triggerHaptic();
         if (!appState.activePoll || appState.activePoll.status !== 'active') return;
 
+        const activePortionBtn = document.querySelector('#pollPortionToggle .seg-btn.active');
+        const portionChoice = activePortionBtn ? activePortionBtn.getAttribute('data-portion') : selectedPortion;
+
         const selectedRadio = document.querySelector('input[name="pollDishChoice"]:checked');
-        if (!selectedRadio) {
-          alert('Please select a sabzi option to vote!');
+        if (portionChoice !== 'No' && !selectedRadio) {
+          alert('Please select a sabzi option to submit your vote!');
           return;
         }
 
-        const dishChoice = selectedRadio.value;
+        const dishChoice = selectedRadio ? selectedRadio.value : 'No Tiffin';
         const myId = (SyncEngine.identity || 'Anjan').toLowerCase();
 
         if (!appState.activePoll.votes) appState.activePoll.votes = {};
         appState.activePoll.votes[myId] = {
           option: dishChoice,
-          portion: selectedPortion,
+          portion: portionChoice,
           time: Date.now()
         };
 
-        logActivity(SyncEngine.identity, 'Voted', `Voted "${dishChoice}" (${selectedPortion}) in ${appState.activePoll.mealSlot} Poll`);
+        logActivity(SyncEngine.identity, 'Voted', `Voted "${dishChoice}" (${portionChoice === 'No' ? 'No Tiffin' : portionChoice}) in ${appState.activePoll.mealSlot} Poll`);
         persistAndBroadcast({
           type: 'poll_voted',
           pollId: appState.activePoll.id,
           roommateId: myId,
           option: dishChoice,
-          portion: selectedPortion
+          portion: portionChoice
         });
-        showToast(`Vote submitted for ${dishChoice} (${selectedPortion})!`);
+        showToast(`Vote submitted! Live results unlocked 🔓`);
+        renderPollView();
       });
     }
 
@@ -1964,11 +1994,13 @@
           return;
         }
 
-        // Count votes and find winner
+        // Count votes and find winner (only count dish preferences where portion != 'No' and dish is valid)
         const tally = {};
         poll.options.forEach(opt => tally[opt] = 0);
         Object.values(votes).forEach(v => {
-          if (tally[v.option] !== undefined) tally[v.option]++;
+          if (v.portion !== 'No' && tally[v.option] !== undefined) {
+            tally[v.option]++;
+          }
         });
 
         let winningDish = poll.options[0];
@@ -1990,14 +2022,14 @@
         ROOMMATES.forEach(r => {
           const voterData = votes[r.id];
           const portion = voterData ? voterData.portion : 'Off';
-          mealsApplied[r.id] = portion;
-          appState.days[poll.day].meals[r.id][slotKey] = (portion === 'Off') ? '' : portion;
+          mealsApplied[r.id] = (portion === 'No') ? 'Off' : portion;
+          appState.days[poll.day].meals[r.id][slotKey] = (portion === 'Off' || portion === 'No') ? '' : portion;
         });
 
         poll.status = 'finalized';
         poll.winner = winningDish;
 
-        logActivity(SyncEngine.identity, 'Finalized Poll', `Winner: ${winningDish} (${maxVotes} votes)`);
+        logActivity(SyncEngine.identity, 'Finalized Poll', `Winner: ${winningDish} (${maxVotes > 0 ? maxVotes : 0} votes)`);
         persistAndBroadcast({
           type: 'poll_finalized',
           day: poll.day,
@@ -2012,25 +2044,39 @@
 
         let waOrder = `🍲 *TIFFIN ORDER - ${poll.day} OCT (${(poll.mealSlot || 'DINNER').toUpperCase()})*\n`;
         waOrder += `Cook: ${provider.name}\n`;
-        waOrder += `Selected Sabzi: *${winningDish}* (${maxVotes} votes)\n`;
+        waOrder += `Selected Sabzi: *${winningDish}*\n`;
         waOrder += `────────────────────\n`;
 
-        let halfCount = 0, fullCount = 0, specCount = 0;
+        let halfCount = 0, fullCount = 0, specCount = 0, noCount = 0;
         ROOMMATES.forEach(r => {
           const p = mealsApplied[r.id];
           if (p === 'Half') halfCount++;
           else if (p === 'Full') fullCount++;
           else if (p === 'Special') specCount++;
-          waOrder += `• ${r.name}: ${p === 'Special' ? 'Special (5 Roti, Sabji, Dal)' : p}\n`;
+          else noCount++;
+
+          let displayStatus = p;
+          if (p === 'Special') displayStatus = 'Special (5 Roti, Sabji, Dal)';
+          else if (p === 'Off') displayStatus = 'No Tiffin (Off)';
+
+          waOrder += `• ${r.name}: ${displayStatus}\n`;
         });
 
         waOrder += `────────────────────\n`;
-        waOrder += `*Total Order:* ${halfCount} Half, ${fullCount} Full${specCount ? `, ${specCount} Special` : ''}\n\n`;
+        const countSummary = [];
+        if (halfCount) countSummary.push(`${halfCount} Half`);
+        if (fullCount) countSummary.push(`${fullCount} Full`);
+        if (specCount) countSummary.push(`${specCount} Special`);
+        if (noCount) countSummary.push(`${noCount} Off`);
+        waOrder += `*Total Order:* ${countSummary.join(', ')}\n\n`;
         waOrder += `Please prepare as per count. Thank you!`;
 
         // Copy and open WhatsApp
         copyToClipboard(waOrder);
         showToast(`Copied order message for ${provider.name}!`);
+        renderPollView();
+        renderDailyLogger();
+        renderMasterSheet();
 
         const phoneParam = provider.phone ? `&phone=${encodeURIComponent(provider.phone.replace(/[^0-9]/g, ''))}` : '';
         const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(waOrder)}${phoneParam}`;

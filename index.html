@@ -23,7 +23,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css?v=2.2">
+  <link rel="stylesheet" href="styles.css?v=2.3">
 </head>
 <body>
   <!-- App Container -->
@@ -156,25 +156,10 @@
             <button id="clearSabziBtn" class="icon-btn-compact" title="Clear Sabzi">✕</button>
           </div>
 
-          <!-- Quick Dish 1-Tap Chips -->
-          <div class="menu-quick-chips" id="menuQuickChips">
-            <span class="chips-label">Quick Pick:</span>
-            <button class="menu-chip-btn" data-dish="Paneer">Paneer</button>
-            <button class="menu-chip-btn" data-dish="Rajma">Rajma</button>
-            <button class="menu-chip-btn" data-dish="Dal Tadka">Dal Tadka</button>
-            <button class="menu-chip-btn" data-dish="Aloo Gobi">Aloo Gobi</button>
-            <button class="menu-chip-btn" data-dish="Bhindi">Bhindi</button>
-            <button class="menu-chip-btn" data-dish="Mix Veg">Mix Veg</button>
-            <button class="menu-chip-btn" data-dish="Chole">Chole</button>
-          </div>
         </div>
 
-        <!-- Fast Bulk Actions Toolbar -->
+        <!-- Fast Actions Toolbar -->
         <div class="fast-actions-bar">
-          <button id="markAllDinnerHalfBtn" class="fast-action-btn">
-            <span class="btn-emoji">🌙</span>
-            <span>Mark All Dinner Half</span>
-          </button>
           <button id="openPollQuickBtn" class="fast-action-btn highlight-poll-action">
             <span class="btn-emoji">🗳️</span>
             <span>Menu Poll</span>
@@ -219,19 +204,45 @@
               <p class="poll-meta-text" id="pollMetaText">Created by Anjan • Votes update live across all phones</p>
             </div>
 
+            <!-- Blind Voting Notice (Shown until user votes) -->
+            <div id="pollBlindNotice" class="card-inner-box poll-blind-banner" style="display:none;">
+              <div class="blind-notice-icon">🔒</div>
+              <div class="blind-notice-content">
+                <strong>Blind Voting Active</strong>
+                <p>Flatmates cannot see other responses beforehand. Select your preferred sabzi and tiffin type below to submit your vote and reveal live results.</p>
+              </div>
+            </div>
+
             <!-- Voting Form for Current User -->
             <div class="card-inner-box my-vote-box" id="myVoteBox">
               <h4 class="inner-box-title">Cast Your Vote (<span id="myVoteIdentityLabel">Anjan</span>):</h4>
-              <div class="poll-options-radio-grid" id="pollOptionsRadioGrid">
-                <!-- Radio options injected here -->
+              <div class="form-group mt-2">
+                <span class="input-label" style="font-weight: 700; color: #fff;">1. Choose Sabzi Option:</span>
+                <div class="poll-options-radio-grid mt-1" id="pollOptionsRadioGrid">
+                  <!-- Radio options injected here -->
+                </div>
               </div>
+
               <div class="poll-portion-picker mt-3">
-                <span class="input-label">Select Meal Portion:</span>
+                <span class="input-label" style="font-weight: 700; color: #fff;">2. Select Tiffin Option:</span>
                 <div class="segment-toggle segment-sm" id="pollPortionToggle">
-                  <button class="seg-btn active half" data-portion="Half">Half</button>
-                  <button class="seg-btn full" data-portion="Full">Full</button>
-                  <button class="seg-btn special" data-portion="Special">Special (₹90)</button>
-                  <button class="seg-btn off" data-portion="Off">Off</button>
+                  <button class="seg-btn active half" data-portion="Half">
+                    <span>Half</span>
+                    <span class="seg-price">₹80</span>
+                  </button>
+                  <button class="seg-btn full" data-portion="Full">
+                    <span>Full</span>
+                    <span class="seg-price">₹110</span>
+                  </button>
+                  <button class="seg-btn special" data-portion="Special">
+                    <span>Special</span>
+                    <span class="seg-price">₹90</span>
+                    <span class="seg-desc">5 Roti, Sabji, Dal</span>
+                  </button>
+                  <button class="seg-btn off no-tiffin-btn" data-portion="No">
+                    <span>No</span>
+                    <span class="seg-price">No Tiffin</span>
+                  </button>
                 </div>
               </div>
               <button id="submitVoteBtn" class="primary-btn glow-btn btn-sm w-full mt-3">
@@ -239,16 +250,27 @@
               </button>
             </div>
 
-            <!-- Live Voting Results / Breakdown -->
-            <div class="poll-results-tray mt-4">
+            <!-- Voted Summary Card (Visible after user votes) -->
+            <div class="card-inner-box my-voted-summary-box" id="myVotedSummaryBox" style="display:none;">
+              <div class="voted-summary-header">
+                <div>
+                  <span class="voted-badge">✓ Vote Submitted</span>
+                  <h4 class="voted-title" id="myVotedChoiceText">You voted: Paneer • Half</h4>
+                </div>
+                <button id="changeVoteBtn" class="pill-btn-ghost btn-xs">Change Vote</button>
+              </div>
+            </div>
+
+            <!-- Live Voting Results / Breakdown (Hidden until user votes) -->
+            <div class="poll-results-tray mt-4" id="pollResultsTray">
               <h4 class="inner-box-title">Live Votes Tally:</h4>
               <div class="poll-results-bars" id="pollResultsBars">
                 <!-- Tally bars injected here -->
               </div>
             </div>
 
-            <!-- Who Voted for What Breakdown -->
-            <div class="voters-breakdown-card mt-3">
+            <!-- Who Voted for What Breakdown (Hidden until user votes) -->
+            <div class="voters-breakdown-card mt-3" id="votersBreakdownCard">
               <div class="voters-header">
                 <span class="tray-label">Roommate Choices:</span>
                 <span class="helper-text" id="votersCountLabel">0 / 7 Voted</span>
@@ -259,7 +281,7 @@
             </div>
 
             <!-- Finalize & Send WhatsApp Order to Cook -->
-            <div class="poll-finalize-actions mt-4">
+            <div class="poll-finalize-actions mt-4" id="pollFinalizeActions">
               <button id="finalizePollBtn" class="whatsapp-btn w-full btn-lg">
                 <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
                 <span>Finalize & Forward Order to Cook (WhatsApp)</span>
@@ -1056,8 +1078,8 @@
   </div>
 
   <!-- QR Generator Script -->
-  <script src="qr.js?v=2.2"></script>
+  <script src="qr.js?v=2.3"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=2.2"></script>
+  <script src="app.js?v=2.3"></script>
 </body>
 </html>

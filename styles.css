@@ -979,11 +979,77 @@ body {
   color: var(--text-muted);
 }
 
+/* Blind Voting Banner & Voted Summary */
+.poll-blind-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), #141419);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-top: 12px;
+}
+
+.blind-notice-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.blind-notice-content strong {
+  font-size: 0.95rem;
+  color: #fbbf24;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.blind-notice-content p {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.my-voted-summary-box {
+  background: linear-gradient(135deg, rgba(0, 229, 153, 0.12), #141419);
+  border: 1px solid rgba(0, 229, 153, 0.35);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-top: 12px;
+}
+
+.voted-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.voted-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--emerald);
+  text-transform: uppercase;
+}
+
+.voted-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin-top: 2px;
+}
+
+.no-tiffin-btn.active {
+  background: #272732 !important;
+  color: #fb7185 !important;
+  border-color: rgba(244, 63, 94, 0.4) !important;
+}
+
 .my-vote-box {
   background: var(--bg-card-solid);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 14px;
+  border-radius: var(--radius-md);
+  padding: 16px;
   margin-top: 12px;
 }
 
