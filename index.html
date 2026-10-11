@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>October Tiffin Expense Tracker</title>
+  
+  <!-- PWA & Mobile Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TiffinTrack">
+  <meta name="theme-color" content="#090d16">
+  <meta name="description" content="Live interactive mess and tiffin expense ledger with 1-tap logging, master spreadsheet, UPI settlements, and WhatsApp sharing.">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="apple-touch-icon" href="icon.svg">
+
+  <!-- Inter & Plus Jakarta Sans Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- App Container -->
+  <div id="app" class="app-root">
+    
+    <!-- Top Bar / Header (Compact & Height-Optimized) -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="app-logo">
+          <img src="icon.svg" alt="Tiffin Tracker Logo" class="logo-img">
+        </div>
+        <div class="header-titles">
+          <div class="header-main-title-row">
+            <h1 class="header-title">Tiffin Tracker</h1>
+            <span class="month-pill" id="headerMonthPill">OCT 2026</span>
+          </div>
+          <button id="headerUserIdentityPill" class="user-identity-badge" title="Tap to switch your name">
+            <span class="user-avatar-dot"></span>
+            <span id="headerIdentityName">Anjan</span>
+            <span class="switch-icon">▾</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <!-- Live Cloud Sync Status Pill -->
+        <button id="liveSyncStatusBtn" class="sync-status-btn connected" title="Live Cloud Sync: Connected. Tap for settings.">
+          <span class="sync-radar-dot"></span>
+          <span id="syncStatusLabel" class="sync-status-text">Live Sync</span>
+        </button>
+
+        <!-- Quick Menu Poll Shortcut Button -->
+        <button id="headerPollBtn" class="icon-btn poll-btn-highlight" title="Menu Voting Poll" aria-label="Menu Voting Poll">
+          <span>🗳️</span>
+        </button>
+
+        <!-- Settings & Pricing Button -->
+        <button id="headerSettingsBtn" class="icon-btn" title="Pricing & Flat Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+
+        <!-- Theme Toggle -->
+        <button id="themeToggleBtn" class="icon-btn" title="Toggle Theme" aria-label="Toggle Theme">
+          <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+
+        <!-- Share Live Link Button -->
+        <button id="headerShareBtn" class="primary-btn glow-btn btn-sm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+          <span>Share</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Desktop Navigation Tab Bar -->
+    <nav class="nav-bar desktop-nav" aria-label="Main Navigation">
+      <button class="nav-tab active" data-tab="logger">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        <span>Daily Logger</span>
+      </button>
+      <button class="nav-tab" data-tab="poll">
+        <span>🗳️</span>
+        <span>Menu Poll</span>
+      </button>
+      <button class="nav-tab" data-tab="sheet">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+        <span>Master Sheet</span>
+      </button>
+      <button class="nav-tab" data-tab="split">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>Split & Analytics</span>
+      </button>
+      <button class="nav-tab" data-tab="upi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        <span>UPI Settlement</span>
+      </button>
+      <button class="nav-tab" data-tab="amul">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12l2 6v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9l2-6z"/><line x1="4" y1="9" x2="20" y2="9"/></svg>
+        <span>Amul Milk</span>
+      </button>
+      <button class="nav-tab" data-tab="export">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Export & WA</span>
+      </button>
+    </nav>
+
+    <!-- Main Content Area with View Panels -->
+    <main class="main-content">
+
+      <!-- ========================================== -->
+      <!-- TAB 1: DAILY MEAL LOGGER (Mobile-First)     -->
+      <!-- ========================================== -->
+      <section id="view-logger" class="view-panel active">
+        <!-- Date Selector Strip -->
+        <div class="card date-strip-card">
+          <div class="date-strip-header">
+            <button id="prevDayBtn" class="icon-btn circle-btn" title="Previous Day">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div class="current-date-info">
+              <div class="date-main-row">
+                <h2 id="currentDayTitle" class="date-title">Date</h2>
+                <span id="dayTagPill" class="badge-pill today-pill">Today</span>
+              </div>
+              <p id="daySummarySubtitle" class="date-subtitle">0 meals logged • ₹0</p>
+            </div>
+            <button id="nextDayBtn" class="icon-btn circle-btn" title="Next Day">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+
+          <!-- Quick Date Bar -->
+          <div class="quick-date-row">
+            <button id="jumpTodayBtn" class="action-chip highlight-chip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span id="jumpTodayLabel">Jump to Today</span>
+            </button>
+            <div class="date-picker-wrap">
+              <label for="daySelectInput" class="visually-hidden">Select Date</label>
+              <select id="daySelectInput" class="select-dropdown">
+                <!-- Days 1 to 31 populated via JS -->
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sabzi / Menu Note Card (Clean - Quick suggestions removed as requested) -->
+        <div class="card menu-card">
+          <div class="card-header-compact">
+            <div class="card-title-wrap">
+              <span class="icon-bullet">🍲</span>
+              <h3 class="card-title">Sabzi & Menu Note</h3>
+            </div>
+            <span class="helper-text" id="sabziStatusText">Saved</span>
+          </div>
+
+          <div class="menu-input-row">
+            <input type="text" id="sabziInput" class="text-input" placeholder="Type what's cooking today (e.g. Paneer, Rajma, Bhindi...)" autocomplete="off">
+            <button id="clearSabziBtn" class="icon-btn-compact" title="Clear Sabzi">✕</button>
+          </div>
+        </div>
+
+        <!-- Fast Bulk Actions Toolbar -->
+        <div class="fast-actions-bar">
+          <button id="markAllDinnerHalfBtn" class="fast-action-btn">
+            <span class="btn-emoji">🌙</span>
+            <span>Mark All Dinner Half</span>
+          </button>
+          <button id="openPollQuickBtn" class="fast-action-btn highlight-poll-action">
+            <span class="btn-emoji">🗳️</span>
+            <span>Menu Poll</span>
+          </button>
+          <button id="clearTodayMealsBtn" class="fast-action-btn btn-ghost">
+            <span class="btn-emoji">🔄</span>
+            <span>Reset Day</span>
+          </button>
+        </div>
+
+        <!-- Roommates Daily Meal Cards -->
+        <div class="roommates-logger-grid" id="roommatesLoggerGrid">
+          <!-- Dynamically populated Roommate Meal Cards -->
+        </div>
+
+      </section>
+
+
+      <!-- ========================================== -->
+      <!-- TAB 2: MENU VOTING POLL SYSTEM             -->
+      <!-- ========================================== -->
+      <section id="view-poll" class="view-panel">
+        
+        <!-- Active Poll Card / Results -->
+        <div class="card" id="activePollCard">
+          <div class="card-header-compact">
+            <div class="card-title-wrap">
+              <span class="icon-bullet">🗳️</span>
+              <div>
+                <h2 class="card-title" id="pollCardTitle">Daily Menu Voting Poll</h2>
+                <p class="card-desc" id="pollCardSubtitle">Ask flatmates and finalize today's order for cook</p>
+              </div>
+            </div>
+            <span id="pollStatusBadge" class="badge-pill today-pill">No Active Poll</span>
+          </div>
+
+          <!-- Active Poll Live Display -->
+          <div id="activePollContainer" style="display:none;">
+            <div class="poll-question-hero">
+              <span class="poll-tag" id="pollMealTag">DINNER POLL</span>
+              <h3 class="poll-question-text" id="pollQuestionText">What should we cook for Dinner?</h3>
+              <p class="poll-meta-text" id="pollMetaText">Created by Anjan • Votes update live across all phones</p>
+            </div>
+
+            <!-- Voting Form for Current User -->
+            <div class="card-inner-box my-vote-box" id="myVoteBox">
+              <h4 class="inner-box-title">Cast Your Vote (<span id="myVoteIdentityLabel">Anjan</span>):</h4>
+              <div class="poll-options-radio-grid" id="pollOptionsRadioGrid">
+                <!-- Radio options injected here -->
+              </div>
+              <div class="poll-portion-picker mt-3">
+                <span class="input-label">Select Meal Portion:</span>
+                <div class="segment-toggle segment-sm" id="pollPortionToggle">
+                  <button class="seg-btn active half" data-portion="Half">Half</button>
+                  <button class="seg-btn full" data-portion="Full">Full</button>
+                  <button class="seg-btn special" data-portion="Special">Special (₹90)</button>
+                  <button class="seg-btn off" data-portion="Off">Off</button>
+                </div>
+              </div>
+              <button id="submitVoteBtn" class="primary-btn glow-btn btn-sm w-full mt-3">
+                <span>Submit My Vote</span>
+              </button>
+            </div>
+
+            <!-- Live Voting Results / Breakdown -->
+            <div class="poll-results-tray mt-4">
+              <h4 class="inner-box-title">Live Votes Tally:</h4>
+              <div class="poll-results-bars" id="pollResultsBars">
+                <!-- Tally bars injected here -->
+              </div>
+            </div>
+
+            <!-- Who Voted for What Breakdown -->
+            <div class="voters-breakdown-card mt-3">
+              <div class="voters-header">
+                <span class="tray-label">Roommate Choices:</span>
+                <span class="helper-text" id="votersCountLabel">0 / 7 Voted</span>
+              </div>
+              <div class="voters-chips-wrap" id="votersChipsWrap">
+                <!-- Injected via JS -->
+              </div>
+            </div>
+
+            <!-- Finalize & Send WhatsApp Order to Cook -->
+            <div class="poll-finalize-actions mt-4">
+              <button id="finalizePollBtn" class="whatsapp-btn w-full btn-lg">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
+                <span>Finalize & Forward Order to Cook (WhatsApp)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Create New Poll Form (Visible when no active poll or admin wants new poll) -->
+          <div id="createPollContainer" class="create-poll-box mt-3">
+            <h3 class="inner-box-title">Create a New Sabzi Poll</h3>
+            <p class="card-desc">Ask your cook what sabzi options she has, enter them below, and launch the poll to roommates.</p>
+
+            <div class="create-poll-grid">
+              <div class="form-group">
+                <label for="pollDaySelect" class="input-label">Date:</label>
+                <select id="pollDaySelect" class="select-dropdown w-full">
+                  <!-- Populated by JS -->
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="pollMealSlotSelect" class="input-label">Meal Slot:</label>
+                <select id="pollMealSlotSelect" class="select-dropdown w-full">
+                  <option value="Dinner" selected>Dinner</option>
+                  <option value="Lunch">Lunch</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group mt-3">
+              <label class="input-label">Sabzi Options from Cook:</label>
+              <div id="pollOptionInputsContainer" class="poll-inputs-container">
+                <input type="text" class="text-input poll-opt-input" placeholder="Option 1 (e.g. Paneer Bhurji)" value="Paneer">
+                <input type="text" class="text-input poll-opt-input" placeholder="Option 2 (e.g. Bhindi Masala)" value="Bhindi">
+                <input type="text" class="text-input poll-opt-input" placeholder="Option 3 (e.g. Dal Tadka)" value="Aloo Gobi">
+              </div>
+              <button id="addPollOptionBtn" class="secondary-btn btn-sm mt-2">
+                <span>+ Add Another Option</span>
+              </button>
+            </div>
+
+            <button id="launchPollBtn" class="primary-btn glow-btn w-full mt-4">
+              <span>🚀 Launch Poll to All Flatmates</span>
+            </button>
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ========================================== -->
+      <!-- TAB 3: MASTER SHEET MATRIX VIEW            -->
+      <!-- ========================================== -->
+      <section id="view-sheet" class="view-panel">
+        <div class="card sheet-wrapper-card">
+          <div class="sheet-toolbar">
+            <div class="sheet-info">
+              <h2 class="section-title">October 2026 Master Matrix</h2>
+              <p class="section-subtitle">Click meal cells to cycle: <span class="kbd">Off</span> ➜ <span class="kbd">Half</span> ➜ <span class="kbd">Full</span>. Click sabzi cell to edit dish name.</p>
+            </div>
+            <div class="sheet-actions">
+              <div class="filter-box">
+                <input type="text" id="sheetSearchInput" class="text-input-sm" placeholder="Search sabzi / day...">
+              </div>
+              <button id="sheetJumpTodayBtn" class="secondary-btn btn-sm">Jump to Today</button>
+            </div>
+          </div>
+
+          <!-- Spreadsheet Scroll Container (Sticky Layout Optimized) -->
+          <div class="sheet-scroll-container">
+            <table class="master-table" id="masterSheetTable">
+              <thead>
+                <!-- Top Group Header -->
+                <tr class="header-group-row">
+                  <th class="th-sticky th-date">Date</th>
+                  <th class="th-sticky th-menu">Sabzi / Note</th>
+                  <th colspan="2" class="th-person">Anjan</th>
+                  <th colspan="2" class="th-person">Saurabh</th>
+                  <th colspan="3" class="th-person">Alok</th>
+                  <th colspan="2" class="th-person">Rohit</th>
+                  <th colspan="2" class="th-person">Salman</th>
+                  <th colspan="2" class="th-person">Chetan</th>
+                  <th colspan="2" class="th-person">Hitesh</th>
+                  <th class="th-day-total">Day Total</th>
+                </tr>
+                <!-- Sub Columns Header -->
+                <tr class="header-sub-row">
+                  <th class="th-sticky th-date-sub">31 Days</th>
+                  <th class="th-sticky th-menu-sub">Dish</th>
+                  <th>Lunch</th><th>Dinner</th>
+                  <th>Lunch</th><th>Dinner</th>
+                  <th>Lunch</th><th>Dinner</th><th>Special</th>
+                  <th>Lunch</th><th>Dinner</th>
+                  <th>Lunch</th><th>Dinner</th>
+                  <th>Lunch</th><th>Dinner</th>
+                  <th>Lunch</th><th>Dinner</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody id="masterSheetBody">
+                <!-- 31 rows generated via JS -->
+              </tbody>
+              <tfoot id="masterSheetFooter">
+                <!-- Grand Totals Row -->
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ========================================== -->
+      <!-- TAB 4: ROOMMATE SPLIT & ANALYTICS          -->
+      <!-- ========================================== -->
+      <section id="view-split" class="view-panel">
+        
+        <!-- Clean Overview Stats -->
+        <div class="stats-overview-grid single-hero-grid">
+          <div class="stat-card stat-accent">
+            <div class="stat-icon-wrap">🍛</div>
+            <div class="stat-content">
+              <span class="stat-label">Total October Tiffin Expense</span>
+              <h3 class="stat-value" id="statsTotalExpense">₹0</h3>
+              <span class="stat-sub" id="statsTotalMeals">0 total meals served</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Roommate Expense Split Bars -->
+        <div class="card">
+          <div class="card-header-compact">
+            <div class="card-title-wrap">
+              <span class="icon-bullet">📊</span>
+              <h3 class="card-title">Roommate Expense Breakdown</h3>
+            </div>
+            <span class="helper-text" id="splitRatesSubtitle">Live Monthly Bill</span>
+          </div>
+
+          <div class="split-list" id="roommateSplitBarsList">
+            <!-- Roommates bars populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Popular Dishes & Trends -->
+        <div class="card">
+          <div class="card-header-compact">
+            <div class="card-title-wrap">
+              <span class="icon-bullet">🌟</span>
+              <h3 class="card-title">October Menu & Dish Frequency</h3>
+            </div>
+            <span class="helper-text">Most cooked sabzis</span>
+          </div>
+          <div class="popular-dishes-grid" id="popularDishesGrid">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+
+      </section>
+
+
+      <!-- ========================================== -->
+      <!-- TAB 5: DIRECT UPI SETTLEMENT TO COOK       -->
+      <!-- ========================================== -->
+      <section id="view-upi" class="view-panel">
+        <div class="upi-container">
+          <!-- Cook Payee Banner -->
+          <div class="card cook-banner-card">
+            <div class="cook-avatar">
+              <span>👩‍🍳</span>
+            </div>
+            <div class="cook-details">
+              <div class="cook-badge">TIFFIN PROVIDER</div>
+              <h2 class="cook-name" id="upiCookNameDisplay">Sandhya Tiwari</h2>
+              <div class="upi-id-badge" id="cookUpiIdCopy" title="Tap to copy UPI ID">
+                <span id="upiCookVpaDisplay">sandhyatiwari0205@oksbi</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </div>
+              <p class="cook-sub" id="upiCookPhoneDisplay">Mobile: Configurable in Settings</p>
+            </div>
+          </div>
+
+          <!-- Dynamic Roommate Payment Selector & QR -->
+          <div class="card upi-action-card">
+            <div class="form-group">
+              <label for="upiRoommateSelect" class="input-label">Select Roommate to Pay For:</label>
+              <select id="upiRoommateSelect" class="select-dropdown">
+                <!-- Roommate Options -->
+              </select>
+            </div>
+
+            <!-- Amount Box -->
+            <div class="upi-amount-hero">
+              <span class="currency-sym">₹</span>
+              <span class="amount-val" id="upiDisplayAmount">0</span>
+              <button id="editCustomAmountBtn" class="pill-btn-ghost" title="Enter custom amount">Custom</button>
+            </div>
+            <p class="amount-breakdown-note" id="upiAmountNote">Based on meals logged in October</p>
+
+            <!-- QR Code Container -->
+            <div class="qr-code-wrapper">
+              <div id="upiQrCodeContainer" class="qr-code-box">
+                <!-- SVG QR rendered dynamically here -->
+              </div>
+              <div class="qr-label">
+                <span class="scan-pill">Scan with GPay / PhonePe / Paytm</span>
+                <span class="qr-sub">Or tap the button below on your phone</span>
+              </div>
+            </div>
+
+            <!-- Sleek Compact 1-Tap UPI Launch Buttons -->
+            <div class="upi-launch-actions">
+              <a id="upiDirectPayLink" href="#" class="primary-btn glow-btn btn-md w-full upi-pay-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                <span>Pay via UPI App</span>
+              </a>
+
+              <button id="copyUpiLinkBtn" class="secondary-btn btn-sm w-full">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span>Copy UPI Payment Link</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ========================================== -->
+      <!-- TAB 6: AMUL MILK EXPENSE TRACKER           -->
+      <!-- ========================================== -->
+      <section id="view-amul" class="view-panel">
+        <div class="card">
+          <div class="card-header-compact">
+            <div class="card-title-wrap">
+              <span class="icon-bullet">🥛</span>
+              <div>
+                <h2 class="card-title">October Amul Milk Tracker</h2>
+                <p class="card-desc">Tracks daily milk packets consumed</p>
+              </div>
+            </div>
+            <div class="milk-rate-chip">
+              <span>Price:</span>
+              <strong id="amulPriceBadge">₹35 / packet</strong>
+            </div>
+          </div>
+
+          <!-- Milk Summary Cards -->
+          <div class="milk-summary-row">
+            <div class="mini-stat-card">
+              <span class="mini-label">Anjan</span>
+              <h4 class="mini-val" id="amulAnjanTotal">₹70</h4>
+              <span class="mini-sub" id="amulAnjanPackets">2 packets</span>
+            </div>
+            <div class="mini-stat-card">
+              <span class="mini-label">Saurabh</span>
+              <h4 class="mini-val" id="amulSaurabhTotal">₹70</h4>
+              <span class="mini-sub" id="amulSaurabhPackets">2 packets</span>
+            </div>
+            <div class="mini-stat-card accent">
+              <span class="mini-label">Total Milk Bill</span>
+              <h4 class="mini-val text-cyan" id="amulGrandTotal">₹140</h4>
+              <span class="mini-sub" id="amulTotalPackets">4 packets</span>
+            </div>
+          </div>
+
+          <!-- Quick Milk Logging for Selected Date -->
+          <div class="card-inner-box">
+            <h4 class="inner-box-title">Log Milk Packets for <span id="amulCurrentDayLabel">Today</span>:</h4>
+            <div class="milk-steppers-grid">
+              <div class="stepper-item">
+                <span class="stepper-name">Anjan</span>
+                <div class="stepper-controls">
+                  <button class="step-btn" data-person="anjan" data-delta="-1">-</button>
+                  <span class="step-value" id="amulDayAnjanVal">1</span>
+                  <button class="step-btn" data-person="anjan" data-delta="1">+</button>
+                </div>
+              </div>
+              <div class="stepper-item">
+                <span class="stepper-name">Saurabh</span>
+                <div class="stepper-controls">
+                  <button class="step-btn" data-person="saurabh" data-delta="-1">-</button>
+                  <span class="step-value" id="amulDaySaurabhVal">1</span>
+                  <button class="step-btn" data-person="saurabh" data-delta="1">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Milk Calendar Table -->
+          <div class="sheet-scroll-container mt-4">
+            <table class="master-table">
+              <thead>
+                <tr>
+                  <th class="th-sticky">Date</th>
+                  <th>Anjan (Pkt)</th>
+                  <th>Saurabh (Pkt)</th>
+                  <th>Day Total</th>
+                </tr>
+              </thead>
+              <tbody id="amulTableBody">
+                <!-- 31 days of milk entries -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ========================================== -->
+      <!-- TAB 7: SHARING, EXPORT & WHATSAPP          -->
+      <!-- ========================================== -->
+      <section id="view-export" class="view-panel">
+        
+        <!-- Live Link Sharing Card -->
+        <div class="card">
+          <div class="card-header-compact">
+            <div class="card-title-wrap">
+              <span class="icon-bullet">🔗</span>
+              <h3 class="card-title">Live Shareable Link</h3>
+            </div>
+            <span class="badge-pill">Real-time Connected</span>
+          </div>
+          <p class="card-desc">Send this link to flatmates on WhatsApp. Any change made by anyone updates automatically on everyone's phone in real-time!</p>
+          <div class="share-link-box">
+            <input type="text" id="shareUrlDisplay" class="text-input" readonly>
+            <button id="copyShareUrlBtn" class="primary-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>Copy Link</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- WhatsApp Flat Group Message Formatter -->
+        <div class="card">
+          <div class="card-header-compact">
+            <div class="card-title-wrap">
+              <span class="icon-bullet">💬</span>
+              <h3 class="card-title">WhatsApp Group Monthly Summary</h3>
+            </div>
+            <button id="copyWaSummaryBtn" class="whatsapp-btn btn-sm">
+              <span>Copy Summary</span>
+            </button>
+          </div>
+          <p class="card-desc">Pre-formatted itemized bill statement ready to paste into flat group chat:</p>
+          <div class="wa-preview-box">
+            <pre id="waSummaryText" class="wa-pre-text"></pre>
+          </div>
+          <div class="wa-action-row">
+            <button id="sendDirectWaBtn" class="whatsapp-btn w-full">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
+              <span>Open in WhatsApp</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- File Exports -->
+        <div class="card">
+          <div class="card-header-compact">
+            <div class="card-title-wrap">
+              <span class="icon-bullet">📥</span>
+              <h3 class="card-title">Spreadsheet & Document Exports</h3>
+            </div>
+          </div>
+          <div class="exports-grid">
+            <button id="exportCsvBtn" class="export-tile">
+              <span class="tile-icon">📊</span>
+              <div class="tile-text">
+                <strong>Export CSV Spreadsheet</strong>
+                <span>Compatible with Excel & Google Sheets</span>
+              </div>
+            </button>
+            <button id="printInvoiceBtn" class="export-tile">
+              <span class="tile-icon">🖨️</span>
+              <div class="tile-text">
+                <strong>Print / PDF Statement</strong>
+                <span>Official month-end invoice format</span>
+              </div>
+            </button>
+            <button id="backupJsonBtn" class="export-tile">
+              <span class="tile-icon">💾</span>
+              <div class="tile-text">
+                <strong>Backup JSON Ledger</strong>
+                <span>Full offline data backup</span>
+              </div>
+            </button>
+            <label class="export-tile cursor-pointer">
+              <input type="file" id="importJsonInput" accept=".json" class="visually-hidden">
+              <span class="tile-icon">📂</span>
+              <div class="tile-text">
+                <strong>Restore JSON Backup</strong>
+                <span>Load previously saved ledger</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Danger Zone (Password Protected with 'Flower') -->
+        <div class="card danger-card">
+          <div class="card-header-compact">
+            <h3 class="card-title text-rose">Admin Data Controls</h3>
+            <span class="badge-pill" style="border:1px solid var(--rose); color:var(--rose);">Protected</span>
+          </div>
+          <p class="card-desc">Only authorized flat admin can erase or reset cloud ledger data.</p>
+          <div class="danger-actions-row">
+            <button id="resetToDefaultBtn" class="danger-outline-btn">
+              Reset Ledger to Default Data (Password Required)
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- Mobile Bottom Navigation Bar -->
+    <nav class="mobile-nav-bar" aria-label="Mobile Navigation">
+      <button class="m-nav-tab active" data-tab="logger">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        <span>Logger</span>
+      </button>
+      <button class="m-nav-tab" data-tab="poll">
+        <span style="font-size:1.1rem; line-height:1;">🗳️</span>
+        <span>Poll</span>
+      </button>
+      <button class="m-nav-tab" data-tab="sheet">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+        <span>Sheet</span>
+      </button>
+      <button class="m-nav-tab" data-tab="split">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>Split</span>
+      </button>
+      <button class="m-nav-tab" data-tab="upi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        <span>Pay UPI</span>
+      </button>
+      <button class="m-nav-tab" data-tab="export">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+        <span>Share</span>
+      </button>
+    </nav>
+
+
+    <!-- ========================================== -->
+    <!-- MODAL 1: SETTINGS, PRICING & AUDIT LOG     -->
+    <!-- ========================================== -->
+    <div id="settingsModal" class="modal-backdrop">
+      <div class="modal-box modal-lg">
+        <div class="modal-header">
+          <div class="card-title-wrap">
+            <span class="icon-bullet">⚙️</span>
+            <h3 class="modal-title">Settings & Pricing</h3>
+          </div>
+          <button class="modal-close-btn" id="closeSettingsBtn">✕</button>
+        </div>
+        <div class="modal-body">
+          
+          <!-- Settings Sub Tabs -->
+          <div class="sub-tab-strip">
+            <button class="sub-tab active" data-subtab="pricing">Pricing Rates</button>
+            <button class="sub-tab" data-subtab="provider">Tiffin Provider</button>
+            <button class="sub-tab" data-subtab="identity">Your Name</button>
+            <button class="sub-tab" data-subtab="audit">Activity Log</button>
+          </div>
+
+          <!-- Sub Tab 1: Pricing Rates -->
+          <div id="subtab-pricing" class="subtab-content active">
+            <p class="card-desc">Edit meal rates. Updating prices here updates calculations for all roommates instantly:</p>
+            <div class="settings-grid">
+              <div class="form-group">
+                <label for="rateHalfInput" class="input-label">Half Meal Rate (₹):</label>
+                <input type="number" id="rateHalfInput" class="text-input" min="0" value="80">
+              </div>
+              <div class="form-group">
+                <label for="rateFullInput" class="input-label">Full Meal Rate (₹):</label>
+                <input type="number" id="rateFullInput" class="text-input" min="0" value="110">
+              </div>
+              <div class="form-group">
+                <label for="rateSpecialInput" class="input-label">Alok Special Rate (₹) [5 Roti, Sabji, Dal]:</label>
+                <input type="number" id="rateSpecialInput" class="text-input" min="0" value="90">
+              </div>
+              <div class="form-group">
+                <label for="rateAmulInput" class="input-label">Amul Milk Price / Packet (₹):</label>
+                <input type="number" id="rateAmulInput" class="text-input" min="0" value="35">
+              </div>
+            </div>
+            <button id="saveRatesBtn" class="primary-btn btn-sm mt-3 w-full glow-btn">
+              <span>Save Rates & Recalculate Ledger</span>
+            </button>
+          </div>
+
+          <!-- Sub Tab 2: Tiffin Provider Info -->
+          <div id="subtab-provider" class="subtab-content">
+            <p class="card-desc">Configure who receives payments via Google Pay / PhonePe:</p>
+            <div class="settings-grid">
+              <div class="form-group">
+                <label for="providerNameInput" class="input-label">Provider / Cook Name:</label>
+                <input type="text" id="providerNameInput" class="text-input" value="Sandhya Tiwari">
+              </div>
+              <div class="form-group">
+                <label for="providerUpiInput" class="input-label">UPI ID (VPA):</label>
+                <input type="text" id="providerUpiInput" class="text-input" value="sandhyatiwari0205@oksbi">
+              </div>
+              <div class="form-group">
+                <label for="providerPhoneInput" class="input-label">WhatsApp / Mobile Number:</label>
+                <input type="text" id="providerPhoneInput" class="text-input" placeholder="e.g. +91 98765 43210">
+              </div>
+            </div>
+            <button id="saveProviderBtn" class="primary-btn btn-sm mt-3 w-full">
+              <span>Save Provider Details</span>
+            </button>
+          </div>
+
+          <!-- Sub Tab 3: Roommate Identity Switch -->
+          <div id="subtab-identity" class="subtab-content">
+            <p class="card-desc">Select your name so flatmates know who is logging meals and voting:</p>
+            <div class="form-group">
+              <label for="settingsIdentitySelect" class="input-label">I am:</label>
+              <select id="settingsIdentitySelect" class="select-dropdown w-full">
+                <option value="Anjan">Anjan</option>
+                <option value="Saurabh">Saurabh</option>
+                <option value="Alok">Alok</option>
+                <option value="Rohit">Rohit</option>
+                <option value="Salman">Salman</option>
+                <option value="Chetan">Chetan</option>
+                <option value="Hitesh">Hitesh</option>
+              </select>
+            </div>
+            <div class="mt-4">
+              <button id="openWalkthroughBtn" class="secondary-btn btn-sm w-full">
+                <span>📖 View App Walkthrough & Guide</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Sub Tab 4: Audit / Activity Log -->
+          <div id="subtab-audit" class="subtab-content">
+            <div class="audit-header-bar">
+              <div>
+                <strong>Ledger Activity Log</strong>
+                <p class="helper-text">Every change is tracked with timestamp and author name.</p>
+              </div>
+              <button id="clearAuditLogBtn" class="pill-btn-ghost">Clear Log</button>
+            </div>
+            <div class="audit-log-container" id="auditLogList">
+              <!-- Log entries populated here -->
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- MODAL 2: ONBOARDING WALKTHROUGH & WELCOME  -->
+    <!-- ========================================== -->
+    <div id="onboardingModal" class="modal-backdrop">
+      <div class="modal-box">
+        <div class="modal-header">
+          <div class="card-title-wrap">
+            <span class="icon-bullet">🍛</span>
+            <h3 class="modal-title">Welcome to Tiffin Tracker</h3>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div class="walkthrough-bullets">
+            <div class="walkthrough-bullet-item">
+              <span class="bullet-icon">⚡</span>
+              <div>
+                <strong>1-Tap Meal Logging</strong>
+                <p class="bullet-desc">Tap Off, Half, Full, or Special to log lunch & dinner. Monthly bills calculate automatically.</p>
+              </div>
+            </div>
+            <div class="walkthrough-bullet-item">
+              <span class="bullet-icon">🗳️</span>
+              <div>
+                <strong>Daily Menu Voting Poll</strong>
+                <p class="bullet-desc">Cook gives options ➜ launch a poll ➜ flatmates vote ➜ forward 1-click order on WhatsApp.</p>
+              </div>
+            </div>
+            <div class="walkthrough-bullet-item">
+              <span class="bullet-icon">🟢</span>
+              <div>
+                <strong>Live Multi-Device Sync</strong>
+                <p class="bullet-desc">Every change syncs across all roommates' phones in real time with zero setup.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group mt-4">
+            <label for="onboardingNameSelect" class="input-label">Select your name to begin:</label>
+            <select id="onboardingNameSelect" class="select-dropdown w-full">
+              <option value="Anjan">Anjan</option>
+              <option value="Saurabh">Saurabh</option>
+              <option value="Alok">Alok</option>
+              <option value="Rohit">Rohit</option>
+              <option value="Salman">Salman</option>
+              <option value="Chetan">Chetan</option>
+              <option value="Hitesh">Hitesh</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="finishOnboardingBtn" class="primary-btn glow-btn w-full">
+            <span>Get Started 🚀</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- MODAL 3: PASSWORD PROMPT ("Flower")        -->
+    <!-- ========================================== -->
+    <div id="passwordPromptModal" class="modal-backdrop">
+      <div class="modal-box modal-sm">
+        <div class="modal-header">
+          <h3 class="modal-title">🔒 Admin Authentication</h3>
+          <button class="modal-close-btn" id="closePasswordPromptBtn">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="card-desc">Sensitive ledger action. Only authorized flat admin can confirm.</p>
+          <div class="form-group">
+            <label for="adminPasswordInput" class="input-label">Enter Password:</label>
+            <input type="password" id="adminPasswordInput" class="text-input" placeholder="Enter password...">
+            <span id="passwordErrorMsg" class="helper-text text-rose" style="display:none; font-weight:700;">Incorrect password.</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="confirmPasswordBtn" class="danger-outline-btn w-full">
+            <span>Confirm Action</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- MODAL 4: LIVE CLOUD SYNC SETTINGS          -->
+    <!-- ========================================== -->
+    <div id="cloudSyncModal" class="modal-backdrop">
+      <div class="modal-box">
+        <div class="modal-header">
+          <div class="card-title-wrap">
+            <span class="icon-bullet">🔄</span>
+            <h3 class="modal-title">Live Cloud Sync</h3>
+          </div>
+          <button class="modal-close-btn" id="closeCloudSyncBtn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="sync-modal-status-card">
+            <div class="sync-status-indicator">
+              <span class="pulsing-dot-large"></span>
+              <div>
+                <strong id="modalSyncStatusTitle">Live Sync Active</strong>
+                <p id="modalSyncStatusDesc" class="sync-sub-desc">All devices connected to this room update automatically in real-time.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group mt-4">
+            <label for="roomCodeInput" class="input-label">Flat Sync Room Code:</label>
+            <div class="menu-input-row" style="margin-bottom:4px;">
+              <input type="text" id="roomCodeInput" class="text-input" placeholder="e.g. flat-oct-2026-tiffin">
+              <button id="saveRoomCodeBtn" class="primary-btn btn-sm" style="position:absolute; right:6px;">Set</button>
+            </div>
+            <span class="helper-text">Share this room code with flatmates so everyone's phone connects to the same ledger.</span>
+          </div>
+
+          <div class="sync-actions-group mt-4">
+            <button id="forceSyncCloudBtn" class="secondary-btn w-full">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              <span>Broadcast Full Ledger Now</span>
+            </button>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="copyRoomShareLinkBtn" class="primary-btn w-full glow-btn">
+            <span>Copy Live Room Link for Flatmates</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Toast Notification Overlay -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Print Template (Only visible when printing) -->
+    <div id="printableInvoice" class="print-only">
+      <!-- Generated dynamically during window.print() -->
+    </div>
+
+  </div>
+
+  <!-- QR Generator Script -->
+  <script src="qr.js"></script>
+  <!-- Main Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
