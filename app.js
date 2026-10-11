@@ -375,6 +375,10 @@
       if (lbl) {
         lbl.textContent = label || (status === 'connected' ? 'Live Sync' : status === 'syncing' ? 'Syncing...' : 'Offline');
       }
+      const settingsSync = document.getElementById('settingsSyncStatusText');
+      if (settingsSync) {
+        settingsSync.textContent = status === 'connected' ? `Cloud Sync: Connected & Live (#${this.roomCode})` : status === 'syncing' ? 'Cloud Sync: Syncing...' : 'Cloud Sync: Offline';
+      }
       if (modalTitle) {
         modalTitle.textContent = status === 'connected' ? `Live Sync Active (#${this.roomCode})` : status === 'syncing' ? 'Syncing with flatmates...' : 'Connecting to Live Cloud...';
       }
@@ -786,6 +790,24 @@
       daySummary.textContent = `${dayMealsCount} meal${dayMealsCount === 1 ? '' : 's'} logged • ₹${dayCost}`;
     }
 
+    // Sabzi / Menu Note UI (Banner vs Input vs Quick Chips)
+    const sabziBanner = document.getElementById('sabziDisplayBanner');
+    const sabziDishSpan = document.getElementById('sabziDisplayDish');
+    const sabziInputRow = document.getElementById('sabziInputRow');
+    const menuQuickChips = document.getElementById('menuQuickChips');
+
+    const hasSabzi = !!(dayData.sabzi && dayData.sabzi.trim());
+    if (hasSabzi) {
+      if (sabziDishSpan) sabziDishSpan.textContent = dayData.sabzi;
+      if (sabziBanner) sabziBanner.style.display = 'flex';
+      if (sabziInputRow && document.activeElement !== sabziInput) sabziInputRow.style.display = 'none';
+      if (menuQuickChips) menuQuickChips.style.display = 'none';
+    } else {
+      if (sabziBanner) sabziBanner.style.display = 'none';
+      if (sabziInputRow) sabziInputRow.style.display = 'flex';
+      if (menuQuickChips) menuQuickChips.style.display = 'flex';
+    }
+
     if (sabziInput && document.activeElement !== sabziInput) {
       sabziInput.value = dayData.sabzi || '';
     }
@@ -797,29 +819,7 @@
     }
     if (select) select.value = selectedDay;
 
-    // Quick Amul Milk Card on Logger Tab
-    const loggerDayLabel = document.getElementById('loggerAmulDayLabel');
-    if (loggerDayLabel) loggerDayLabel.textContent = dayData.dateShort;
-    const loggerAmulRateBadge = document.getElementById('loggerAmulRateBadge');
-    if (loggerAmulRateBadge) loggerAmulRateBadge.textContent = `₹${rates.amulPacket || 35} / pkt`;
-
-    const anjanPkt = Number(dayData.amul?.anjan) || 0;
-    const saurabhPkt = Number(dayData.amul?.saurabh) || 0;
-    const loggerAnjanVal = document.getElementById('loggerDayAnjanVal');
-    const loggerSaurabhVal = document.getElementById('loggerDaySaurabhVal');
-    if (loggerAnjanVal) loggerAnjanVal.textContent = anjanPkt ? `${anjanPkt} pkt` : '0 pkt';
-    if (loggerSaurabhVal) loggerSaurabhVal.textContent = saurabhPkt ? `${saurabhPkt} pkt` : '0 pkt';
-
-    document.querySelectorAll('.amul-quick-card .amul-pill-group').forEach(group => {
-      const p = group.getAttribute('data-person');
-      const curVal = Number(dayData.amul?.[p]) || 0;
-      group.querySelectorAll('.amul-pill-btn').forEach(b => {
-        const qty = parseFloat(b.getAttribute('data-qty'));
-        b.classList.toggle('active', qty === curVal);
-      });
-    });
-
-    // Roommate Cards Grid
+    // Roommate Cards Grid (Immediately visible, no off-screen push)
     const container = document.getElementById('roommatesLoggerGrid');
     if (!container) return;
     container.innerHTML = '';
@@ -1761,6 +1761,8 @@
         triggerHaptic();
         appState.days[selectedDay].sabzi = '';
         if (sabziInput) sabziInput.value = '';
+        renderDailyLogger();
+        renderMasterSheet();
         logActivity(SyncEngine.identity, 'Cleared Sabzi', `Day ${selectedDay}`);
         persistAndBroadcast({
           type: 'sabzi_update',
@@ -1769,6 +1771,41 @@
         });
       });
     }
+
+    // Change / Edit dish button on banner
+    const editBannerBtn = document.getElementById('editSabziBannerBtn');
+    if (editBannerBtn) {
+      editBannerBtn.addEventListener('click', () => {
+        triggerHaptic();
+        const banner = document.getElementById('sabziDisplayBanner');
+        const inputRow = document.getElementById('sabziInputRow');
+        const chips = document.getElementById('menuQuickChips');
+        if (banner) banner.style.display = 'none';
+        if (inputRow) inputRow.style.display = 'flex';
+        if (chips) chips.style.display = 'flex';
+        if (sabziInput) sabziInput.focus();
+      });
+    }
+
+    // 1-Tap Quick Dish Chips
+    document.querySelectorAll('.menu-chip-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        triggerHaptic();
+        const dish = btn.getAttribute('data-dish');
+        if (!dish) return;
+        appState.days[selectedDay].sabzi = dish;
+        if (sabziInput) sabziInput.value = dish;
+        renderDailyLogger();
+        renderMasterSheet();
+        logActivity(SyncEngine.identity, 'Sabzi Update', `Day ${selectedDay} dish set to "${dish}"`);
+        persistAndBroadcast({
+          type: 'sabzi_update',
+          day: selectedDay,
+          sabzi: dish
+        });
+        showToast(`🍲 Menu set to ${dish}`);
+      });
+    });
   }
 
   function setupFastActions() {
@@ -2536,6 +2573,29 @@
       });
     }
 
+    // Settings Modal Share & Export Buttons
+    const settingsShareLink = document.getElementById('settingsShareLinkBtn');
+    if (settingsShareLink) settingsShareLink.addEventListener('click', copyShare);
+
+    const settingsShareWA = document.getElementById('settingsShareWhatsAppBtn');
+    if (settingsShareWA) {
+      settingsShareWA.addEventListener('click', () => {
+        triggerHaptic();
+        const text = encodeURIComponent(generateWhatsAppSummaryText());
+        window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+      });
+    }
+
+    const settingsExportCsv = document.getElementById('settingsExportCsvBtn');
+    if (settingsExportCsv) settingsExportCsv.addEventListener('click', downloadCsvExport);
+
+    const settingsPrintInv = document.getElementById('settingsPrintInvoiceBtn');
+    if (settingsPrintInv) {
+      settingsPrintInv.addEventListener('click', () => {
+        window.print();
+      });
+    }
+
     if (exportCsvBtn) {
       exportCsvBtn.addEventListener('click', downloadCsvExport);
     }
@@ -2648,21 +2708,47 @@
   }
 
   function setupTheme() {
-    const toggleBtn = document.getElementById('themeToggleBtn');
-    const savedTheme = localStorage.getItem('tiffin_theme') || 
-      (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    const savedTheme = localStorage.getItem('tiffin_theme') || 'dark';
+    applyTheme(savedTheme);
 
-    document.documentElement.setAttribute('data-theme', savedTheme);
+    const darkBtn = document.getElementById('themeDarkBtn');
+    const lightBtn = document.getElementById('themeLightBtn');
+    const toggleBtn = document.getElementById('themeToggleBtn');
+
+    if (darkBtn) {
+      darkBtn.addEventListener('click', () => {
+        triggerHaptic();
+        applyTheme('dark');
+        showToast('Switched to Dark Theme');
+      });
+    }
+
+    if (lightBtn) {
+      lightBtn.addEventListener('click', () => {
+        triggerHaptic();
+        applyTheme('light');
+        showToast('Switched to Light Theme');
+      });
+    }
 
     if (toggleBtn) {
       toggleBtn.addEventListener('click', () => {
         triggerHaptic();
         const current = document.documentElement.getAttribute('data-theme');
         const next = current === 'dark' ? 'light' : 'dark';
-        document.documentElement.setAttribute('data-theme', next);
-        localStorage.setItem('tiffin_theme', next);
+        applyTheme(next);
       });
     }
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('tiffin_theme', theme);
+
+    const darkBtn = document.getElementById('themeDarkBtn');
+    const lightBtn = document.getElementById('themeLightBtn');
+    if (darkBtn) darkBtn.classList.toggle('active', theme === 'dark');
+    if (lightBtn) lightBtn.classList.toggle('active', theme === 'light');
   }
 
   // --- Utility Helpers ---
