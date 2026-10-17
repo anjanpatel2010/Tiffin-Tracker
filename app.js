@@ -2753,47 +2753,13 @@
   }
 
   function setupTheme() {
-    const savedTheme = localStorage.getItem('tiffin_theme') || 'dark';
-    applyTheme(savedTheme);
-
-    const darkBtn = document.getElementById('themeDarkBtn');
-    const lightBtn = document.getElementById('themeLightBtn');
-    const toggleBtn = document.getElementById('themeToggleBtn');
-
-    if (darkBtn) {
-      darkBtn.addEventListener('click', () => {
-        triggerHaptic();
-        applyTheme('dark');
-        showToast('Switched to Dark Theme');
-      });
-    }
-
-    if (lightBtn) {
-      lightBtn.addEventListener('click', () => {
-        triggerHaptic();
-        applyTheme('light');
-        showToast('Switched to Light Theme');
-      });
-    }
-
-    if (toggleBtn) {
-      toggleBtn.addEventListener('click', () => {
-        triggerHaptic();
-        const current = document.documentElement.getAttribute('data-theme');
-        const next = current === 'dark' ? 'light' : 'dark';
-        applyTheme(next);
-      });
-    }
+    document.documentElement.setAttribute('data-theme', 'dark');
+    localStorage.setItem('tiffin_theme', 'dark');
   }
 
   function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('tiffin_theme', theme);
-
-    const darkBtn = document.getElementById('themeDarkBtn');
-    const lightBtn = document.getElementById('themeLightBtn');
-    if (darkBtn) darkBtn.classList.toggle('active', theme === 'dark');
-    if (lightBtn) lightBtn.classList.toggle('active', theme === 'light');
+    document.documentElement.setAttribute('data-theme', 'dark');
+    localStorage.setItem('tiffin_theme', 'dark');
   }
 
   // --- Utility Helpers ---
@@ -2803,7 +2769,7 @@
 
     const toast = document.createElement('div');
     toast.className = 'toast';
-    toast.innerHTML = `<span>⚡</span><span>${escapeHtml(message)}</span>`;
+    toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
     container.appendChild(toast);
 
     setTimeout(() => {
