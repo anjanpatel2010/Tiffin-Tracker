@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>October Tiffin Expense Tracker</title>
+  <title>Tiffin Expense Tracker</title>
   
   <!-- PWA & Mobile Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -23,7 +23,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css?v=2.3">
+  <link rel="stylesheet" href="styles.css?v=2.4">
 </head>
 <body>
   <!-- App Container -->
@@ -38,10 +38,10 @@
         <div class="header-titles">
           <div class="header-main-title-row">
             <h1 class="header-title">Tiffin Tracker</h1>
-            <div class="month-selector-group">
+            <div class="month-selector-group" style="display: none;">
               <button id="headerPrevMonthBtn" class="month-nav-arrow" title="Previous Month">‹</button>
               <button id="headerMonthPickerBtn" class="month-pill-btn" title="Choose Month & Year">
-                <span id="headerMonthText">OCT 2026</span>
+                <span id="headerMonthText"></span>
                 <span class="month-caret">▾</span>
               </button>
               <button id="headerNextMonthBtn" class="month-nav-arrow" title="Next Month">›</button>
@@ -340,7 +340,7 @@
         <div class="card sheet-wrapper-card">
           <div class="sheet-toolbar">
             <div class="sheet-info">
-              <h2 class="section-title" id="sheetMatrixTitle">October 2026 Master Matrix</h2>
+              <h2 class="section-title" id="sheetMatrixTitle">Master Matrix</h2>
               <p class="section-subtitle">Click meal cells to cycle: <span class="kbd">Off</span> ➜ <span class="kbd">Half</span> ➜ <span class="kbd">Full</span>. Click sabzi cell to edit dish name.</p>
             </div>
             <div class="sheet-actions">
@@ -416,7 +416,7 @@
           <div class="stat-card stat-accent">
             <div class="stat-icon-wrap">🍛</div>
             <div class="stat-content">
-              <span class="stat-label">Total October Tiffin Expense</span>
+              <span class="stat-label">Total Monthly Tiffin Expense</span>
               <h3 class="stat-value" id="statsTotalExpense">₹0</h3>
               <span class="stat-sub" id="statsTotalMeals">0 total meals served</span>
             </div>
@@ -443,7 +443,7 @@
           <div class="card-header-compact">
             <div class="card-title-wrap">
               <span class="icon-bullet">🌟</span>
-              <h3 class="card-title">October Menu & Dish Frequency</h3>
+              <h3 class="card-title">Menu & Dish Frequency</h3>
             </div>
             <span class="helper-text">Most cooked sabzis</span>
           </div>
@@ -491,7 +491,7 @@
               <span class="amount-val" id="upiDisplayAmount">0</span>
               <button id="editCustomAmountBtn" class="pill-btn-ghost" title="Enter custom amount">Custom</button>
             </div>
-            <p class="amount-breakdown-note" id="upiAmountNote">Based on meals logged in October</p>
+            <p class="amount-breakdown-note" id="upiAmountNote">Based on logged meals</p>
 
             <!-- QR Code Container -->
             <div class="qr-code-wrapper">
@@ -531,7 +531,7 @@
             <div class="card-title-wrap">
               <span class="icon-bullet">🥛</span>
               <div>
-                <h2 class="card-title" id="amulSectionTitle">October Amul Milk Tracker</h2>
+                <h2 class="card-title" id="amulSectionTitle">Amul Milk Tracker</h2>
                 <p class="card-desc">Tracks daily milk packets consumed (Options: 0.5, 1, or 2 packets)</p>
               </div>
             </div>
@@ -1016,7 +1016,7 @@
           <div class="form-group mt-4">
             <label for="roomCodeInput" class="input-label">Flat Sync Room Code:</label>
             <div class="menu-input-row" style="margin-bottom:4px;">
-              <input type="text" id="roomCodeInput" class="text-input" placeholder="e.g. flat-oct-2026-tiffin">
+              <input type="text" id="roomCodeInput" class="text-input" placeholder="e.g. flat-tiffin">
               <button id="saveRoomCodeBtn" class="primary-btn btn-sm" style="position:absolute; right:6px;">Set</button>
             </div>
             <span class="helper-text">Share this room code with flatmates so everyone's phone connects to the same ledger.</span>
@@ -1078,8 +1078,8 @@
   </div>
 
   <!-- QR Generator Script -->
-  <script src="qr.js?v=2.3"></script>
+  <script src="qr.js?v=2.4"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=2.3"></script>
+  <script src="app.js?v=2.4"></script>
 </body>
 </html>

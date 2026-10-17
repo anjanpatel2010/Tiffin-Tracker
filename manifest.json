@@ -1,5 +1,5 @@
 {
-  "name": "October Tiffin Expense Tracker",
+  "name": "Tiffin Expense Tracker",
   "short_name": "TiffinTrack",
   "description": "Live interactive mess and tiffin expense ledger with 1-tap logging, master spreadsheet, UPI settlements, and WhatsApp sharing.",
   "start_url": "./index.html",

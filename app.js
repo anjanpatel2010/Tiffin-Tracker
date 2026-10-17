@@ -21,11 +21,13 @@
     return new Date(year, month, 0).getDate();
   }
 
-  // Active Month & Year (Defaults to October 2026 for existing ledger)
-  let currentYear = 2026;
-  let currentMonth = 10; // 1-indexed (10 = October)
-
   const now = new Date();
+  let currentYear = now.getFullYear();
+  let currentMonth = now.getMonth() + 1; // 1-indexed
+
+  // Application State declaration (initialized to null to prevent TDZ reference errors)
+  let appState = null;
+
   function getDynamicTodayForMonth(year, month) {
     if (now.getFullYear() === year && (now.getMonth() + 1) === month) {
       return Math.min(Math.max(now.getDate(), 1), getDaysInMonth(year, month));
@@ -83,8 +85,8 @@
       days[d] = {
         day: d,
         dayOfWeek: dayOfWeek,
-        dateFormatted: `${dayOfWeek}, ${d} ${monthName}, ${year}`,
-        dateShort: `${d} ${monthShort}`,
+        dateFormatted: `${dayOfWeek}, Day ${d}`,
+        dateShort: `Day ${d}`,
         sabzi: '',
         meals: {
           anjan: { lunch: '', dinner: '' },
@@ -124,8 +126,8 @@
       }
     }
 
-    const rates = (typeof appState !== 'undefined' && appState?.rates) ? { ...appState.rates } : { ...CONFIG.defaultRates };
-    const provider = (typeof appState !== 'undefined' && appState?.provider) ? { ...appState.provider } : { ...CONFIG.defaultProvider };
+    const rates = (appState && appState.rates) ? { ...appState.rates } : { ...CONFIG.defaultRates };
+    const provider = (appState && appState.provider) ? { ...appState.provider } : { ...CONFIG.defaultProvider };
 
     return {
       version: 3,
@@ -143,7 +145,7 @@
           timeFormatted: formatLogTime(Date.now()),
           author: 'System',
           action: 'Ledger Initialized',
-          details: `Initialized ledger for ${monthName} ${year}.`
+          details: `Initialized ledger for Day 1-${daysInM}.`
         }
       ]
     };
@@ -210,7 +212,7 @@
   }
 
   // Application State
-  let appState = loadState();
+  appState = loadState();
   let selectedDay = CONFIG.todayDay;
   let selectedUpiRoommate = 'anjan';
   let customUpiAmount = null;
@@ -270,13 +272,10 @@
     const sheetDaysSub = document.getElementById('sheetDaysSubLabel');
     const amulTitle = document.getElementById('amulSectionTitle');
 
-    const mName = MONTH_NAMES[currentMonth - 1];
-    const mShort = MONTH_SHORTS[currentMonth - 1];
-
-    if (monthText) monthText.textContent = `${mShort} ${currentYear}`;
-    if (sheetTitle) sheetTitle.textContent = `${mName} ${currentYear} Master Matrix`;
+    if (monthText) monthText.textContent = '';
+    if (sheetTitle) sheetTitle.textContent = `Master Matrix`;
     if (sheetDaysSub) sheetDaysSub.textContent = `${CONFIG.daysInMonth} Days`;
-    if (amulTitle) amulTitle.textContent = `${mName} Amul Milk Tracker`;
+    if (amulTitle) amulTitle.textContent = `Amul Milk Tracker`;
   }
 
   function populateDateSelectors() {
@@ -291,7 +290,7 @@
         opt.value = d;
         const dateObj = new Date(currentYear, currentMonth - 1, d);
         const dayName = DAY_NAMES[dateObj.getDay()].slice(0, 3);
-        opt.textContent = `${d} ${MONTH_SHORTS[currentMonth - 1]} (${dayName})`;
+        opt.textContent = `Day ${d} (${dayName})`;
         sel.appendChild(opt);
       }
       sel.value = selectedDay;
@@ -559,7 +558,7 @@
         }
       } else if (action.type === 'poll_created') {
         appState.activePoll = action.poll;
-        logActivity(action.author, 'Created Poll', `${action.poll.mealSlot} Poll for ${action.poll.day} Oct: ${action.poll.options.join(', ')}`);
+        logActivity(action.author, 'Created Poll', `${action.poll.mealSlot} Poll for Day ${action.poll.day}: ${action.poll.options.join(', ')}`);
         modified = true;
         if (!isCatchUp) {
           showToast(`🗳️ New ${action.poll.mealSlot} Poll from ${action.author}! Tap to vote.`);
@@ -928,7 +927,7 @@
       for (let d = 1; d <= CONFIG.daysInMonth; d++) {
         const opt = document.createElement('option');
         opt.value = d;
-        opt.textContent = `${d} Oct`;
+        opt.textContent = `Day ${d}`;
         pollDaySelect.appendChild(opt);
       }
       pollDaySelect.value = selectedDay;
@@ -957,7 +956,7 @@
     const questionText = document.getElementById('pollQuestionText');
     const metaText = document.getElementById('pollMetaText');
 
-    if (mealTag) mealTag.textContent = `${(poll.mealSlot || 'DINNER').toUpperCase()} POLL (${poll.day} OCT)`;
+    if (mealTag) mealTag.textContent = `${(poll.mealSlot || 'DINNER').toUpperCase()} POLL (DAY ${poll.day})`;
     if (questionText) questionText.textContent = `What should we cook for ${poll.mealSlot || 'Dinner'}?`;
     if (metaText) metaText.textContent = `Launched by ${poll.author || 'Flatmate'} • Live across all phones`;
 
@@ -1368,7 +1367,7 @@
     const splitRatesSub = document.getElementById('splitRatesSubtitle');
 
     if (statExpense) statExpense.textContent = `₹${flatTotals.tiffinTotal}`;
-    if (statMeals) statMeals.textContent = `${flatTotals.totalMeals} total meals served in October`;
+    if (statMeals) statMeals.textContent = `${flatTotals.totalMeals} total meals served`;
     if (splitRatesSub) splitRatesSub.textContent = `Rates: Half ₹${rates.half} • Full ₹${rates.full} • Special ₹${rates.special}`;
 
     // Roommate Expense Split Bars
@@ -1470,11 +1469,11 @@
     if (amountNote) {
       amountNote.textContent = customUpiAmount !== null 
         ? `Custom payment entered for ${roommateObj.name}`
-        : `${roommateObj.name}'s October bill (${stats.totalMeals} meals)`;
+        : `${roommateObj.name}'s Monthly bill (${stats.totalMeals} meals)`;
     }
 
     // Dynamic UPI Deep Link
-    const note = encodeURIComponent(`October Tiffin - ${roommateObj.name}`);
+    const note = encodeURIComponent(`Tiffin Payment - ${roommateObj.name}`);
     const upiUri = `upi://pay?pa=${encodeURIComponent(provider.upi)}&pn=${encodeURIComponent(provider.name)}&am=${amountToPay}&tn=${note}&cu=INR`;
 
     const payLink = document.getElementById('upiDirectPayLink');
@@ -1613,7 +1612,7 @@
     const provider = appState.provider || CONFIG.defaultProvider;
     const mNameUpper = MONTH_NAMES[currentMonth - 1].toUpperCase();
 
-    let text = `🍛 *${mNameUpper} ${currentYear} TIFFIN EXPENSE SUMMARY*\n`;
+    let text = `🍛 *TIFFIN EXPENSE SUMMARY*\n`;
     text += `Flat Tiffin Ledger • Cook: ${provider.name}\n`;
     text += `Rate: Half ₹${rates.half} | Full ₹${rates.full} | Special ₹${rates.special}\n`;
     text += `──────────────────────\n`;
@@ -1763,7 +1762,7 @@
         triggerHaptic();
         selectedDay = CONFIG.todayDay;
         renderAll();
-        showToast(`Jumped to Today (Oct ${CONFIG.todayDay})`);
+        showToast(`Jumped to Today (Day ${CONFIG.todayDay})`);
       });
     }
 
@@ -1855,7 +1854,7 @@
             state: appState,
             reason: `Reset day ${selectedDay}`
           });
-          showToast(`Meals for ${selectedDay} Oct reset to Off`);
+          showToast(`Meals for Day ${selectedDay} reset to Off`);
         });
       });
     }
@@ -1935,7 +1934,7 @@
         };
 
         appState.activePoll = newPoll;
-        logActivity(SyncEngine.identity, 'Created Poll', `${slot} poll for ${day} Oct: ${options.join(', ')}`);
+        logActivity(SyncEngine.identity, 'Created Poll', `${slot} poll for Day ${day}: ${options.join(', ')}`);
         persistAndBroadcast({
           type: 'poll_created',
           poll: newPoll
@@ -2042,7 +2041,7 @@
         const rates = getRates();
         const provider = appState.provider || CONFIG.defaultProvider;
 
-        let waOrder = `🍲 *TIFFIN ORDER - ${poll.day} OCT (${(poll.mealSlot || 'DINNER').toUpperCase()})*\n`;
+        let waOrder = `🍲 *TIFFIN ORDER - DAY ${poll.day} (${(poll.mealSlot || 'DINNER').toUpperCase()})*\n`;
         waOrder += `Cook: ${provider.name}\n`;
         waOrder += `Selected Sabzi: *${winningDish}*\n`;
         waOrder += `────────────────────\n`;
@@ -2657,7 +2656,7 @@
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState, null, 2));
         const a = document.createElement('a');
         a.setAttribute('href', dataStr);
-        a.setAttribute('download', `October_Tiffin_Backup_${new Date().toISOString().slice(0, 10)}.json`);
+        a.setAttribute('download', `Tiffin_Ledger_Backup_${new Date().toISOString().slice(0, 10)}.json`);
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -2746,11 +2745,11 @@
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `October_2026_Tiffin_Expense.csv`);
+    link.setAttribute("download", `Tiffin_Expense_Report.csv`);
     document.body.appendChild(link);
     link.click();
     link.remove();
-    showToast('Downloaded October 2026 CSV');
+    showToast('Downloaded Tiffin Expense CSV');
   }
 
   function setupTheme() {
