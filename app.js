@@ -780,7 +780,7 @@
       dayTagPill.style.display = (selectedDay === CONFIG.todayDay) ? 'inline-flex' : 'none';
     }
     if (jumpLabel) {
-      jumpLabel.textContent = `Jump to Today (${MONTH_SHORTS[currentMonth - 1]} ${CONFIG.todayDay})`;
+      jumpLabel.textContent = `Jump to Today (Day ${CONFIG.todayDay})`;
     }
 
     const dayCost = getDayTotalCost(selectedDay);
@@ -1184,7 +1184,7 @@
       if (isAll) {
         tr.innerHTML = `
           <td class="td-sticky-date" title="${dayData.dateFormatted}">
-            ${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}
+            ${dayData.dayOfWeek.slice(0, 3)}, Day ${d}
           </td>
           <td class="td-sticky-menu" data-day="${d}" title="Click to edit sabzi">
             ${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}
@@ -1221,7 +1221,7 @@
       } else if (activePerson) {
         tr.innerHTML = `
           <td class="td-sticky-date" title="${dayData.dateFormatted}">
-            ${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}
+            ${dayData.dayOfWeek.slice(0, 3)}, Day ${d}
           </td>
           <td class="td-sticky-menu" data-day="${d}" title="Click to edit sabzi">
             ${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}

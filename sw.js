@@ -1,10 +1,10 @@
-const CACHE_NAME = 'tiffin-tracker-v2.4';
+const CACHE_NAME = 'tiffin-tracker-v3.0';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=2.4',
-  './app.js?v=2.4',
-  './qr.js?v=2.4',
+  './styles.css?v=3.0',
+  './app.js?v=3.0',
+  './qr.js?v=3.0',
   './manifest.json',
   './icon.svg'
 ];
@@ -38,12 +38,14 @@ self.addEventListener('fetch', (e) => {
 
   const url = new URL(e.request.url);
 
-  // Network-First for core navigation and code (HTML, JS, CSS) so updates appear immediately
+  // Network-First for root, HTML, JS, CSS so latest UI updates load instantly
   const isCoreAsset = e.request.mode === 'navigate' ||
                       e.request.destination === 'document' ||
-                      url.pathname.endsWith('.html') ||
-                      url.pathname.endsWith('.js') ||
-                      url.pathname.endsWith('.css');
+                      url.pathname === '/' ||
+                      url.pathname.endsWith('/') ||
+                      url.pathname.includes('.html') ||
+                      url.pathname.includes('.js') ||
+                      url.pathname.includes('.css');
 
   if (isCoreAsset) {
     e.respondWith(
