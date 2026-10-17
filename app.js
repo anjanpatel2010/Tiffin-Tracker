@@ -353,9 +353,12 @@
         if (result === 'granted') {
           if (showFeedback) showToast('Phone alerts enabled! Sending test notification...');
           await this.send('Tiffin Tracker Notifications Active', {
-            body: 'You will receive alerts in your notification bar when a flatmate schedules a poll!',
+            body: 'You will receive alerts in your notification bar when a flatmate schedules a poll, plus 5-min reminders!',
             tag: 'tiffin-welcome'
           });
+          if (appState && appState.activePoll && appState.activePoll.status === 'active') {
+            PollReminderManager.start(appState.activePoll);
+          }
           return true;
         } else if (result === 'denied' && showFeedback) {
           showToast('Notification permission was denied in browser settings.');
@@ -372,7 +375,7 @@
       const defaultOpts = {
         icon: './icon.svg',
         badge: './icon.svg',
-        vibrate: [200, 100, 200],
+        vibrate: [250, 100, 250],
         tag: 'tiffin-alert',
         renotify: true,
         data: { url: window.location.href.split('#')[0] + '#view-poll' },
@@ -391,6 +394,109 @@
       } catch (err) {
         console.warn('Notification post failed:', err);
       }
+    }
+  };
+
+  // ==========================================================================
+  // POLL 5-MINUTE RECURRING REMINDER MANAGER
+  // ==========================================================================
+  const PollReminderManager = {
+    intervalId: null,
+    REMINDER_INTERVAL_MS: 5 * 60 * 1000, // 5 minutes
+
+    hasUserVoted(poll) {
+      if (!poll || !poll.votes) return false;
+      const myId = (typeof SyncEngine !== 'undefined' && SyncEngine.identity ? SyncEngine.identity : '').trim().toLowerCase();
+      if (!myId) return false;
+      return !!poll.votes[myId];
+    },
+
+    start(poll) {
+      if (!poll || poll.status !== 'active') {
+        this.stop();
+        return;
+      }
+
+      // If user has already voted, do not remind
+      if (this.hasUserVoted(poll)) {
+        this.stop();
+        return;
+      }
+
+      // Record baseline reminder timestamp if not present
+      const pollKey = 'tiffin_poll_remind_' + poll.id;
+      if (!localStorage.getItem(pollKey)) {
+        localStorage.setItem(pollKey, Date.now().toString());
+      }
+
+      // Keep Service Worker informed for background notification dispatch
+      try {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: 'START_POLL_REMINDER',
+            pollId: poll.id,
+            mealSlot: poll.mealSlot,
+            options: (poll.options || []).join(' vs '),
+            day: poll.day
+          });
+        }
+      } catch (e) {}
+
+      // Keep client-side check running every 30 seconds
+      if (!this.intervalId) {
+        this.intervalId = setInterval(() => {
+          this.checkAndRemind();
+        }, 30000);
+      }
+    },
+
+    checkAndRemind() {
+      const poll = appState ? appState.activePoll : null;
+      if (!poll || poll.status !== 'active') {
+        this.stop();
+        return;
+      }
+
+      if (this.hasUserVoted(poll)) {
+        this.stop();
+        return;
+      }
+
+      const pollKey = 'tiffin_poll_remind_' + poll.id;
+      const lastReminded = parseInt(localStorage.getItem(pollKey) || '0', 10);
+      const now = Date.now();
+
+      if (now - lastReminded >= this.REMINDER_INTERVAL_MS) {
+        localStorage.setItem(pollKey, now.toString());
+        const optionsList = Array.isArray(poll.options) ? poll.options.join(' vs ') : 'sabzi options';
+        const meal = poll.mealSlot || 'Dinner';
+        NotificationManager.send(`Reminder: Vote for ${meal} Poll!`, {
+          body: `Options: "${optionsList}" (Day ${poll.day}). Please tap to cast your vote!`,
+          tag: 'poll-reminder-' + poll.id,
+          renotify: true,
+          vibrate: [300, 150, 300]
+        });
+      }
+    },
+
+    stop(pollId) {
+      if (this.intervalId) {
+        clearInterval(this.intervalId);
+        this.intervalId = null;
+      }
+      if (pollId) {
+        localStorage.removeItem('tiffin_poll_remind_' + pollId);
+      } else if (appState && appState.activePoll) {
+        localStorage.removeItem('tiffin_poll_remind_' + appState.activePoll.id);
+      }
+
+      try {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: 'STOP_POLL_REMINDER'
+          });
+        }
+      } catch (e) {}
     }
   };
 
@@ -426,7 +532,9 @@
       this.catchUp();
 
       // 5. Setup 5-minute Poll Reminder Check
-      this.setupPollReminder();
+      if (appState && appState.activePoll && appState.activePoll.status === 'active') {
+        PollReminderManager.start(appState.activePoll);
+      }
     },
 
     setRoomCode(newRoom) {
@@ -451,6 +559,14 @@
       this.identity = name;
       localStorage.setItem('tiffin_my_identity', name);
       updateIdentityUI(name);
+
+      if (appState && appState.activePoll && appState.activePoll.status === 'active') {
+        if (PollReminderManager.hasUserVoted(appState.activePoll)) {
+          PollReminderManager.stop(appState.activePoll.id);
+        } else {
+          PollReminderManager.start(appState.activePoll);
+        }
+      }
     },
 
     updateStatusUI(status, label) {
@@ -664,9 +780,12 @@
           triggerHaptic();
           NotificationManager.send(`New ${action.poll.mealSlot} Poll from ${action.author}`, {
             body: `${action.poll.options.join(', ')} (Day ${action.poll.day}). Tap to vote!`,
-            tag: 'poll-' + action.poll.id
+            tag: 'poll-' + action.poll.id,
+            renotify: true
           });
         }
+        localStorage.setItem('tiffin_poll_remind_' + action.poll.id, Date.now().toString());
+        PollReminderManager.start(action.poll);
       } else if (action.type === 'poll_voted') {
         if (appState.activePoll && appState.activePoll.id === action.pollId) {
           if (!appState.activePoll.votes) appState.activePoll.votes = {};
@@ -677,8 +796,13 @@
           };
           logActivity(action.author, 'Cast Vote', `Voted "${action.option}" (${action.portion})`);
           modified = true;
+
+          const myId = (SyncEngine.identity || '').toLowerCase();
+          if (action.roommateId === myId) {
+            PollReminderManager.stop(action.pollId);
+          }
+
           if (!isCatchUp) {
-            const myId = (SyncEngine.identity || '').toLowerCase();
             const hasMyVote = !!(appState.activePoll.votes && appState.activePoll.votes[myId]);
             if (hasMyVote) {
               showToast(`${action.author} voted for ${action.option}`);
@@ -689,6 +813,7 @@
         }
       } else if (action.type === 'poll_finalized') {
         if (appState.activePoll) {
+          PollReminderManager.stop(appState.activePoll.id);
           appState.activePoll.status = 'finalized';
           appState.activePoll.winner = action.winner;
 
@@ -2208,8 +2333,11 @@
         showToast('Poll launched to flatmates!');
         NotificationManager.send(`New ${slot} Poll Scheduled!`, {
           body: `Options: ${options.join(', ')} (Day ${day}). Tap to vote!`,
-          tag: 'poll-' + newPoll.id
+          tag: 'poll-' + newPoll.id,
+          renotify: true
         });
+        localStorage.setItem('tiffin_poll_remind_' + newPoll.id, Date.now().toString());
+        PollReminderManager.start(newPoll);
         renderPollView();
       });
     }
@@ -2262,7 +2390,8 @@
           option: dishChoice,
           portion: portionChoice
         });
-        showToast(`Vote submitted! Live results unlocked`);
+        PollReminderManager.stop(appState.activePoll.id);
+        showToast(`Vote submitted! 5-min poll reminders stopped.`);
         renderPollView();
       });
     }
@@ -2322,6 +2451,7 @@
           appState.pollHistory.unshift({ ...poll });
         }
 
+        PollReminderManager.stop(poll.id);
         logActivity(SyncEngine.identity, 'Finalized Poll', `Winner: ${winningDish} (${maxVotes > 0 ? maxVotes : 0} votes)`);
         persistAndBroadcast({
           type: 'poll_finalized',
@@ -2333,7 +2463,8 @@
 
         NotificationManager.send(`Poll Finalized: ${winningDish}!`, {
           body: `${poll.mealSlot || 'Dinner'} menu finalized for Day ${poll.day}.`,
-          tag: 'poll-winner-' + poll.day
+          tag: 'poll-winner-' + poll.day,
+          renotify: true
         });
 
         // Generate WhatsApp Order Message
@@ -2920,6 +3051,7 @@
     const modal = document.getElementById('onboardingModal');
     const finishBtn = document.getElementById('finishOnboardingBtn');
     const select = document.getElementById('onboardingNameSelect');
+    const notifToggle = document.getElementById('onboardingNotifToggle');
 
     const hasOnboarded = localStorage.getItem('tiffin_onboarded_v2');
     if (!hasOnboarded && modal) {
@@ -2927,15 +3059,70 @@
     }
 
     if (finishBtn && modal) {
-      finishBtn.addEventListener('click', () => {
+      finishBtn.addEventListener('click', async () => {
         triggerHaptic();
         const chosen = select?.value || 'Anjan';
         SyncEngine.setIdentity(chosen);
         localStorage.setItem('tiffin_onboarded_v2', 'true');
         modal.classList.remove('active');
+
+        // Request native notification bar alerts if toggle is checked
+        if (notifToggle && notifToggle.checked) {
+          await NotificationManager.requestPermission(true);
+        }
+
         showToast(`Welcome ${chosen}! You are ready to log meals.`);
       });
     }
+  }
+
+  // --- Startup Notification Permission Dialog ---
+  function setupNotificationStartupPrompt() {
+    if (!NotificationManager.isSupported()) return;
+
+    const modal = document.getElementById('notificationPromptModal');
+    const allowBtn = document.getElementById('allowStartNotificationBtn');
+    const dismissBtn = document.getElementById('dismissStartNotificationBtn');
+
+    const hasOnboarded = localStorage.getItem('tiffin_onboarded_v2');
+    const dismissed = sessionStorage.getItem('tiffin_notif_prompt_dismissed');
+
+    // If permission is default and user has already completed onboarding, prompt them on start!
+    if (Notification.permission === 'default' && hasOnboarded && !dismissed && modal) {
+      setTimeout(() => {
+        modal.classList.add('active');
+      }, 500);
+    }
+
+    if (allowBtn && modal) {
+      allowBtn.addEventListener('click', async () => {
+        triggerHaptic();
+        modal.classList.remove('active');
+        const granted = await NotificationManager.requestPermission(true);
+        if (granted && appState.activePoll && appState.activePoll.status === 'active') {
+          PollReminderManager.start(appState.activePoll);
+        }
+      });
+    }
+
+    if (dismissBtn && modal) {
+      dismissBtn.addEventListener('click', () => {
+        triggerHaptic();
+        sessionStorage.setItem('tiffin_notif_prompt_dismissed', 'true');
+        modal.classList.remove('active');
+      });
+    }
+
+    // Direct native request on first user touch anywhere if still default
+    const requestOnFirstTouch = () => {
+      if (NotificationManager.isSupported() && Notification.permission === 'default') {
+        NotificationManager.requestPermission(false).catch(() => {});
+      }
+      document.removeEventListener('click', requestOnFirstTouch);
+      document.removeEventListener('touchstart', requestOnFirstTouch);
+    };
+    document.addEventListener('click', requestOnFirstTouch, { once: true, passive: true });
+    document.addEventListener('touchstart', requestOnFirstTouch, { once: true, passive: true });
   }
 
   // --- Cloud Sync & Room Controls ---
@@ -3296,11 +3483,24 @@
     updateMonthUI();
     populateDateSelectors();
 
-    // Initialize notification status
+    // Initialize notification status and startup permission prompt
     NotificationManager.updateUI();
+    setupNotificationStartupPrompt();
 
     // Start Real-Time Cloud Sync Engine
     SyncEngine.init();
+
+    // Check active poll reminders on startup
+    if (appState && appState.activePoll && appState.activePoll.status === 'active') {
+      PollReminderManager.start(appState.activePoll);
+    }
+
+    // Check reminders when user returns to app
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && appState && appState.activePoll && appState.activePoll.status === 'active') {
+        PollReminderManager.checkAndRemind();
+      }
+    });
 
     // Initial Full Render
     renderAll();

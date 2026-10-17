@@ -1,10 +1,10 @@
-const CACHE_NAME = 'tiffin-tracker-v3.1';
+const CACHE_NAME = 'tiffin-tracker-v3.2';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=3.1',
-  './app.js?v=3.1',
-  './qr.js?v=3.1',
+  './styles.css?v=3.2',
+  './app.js?v=3.2',
+  './qr.js?v=3.2',
   './manifest.json',
   './icon.svg'
 ];
@@ -31,6 +31,33 @@ self.addEventListener('activate', (e) => {
       );
     }).then(() => self.clients.claim())
   );
+});
+
+// Background Poll Reminder Dispatcher in Service Worker
+let swReminderInterval = null;
+self.addEventListener('message', (event) => {
+  if (!event.data) return;
+  if (event.data.type === 'START_POLL_REMINDER') {
+    const { pollId, mealSlot, options, day } = event.data;
+    if (swReminderInterval) clearInterval(swReminderInterval);
+    // Every 5 minutes (300,000 ms), push phone notification reminder
+    swReminderInterval = setInterval(() => {
+      self.registration.showNotification(`Reminder: Vote for ${mealSlot || 'Dinner'} Poll!`, {
+        body: `Options: "${options}" (Day ${day}). Please tap to cast your vote!`,
+        icon: './icon.svg',
+        badge: './icon.svg',
+        tag: 'poll-reminder-' + pollId,
+        renotify: true,
+        vibrate: [300, 150, 300],
+        data: { url: './#view-poll' }
+      });
+    }, 5 * 60 * 1000);
+  } else if (event.data.type === 'STOP_POLL_REMINDER') {
+    if (swReminderInterval) {
+      clearInterval(swReminderInterval);
+      swReminderInterval = null;
+    }
+  }
 });
 
 // Native Notification Click Handler (Brings PWA / browser window to foreground)
