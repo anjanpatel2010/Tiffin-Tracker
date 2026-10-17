@@ -57,13 +57,13 @@
   };
 
   const ROOMMATES = [
-    { id: 'anjan', name: 'Anjan', slots: ['lunch', 'dinner'], avatarColor: '#0284c7' },
-    { id: 'saurabh', name: 'Saurabh', slots: ['lunch', 'dinner'], avatarColor: '#0ea5e9' },
-    { id: 'alok', name: 'Alok', slots: ['lunch', 'dinner'], hasSpecial: true, avatarColor: '#8b5cf6' },
-    { id: 'rohit', name: 'Rohit', slots: ['lunch', 'dinner'], avatarColor: '#ec4899' },
-    { id: 'salman', name: 'Salman', slots: ['lunch', 'dinner'], avatarColor: '#f59e0b' },
+    { id: 'anjan', name: 'Anjan', slots: ['lunch', 'dinner'], avatarColor: '#00d26a' },
+    { id: 'saurabh', name: 'Saurabh', slots: ['lunch', 'dinner'], avatarColor: '#00d4ff' },
+    { id: 'alok', name: 'Alok', slots: ['lunch', 'dinner'], hasSpecial: true, avatarColor: '#a78bfa' },
+    { id: 'rohit', name: 'Rohit', slots: ['lunch', 'dinner'], avatarColor: '#ff3b5c' },
+    { id: 'salman', name: 'Salman', slots: ['lunch', 'dinner'], avatarColor: '#ffb800' },
     { id: 'chetan', name: 'Chetan', slots: ['lunch', 'dinner'], avatarColor: '#10b981' },
-    { id: 'hitesh', name: 'Hitesh', slots: ['lunch', 'dinner'], avatarColor: '#06b6d4' }
+    { id: 'hitesh', name: 'Hitesh', slots: ['lunch', 'dinner'], avatarColor: '#38bdf8' }
   ];
 
   function getStorageKey(year, month) {
