@@ -1,10 +1,10 @@
-const CACHE_NAME = 'tiffin-tracker-v3.2';
+const CACHE_NAME = 'tiffin-tracker-v3.3';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=3.2',
-  './app.js?v=3.2',
-  './qr.js?v=3.2',
+  './styles.css?v=3.3',
+  './app.js?v=3.3',
+  './qr.js?v=3.3',
   './manifest.json',
   './icon.svg'
 ];
@@ -42,8 +42,8 @@ self.addEventListener('message', (event) => {
     if (swReminderInterval) clearInterval(swReminderInterval);
     // Every 5 minutes (300,000 ms), push phone notification reminder
     swReminderInterval = setInterval(() => {
-      self.registration.showNotification(`Reminder: Vote for ${mealSlot || 'Dinner'} Poll!`, {
-        body: `Options: "${options}" (Day ${day}). Please tap to cast your vote!`,
+      self.registration.showNotification(`Poll Reminder`, {
+        body: `Please cast your vote for ${mealSlot || 'meal'}.`,
         icon: './icon.svg',
         badge: './icon.svg',
         tag: 'poll-reminder-' + pollId,

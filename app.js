@@ -352,8 +352,8 @@
         this.updateUI();
         if (result === 'granted') {
           if (showFeedback) showToast('Phone alerts enabled! Sending test notification...');
-          await this.send('Tiffin Tracker Notifications Active', {
-            body: 'You will receive alerts in your notification bar when a flatmate schedules a poll, plus 5-min reminders!',
+          await this.send('Alerts Active', {
+            body: 'You will receive phone alerts when a poll starts.',
             tag: 'tiffin-welcome'
           });
           if (appState && appState.activePoll && appState.activePoll.status === 'active') {
@@ -468,10 +468,9 @@
 
       if (now - lastReminded >= this.REMINDER_INTERVAL_MS) {
         localStorage.setItem(pollKey, now.toString());
-        const optionsList = Array.isArray(poll.options) ? poll.options.join(' vs ') : 'sabzi options';
         const meal = poll.mealSlot || 'Dinner';
-        NotificationManager.send(`Reminder: Vote for ${meal} Poll!`, {
-          body: `Options: "${optionsList}" (Day ${poll.day}). Please tap to cast your vote!`,
+        NotificationManager.send(`Poll Reminder`, {
+          body: `Please cast your vote for ${meal}.`,
           tag: 'poll-reminder-' + poll.id,
           renotify: true,
           vibrate: [300, 150, 300]
@@ -778,8 +777,8 @@
         if (!isCatchUp) {
           showToast(`New ${action.poll.mealSlot} Poll from ${action.author}! Tap to vote.`);
           triggerHaptic();
-          NotificationManager.send(`New ${action.poll.mealSlot} Poll from ${action.author}`, {
-            body: `${action.poll.options.join(', ')} (Day ${action.poll.day}). Tap to vote!`,
+          NotificationManager.send(`New ${action.poll.mealSlot || 'Meal'} Poll`, {
+            body: 'Tap to cast your vote.',
             tag: 'poll-' + action.poll.id,
             renotify: true
           });
@@ -840,12 +839,28 @@
         logActivity(action.author, 'Finalized Poll', `Winner dish: ${action.winner}`);
         modified = true;
         if (!isCatchUp) {
-          showToast(`Poll Finalized: Winner is ${action.winner}!`);
-          NotificationManager.send(`Poll Finalized: ${action.winner}!`, {
-            body: `${action.mealSlot || 'Dinner'} menu finalized for Day ${action.day}`,
-            tag: 'poll-winner-' + action.day
+          showToast(`Poll Finalized: ${action.winner}`);
+          NotificationManager.send(`Poll Finalized`, {
+            body: `${action.mealSlot || 'Meal'} decided. Tap to view.`,
+            tag: 'poll-winner-' + action.day,
+            renotify: true
           });
         }
+      } else if (action.type === 'poll_cancelled') {
+        if (appState.activePoll) {
+          PollReminderManager.stop(appState.activePoll.id);
+          appState.activePoll = null;
+          modified = true;
+          if (!isCatchUp) showToast('Active poll was cancelled.');
+        }
+      } else if (action.type === 'poll_history_delete') {
+        if (appState.pollHistory && action.pollId) {
+          appState.pollHistory = appState.pollHistory.filter(p => p.id !== action.pollId);
+          modified = true;
+        }
+      } else if (action.type === 'poll_history_clear') {
+        appState.pollHistory = [];
+        modified = true;
       } else if (action.type === 'amul_members_update') {
         if (Array.isArray(action.members) && action.members.length > 0) {
           appState.amulMembers = action.members;
@@ -1335,90 +1350,104 @@
     }
 
     // --- Render Previous Polls Archive Section ---
+    const prevCard = document.getElementById('previousPollsCard');
     const prevListContainer = document.getElementById('previousPollsList');
     const prevCountBadge = document.getElementById('prevPollsCountBadge');
+    const clearAllBtn = document.getElementById('clearAllPrevPollsBtn');
     const pollHistory = appState.pollHistory || [];
+
+    if (prevCard) {
+      prevCard.style.display = pollHistory.length > 0 ? 'block' : 'none';
+    }
 
     if (prevCountBadge) {
       prevCountBadge.textContent = `${pollHistory.length} Saved`;
     }
 
+    if (clearAllBtn) {
+      clearAllBtn.style.display = pollHistory.length > 0 ? 'inline-block' : 'none';
+    }
+
     if (prevListContainer) {
       prevListContainer.innerHTML = '';
-      if (pollHistory.length === 0) {
-        prevListContainer.innerHTML = `
-          <div class="empty-archive-box">
-            No previous polls saved yet. When a poll is finalized or replaced, it will appear here.
-          </div>
-        `;
-      } else {
-        pollHistory.forEach(pastPoll => {
-          const card = document.createElement('div');
-          card.className = 'previous-poll-card-item';
+      pollHistory.forEach(pastPoll => {
+        const card = document.createElement('div');
+        card.className = 'previous-poll-card-item';
 
-          const votes = pastPoll.votes || {};
-          const totalVotes = Object.keys(votes).length;
-          const dateStr = `Day ${pastPoll.day || '?'}`;
-          const slotStr = (pastPoll.mealSlot || 'Dinner').toUpperCase();
+        const votes = pastPoll.votes || {};
+        const totalVotes = Object.keys(votes).length;
+        const dateStr = `Day ${pastPoll.day || '?'}`;
+        const slotStr = (pastPoll.mealSlot || 'Dinner').toUpperCase();
 
-          const tally = {};
-          (pastPoll.options || []).forEach(opt => tally[opt] = 0);
-          Object.values(votes).forEach(v => {
-            if (v.portion !== 'No' && tally[v.option] !== undefined) {
-              tally[v.option]++;
-            }
-          });
-
-          let optionsBarsHtml = '';
-          (pastPoll.options || []).forEach(opt => {
-            const count = tally[opt] || 0;
-            const pct = totalVotes > 0 ? ((count / totalVotes) * 100).toFixed(0) : 0;
-            const isWinner = pastPoll.winner === opt;
-            optionsBarsHtml += `
-              <div class="prev-opt-bar-row">
-                <div class="prev-opt-text-row">
-                  <span>${escapeHtml(opt)}</span>
-                  <span>${count} (${pct}%)</span>
-                </div>
-                <div class="prev-opt-progress-track">
-                  <div class="prev-opt-progress-bar ${isWinner ? 'winner' : ''}" style="width: ${pct}%"></div>
-                </div>
-              </div>
-            `;
-          });
-
-          let votersChipsHtml = '';
-          ROOMMATES.forEach(r => {
-            const v = votes[r.id];
-            if (v) {
-              const portionDisp = v.portion === 'No' ? 'No Tiffin' : v.portion;
-              const choiceDisp = (v.portion === 'No' && (!v.option || v.option === 'No Tiffin'))
-                ? 'No Tiffin'
-                : `${escapeHtml(v.option)} (${portionDisp})`;
-              votersChipsHtml += `<span class="prev-voter-chip"><strong>${r.name}:</strong> ${choiceDisp}</span>`;
-            }
-          });
-
-          card.innerHTML = `
-            <div class="prev-poll-top-row">
-              <div>
-                <div class="prev-poll-tag-wrap">
-                  <span class="poll-tag" style="font-size:0.65rem;">${slotStr} • ${dateStr}</span>
-                  ${pastPoll.winner ? `<span class="prev-winner-badge">✓ Winner: ${escapeHtml(pastPoll.winner)}</span>` : ''}
-                </div>
-                <h4 class="prev-poll-title">${pastPoll.options ? pastPoll.options.join(' vs ') : 'Poll'}</h4>
-                <p class="prev-poll-meta">By ${pastPoll.author || 'Flatmate'} • ${totalVotes} / ${ROOMMATES.length} voted</p>
-              </div>
-            </div>
-            <div class="prev-poll-options-summary">
-              ${optionsBarsHtml}
-            </div>
-            ${votersChipsHtml ? `<div class="prev-voters-list">${votersChipsHtml}</div>` : ''}
-          `;
-
-          prevListContainer.appendChild(card);
+        const tally = {};
+        (pastPoll.options || []).forEach(opt => tally[opt] = 0);
+        Object.values(votes).forEach(v => {
+          if (v.portion !== 'No' && tally[v.option] !== undefined) {
+            tally[v.option]++;
+          }
         });
-      }
+
+        let optionsBarsHtml = '';
+        (pastPoll.options || []).forEach(opt => {
+          const count = tally[opt] || 0;
+          const pct = totalVotes > 0 ? ((count / totalVotes) * 100).toFixed(0) : 0;
+          const isWinner = pastPoll.winner === opt;
+          optionsBarsHtml += `
+            <div class="prev-opt-bar-row">
+              <div class="prev-opt-text-row">
+                <span>${escapeHtml(opt)}</span>
+                <span>${count} (${pct}%)</span>
+              </div>
+              <div class="prev-opt-progress-track">
+                <div class="prev-opt-progress-bar ${isWinner ? 'winner' : ''}" style="width: ${pct}%"></div>
+              </div>
+            </div>
+          `;
+        });
+
+        let votersChipsHtml = '';
+        ROOMMATES.forEach(r => {
+          const v = votes[r.id];
+          if (v) {
+            const portionDisp = v.portion === 'No' ? 'No Tiffin' : v.portion;
+            const choiceDisp = (v.portion === 'No' && (!v.option || v.option === 'No Tiffin'))
+              ? 'No Tiffin'
+              : `${escapeHtml(v.option)} (${portionDisp})`;
+            votersChipsHtml += `<span class="prev-voter-chip"><strong>${r.name}:</strong> ${choiceDisp}</span>`;
+          }
+        });
+
+        card.innerHTML = `
+          <div class="prev-poll-top-row" style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+            <div style="flex:1;">
+              <div class="prev-poll-tag-wrap">
+                <span class="poll-tag" style="font-size:0.65rem;">${slotStr} • ${dateStr}</span>
+                ${pastPoll.winner ? `<span class="prev-winner-badge">✓ Winner: ${escapeHtml(pastPoll.winner)}</span>` : ''}
+              </div>
+              <h4 class="prev-poll-title">${pastPoll.options ? pastPoll.options.join(' vs ') : 'Poll'}</h4>
+              <p class="prev-poll-meta">By ${pastPoll.author || 'Flatmate'} • ${totalVotes} / ${ROOMMATES.length} voted</p>
+            </div>
+            <button class="pill-btn-ghost btn-xs text-muted delete-single-poll-btn" data-poll-id="${pastPoll.id}" title="Delete this old poll" style="flex-shrink:0; font-size:0.75rem; padding:3px 8px; border:1px solid rgba(255,255,255,0.08);">
+              Delete
+            </button>
+          </div>
+          <div class="prev-poll-options-summary">
+            ${optionsBarsHtml}
+          </div>
+          ${votersChipsHtml ? `<div class="prev-voters-list">${votersChipsHtml}</div>` : ''}
+        `;
+
+        card.querySelector('.delete-single-poll-btn')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const pid = pastPoll.id;
+          appState.pollHistory = (appState.pollHistory || []).filter(p => p.id !== pid);
+          persistAndBroadcast({ type: 'poll_history_delete', pollId: pid });
+          showToast('Poll deleted.');
+          renderPollView();
+        });
+
+        prevListContainer.appendChild(card);
+      });
     }
   }
 
@@ -2331,8 +2360,8 @@
           poll: newPoll
         });
         showToast('Poll launched to flatmates!');
-        NotificationManager.send(`New ${slot} Poll Scheduled!`, {
-          body: `Options: ${options.join(', ')} (Day ${day}). Tap to vote!`,
+        NotificationManager.send(`New ${slot} Poll`, {
+          body: 'Tap to cast your vote.',
           tag: 'poll-' + newPoll.id,
           renotify: true
         });
@@ -2355,6 +2384,43 @@
       settingsNotifBtn.addEventListener('click', () => {
         triggerHaptic();
         NotificationManager.requestPermission(true);
+      });
+    }
+
+    const resetActivePollBtn = document.getElementById('resetActivePollBtn');
+    if (resetActivePollBtn) {
+      resetActivePollBtn.addEventListener('click', () => {
+        if (!appState.activePoll) return;
+        if (confirm('Menu shifted? This will cancel the current poll so you can launch a new one.')) {
+          triggerHaptic();
+          const oldPoll = appState.activePoll;
+          PollReminderManager.stop(oldPoll.id);
+          oldPoll.status = 'cancelled';
+          appState.pollHistory = appState.pollHistory || [];
+          appState.pollHistory.unshift({ ...oldPoll });
+          appState.activePoll = null;
+
+          persistAndBroadcast({
+            type: 'poll_cancelled',
+            pollId: oldPoll.id
+          });
+          showToast('Active poll cancelled. You can create a new poll.');
+          renderPollView();
+        }
+      });
+    }
+
+    const clearAllPrevPollsBtn = document.getElementById('clearAllPrevPollsBtn');
+    if (clearAllPrevPollsBtn) {
+      clearAllPrevPollsBtn.addEventListener('click', () => {
+        if (!appState.pollHistory || appState.pollHistory.length === 0) return;
+        if (confirm('Delete all previous polls?')) {
+          triggerHaptic();
+          appState.pollHistory = [];
+          persistAndBroadcast({ type: 'poll_history_clear' });
+          showToast('All previous polls deleted.');
+          renderPollView();
+        }
       });
     }
 
@@ -2461,8 +2527,8 @@
           mealsApplied: mealsApplied
         });
 
-        NotificationManager.send(`Poll Finalized: ${winningDish}!`, {
-          body: `${poll.mealSlot || 'Dinner'} menu finalized for Day ${poll.day}.`,
+        NotificationManager.send(`Poll Finalized`, {
+          body: `${poll.mealSlot || 'Meal'} menu decided. Tap to view.`,
           tag: 'poll-winner-' + poll.day,
           renotify: true
         });
