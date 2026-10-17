@@ -138,6 +138,8 @@
       provider: provider,
       days: days,
       activePoll: null,
+      pollHistory: [],
+      amulMembers: ['anjan', 'saurabh'],
       auditLog: [
         {
           id: 'log_init_' + year + '_' + month,
@@ -159,6 +161,8 @@
         const jsonStr = decodeURIComponent(atob(encoded));
         const parsed = JSON.parse(jsonStr);
         if (parsed && parsed.days) {
+          if (!parsed.pollHistory) parsed.pollHistory = [];
+          if (!parsed.amulMembers || !Array.isArray(parsed.amulMembers)) parsed.amulMembers = ['anjan', 'saurabh'];
           saveStateForMonth(year, month, parsed);
           return parsed;
         }
@@ -177,6 +181,8 @@
           parsed.rates = { ...CONFIG.defaultRates, ...(parsed.rates || {}) };
           parsed.provider = { ...CONFIG.defaultProvider, ...(parsed.provider || {}) };
           if (!parsed.auditLog) parsed.auditLog = [];
+          if (!parsed.pollHistory) parsed.pollHistory = [];
+          if (!parsed.amulMembers || !Array.isArray(parsed.amulMembers)) parsed.amulMembers = ['anjan', 'saurabh'];
           return parsed;
         }
       }
@@ -299,6 +305,94 @@
     fillSelect(daySelect);
     fillSelect(pollDaySelect);
   }
+
+  // ==========================================================================
+  // NATIVE PHONE NOTIFICATION BAR SYSTEM (PWA / Chrome Mobile)
+  // ==========================================================================
+  const NotificationManager = {
+    isSupported() {
+      return ('Notification' in window);
+    },
+
+    getPermission() {
+      return this.isSupported() ? Notification.permission : 'unsupported';
+    },
+
+    updateUI() {
+      const btn = document.getElementById('pollNotificationBtn');
+      const text = document.getElementById('pollNotificationBtnText');
+      const settingsBtn = document.getElementById('settingsNotificationBtn');
+      const perm = this.getPermission();
+
+      if (btn && text) {
+        if (perm === 'granted') {
+          btn.className = 'notification-status-chip';
+          btn.title = 'Phone Notifications are enabled';
+          btn.innerHTML = `<span class="pulse-dot"></span><span>Alerts Active</span>`;
+        } else {
+          btn.className = 'notification-chip-btn';
+          btn.title = 'Tap to enable Phone Notification Bar Alerts';
+          btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Enable Alerts</span>`;
+        }
+      }
+
+      if (settingsBtn) {
+        settingsBtn.textContent = perm === 'granted' ? '✓ Phone Alerts Active (Tap to Test)' : 'Enable Phone Notification Bar Alerts';
+      }
+    },
+
+    async requestPermission(showFeedback = true) {
+      if (!this.isSupported()) {
+        if (showFeedback) showToast('Notifications not supported by this browser.');
+        return false;
+      }
+
+      try {
+        const result = await Notification.requestPermission();
+        this.updateUI();
+        if (result === 'granted') {
+          if (showFeedback) showToast('Phone alerts enabled! Sending test notification...');
+          await this.send('Tiffin Tracker Notifications Active', {
+            body: 'You will receive alerts in your notification bar when a flatmate schedules a poll!',
+            tag: 'tiffin-welcome'
+          });
+          return true;
+        } else if (result === 'denied' && showFeedback) {
+          showToast('Notification permission was denied in browser settings.');
+        }
+      } catch (e) {
+        console.warn('Error requesting notification permission', e);
+      }
+      return false;
+    },
+
+    async send(title, options = {}) {
+      if (!this.isSupported() || Notification.permission !== 'granted') return;
+
+      const defaultOpts = {
+        icon: './icon.svg',
+        badge: './icon.svg',
+        vibrate: [200, 100, 200],
+        tag: 'tiffin-alert',
+        renotify: true,
+        data: { url: window.location.href.split('#')[0] + '#view-poll' },
+        ...options
+      };
+
+      try {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.ready;
+          if (reg && reg.showNotification) {
+            await reg.showNotification(title, defaultOpts);
+            return;
+          }
+        }
+        new Notification(title, defaultOpts);
+      } catch (err) {
+        console.warn('Notification post failed:', err);
+      }
+    }
+  };
 
   // ==========================================================================
   // REAL-TIME MULTI-USER CLOUD SYNC ENGINE
@@ -557,12 +651,21 @@
           modified = true;
         }
       } else if (action.type === 'poll_created') {
+        if (appState.activePoll && appState.activePoll.id !== action.poll.id) {
+          appState.pollHistory = appState.pollHistory || [];
+          const exists = appState.pollHistory.some(p => p.id === appState.activePoll.id);
+          if (!exists) appState.pollHistory.unshift(appState.activePoll);
+        }
         appState.activePoll = action.poll;
         logActivity(action.author, 'Created Poll', `${action.poll.mealSlot} Poll for Day ${action.poll.day}: ${action.poll.options.join(', ')}`);
         modified = true;
         if (!isCatchUp) {
-          showToast(`🗳️ New ${action.poll.mealSlot} Poll from ${action.author}! Tap to vote.`);
+          showToast(`New ${action.poll.mealSlot} Poll from ${action.author}! Tap to vote.`);
           triggerHaptic();
+          NotificationManager.send(`New ${action.poll.mealSlot} Poll from ${action.author}`, {
+            body: `${action.poll.options.join(', ')} (Day ${action.poll.day}). Tap to vote!`,
+            tag: 'poll-' + action.poll.id
+          });
         }
       } else if (action.type === 'poll_voted') {
         if (appState.activePoll && appState.activePoll.id === action.pollId) {
@@ -578,9 +681,9 @@
             const myId = (SyncEngine.identity || '').toLowerCase();
             const hasMyVote = !!(appState.activePoll.votes && appState.activePoll.votes[myId]);
             if (hasMyVote) {
-              showToast(`🗳️ ${action.author} voted for ${action.option}`);
+              showToast(`${action.author} voted for ${action.option}`);
             } else {
-              showToast(`🗳️ ${action.author} cast their vote!`);
+              showToast(`${action.author} cast their vote!`);
             }
           }
         }
@@ -588,6 +691,14 @@
         if (appState.activePoll) {
           appState.activePoll.status = 'finalized';
           appState.activePoll.winner = action.winner;
+
+          appState.pollHistory = appState.pollHistory || [];
+          const idx = appState.pollHistory.findIndex(p => p.id === appState.activePoll.id);
+          if (idx >= 0) {
+            appState.pollHistory[idx] = { ...appState.activePoll };
+          } else {
+            appState.pollHistory.unshift({ ...appState.activePoll });
+          }
         }
         // Apply winner sabzi to ledger
         if (action.day && appState.days[action.day]) {
@@ -604,21 +715,31 @@
         logActivity(action.author, 'Finalized Poll', `Winner dish: ${action.winner}`);
         modified = true;
         if (!isCatchUp) {
-          showToast(`✅ Poll Finalized: Winner is ${action.winner}!`);
+          showToast(`Poll Finalized: Winner is ${action.winner}!`);
+          NotificationManager.send(`Poll Finalized: ${action.winner}!`, {
+            body: `${action.mealSlot || 'Dinner'} menu finalized for Day ${action.day}`,
+            tag: 'poll-winner-' + action.day
+          });
+        }
+      } else if (action.type === 'amul_members_update') {
+        if (Array.isArray(action.members) && action.members.length > 0) {
+          appState.amulMembers = action.members;
+          logActivity(action.author, 'Milk Members', `Updated Amul milk tracker members`);
+          modified = true;
         }
       } else if (action.type === 'rates_updated') {
         appState.rates = action.rates;
         logActivity(action.author, 'Rates Updated', `Half: ₹${action.rates.half}, Full: ₹${action.rates.full}, Special: ₹${action.rates.special}`);
         modified = true;
         if (!isCatchUp) {
-          showToast(`💰 Meal rates updated by ${action.author}`);
+          showToast(`Meal rates updated by ${action.author}`);
         }
       } else if (action.type === 'full_sync' && action.state) {
         if (action.state.days) {
           appState = action.state;
           modified = true;
           if (!isCatchUp) {
-            showToast(`⚡ Ledger synchronized from ${action.author}`);
+            showToast(`Ledger synchronized from ${action.author}`);
           }
         }
       }
@@ -914,6 +1035,8 @@
 
   // 2. Menu Voting Poll Render
   function renderPollView() {
+    NotificationManager.updateUI();
+
     const pollCardTitle = document.getElementById('pollCardTitle');
     const pollStatusBadge = document.getElementById('pollStatusBadge');
     const activePollContainer = document.getElementById('activePollContainer');
@@ -936,157 +1059,241 @@
     if (!poll || poll.status === 'finalized') {
       if (pollStatusBadge) {
         pollStatusBadge.className = 'badge-pill';
-        pollStatusBadge.textContent = poll && poll.status === 'finalized' ? 'Last Poll Finalized' : 'No Active Poll';
+        pollStatusBadge.textContent = poll && poll.status === 'finalized' ? 'Poll Finalized' : 'No Active Poll';
       }
       if (activePollContainer) activePollContainer.style.display = 'none';
       if (createPollContainer) createPollContainer.style.display = 'block';
-      return;
-    }
-
-    // Active Poll is Running
-    if (pollStatusBadge) {
-      pollStatusBadge.className = 'badge-pill today-pill';
-      pollStatusBadge.textContent = 'Active Poll 🟢';
-    }
-    if (activePollContainer) activePollContainer.style.display = 'block';
-    if (createPollContainer) createPollContainer.style.display = 'none';
-
-    // Set Poll texts
-    const mealTag = document.getElementById('pollMealTag');
-    const questionText = document.getElementById('pollQuestionText');
-    const metaText = document.getElementById('pollMetaText');
-
-    if (mealTag) mealTag.textContent = `${(poll.mealSlot || 'DINNER').toUpperCase()} POLL (DAY ${poll.day})`;
-    if (questionText) questionText.textContent = `What should we cook for ${poll.mealSlot || 'Dinner'}?`;
-    if (metaText) metaText.textContent = `Launched by ${poll.author || 'Flatmate'} • Live across all phones`;
-
-    const myId = (SyncEngine.identity || 'anjan').toLowerCase();
-    const myVote = (poll.votes && poll.votes[myId]) ? poll.votes[myId] : null;
-    const hasVoted = !!myVote;
-
-    const blindNotice = document.getElementById('pollBlindNotice');
-    const myVoteBox = document.getElementById('myVoteBox');
-    const myVotedSummary = document.getElementById('myVotedSummaryBox');
-    const myVotedChoiceText = document.getElementById('myVotedChoiceText');
-    const myVoteIdentityLabel = document.getElementById('myVoteIdentityLabel');
-    const pollResultsTray = document.getElementById('pollResultsTray');
-    const votersBreakdownCard = document.getElementById('votersBreakdownCard');
-    const finalizeActions = document.getElementById('pollFinalizeActions');
-
-    if (myVoteIdentityLabel) myVoteIdentityLabel.textContent = SyncEngine.identity || 'You';
-
-    // Blind Voting Enforcement:
-    // If user hasn't voted yet, hide the results, tally, and others' choices!
-    if (!hasVoted) {
-      if (blindNotice) blindNotice.style.display = 'flex';
-      if (myVoteBox) myVoteBox.style.display = 'block';
-      if (myVotedSummary) myVotedSummary.style.display = 'none';
-      if (pollResultsTray) pollResultsTray.style.display = 'none';
-      if (votersBreakdownCard) votersBreakdownCard.style.display = 'none';
-      if (finalizeActions) finalizeActions.style.display = 'none';
     } else {
-      if (blindNotice) blindNotice.style.display = 'none';
-      if (myVoteBox) myVoteBox.style.display = 'none';
-      if (myVotedSummary) {
-        myVotedSummary.style.display = 'block';
-        if (myVotedChoiceText) {
-          const portionText = myVote.portion === 'No' ? 'No Tiffin' : myVote.portion;
-          const dishText = (myVote.portion === 'No' && (!myVote.option || myVote.option === 'No Tiffin')) ? 'Opted out' : escapeHtml(myVote.option);
-          myVotedChoiceText.textContent = `You voted: ${dishText} • ${portionText}`;
-        }
+      // Active Poll is Running
+      if (pollStatusBadge) {
+        pollStatusBadge.className = 'badge-pill today-pill';
+        pollStatusBadge.textContent = 'Active Poll';
       }
-      if (pollResultsTray) pollResultsTray.style.display = 'block';
-      if (votersBreakdownCard) votersBreakdownCard.style.display = 'block';
-      if (finalizeActions) finalizeActions.style.display = 'block';
-    }
+      if (activePollContainer) activePollContainer.style.display = 'block';
+      if (createPollContainer) createPollContainer.style.display = 'none';
 
-    // Radio Options for Current User to Vote
-    const radioGrid = document.getElementById('pollOptionsRadioGrid');
-    if (radioGrid) {
-      radioGrid.innerHTML = '';
-      const currentVoteOption = myVote ? myVote.option : null;
+      // Set Poll texts
+      const mealTag = document.getElementById('pollMealTag');
+      const questionText = document.getElementById('pollQuestionText');
+      const metaText = document.getElementById('pollMetaText');
 
-      poll.options.forEach((optText, idx) => {
-        const isSelected = currentVoteOption === optText;
-        const label = document.createElement('label');
-        label.className = `poll-radio-label ${isSelected ? 'selected' : ''}`;
-        label.innerHTML = `
-          <input type="radio" name="pollDishChoice" value="${escapeHtml(optText)}" ${isSelected ? 'checked' : ''}>
-          <strong>${escapeHtml(optText)}</strong>
-        `;
-        label.addEventListener('click', () => {
-          radioGrid.querySelectorAll('.poll-radio-label').forEach(l => l.classList.remove('selected'));
-          label.classList.add('selected');
-        });
-        radioGrid.appendChild(label);
-      });
-    }
+      if (mealTag) mealTag.textContent = `${(poll.mealSlot || 'DINNER').toUpperCase()} POLL (DAY ${poll.day})`;
+      if (questionText) questionText.textContent = `What should we cook for ${poll.mealSlot || 'Dinner'}?`;
+      if (metaText) metaText.textContent = `Launched by ${poll.author || 'Flatmate'} • Live across all phones`;
 
-    // Set portion buttons active state
-    const currentPortion = myVote ? myVote.portion : 'Half';
-    document.querySelectorAll('#pollPortionToggle .seg-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.getAttribute('data-portion') === currentPortion);
-    });
+      const myId = (SyncEngine.identity || 'anjan').toLowerCase();
+      const myVote = (poll.votes && poll.votes[myId]) ? poll.votes[myId] : null;
+      const hasVoted = !!myVote;
 
-    // Live Tally Progress Bars
-    const resultsContainer = document.getElementById('pollResultsBars');
-    if (resultsContainer) {
-      resultsContainer.innerHTML = '';
-      const votes = poll.votes || {};
-      const totalVotesCast = Object.keys(votes).length;
+      const blindNotice = document.getElementById('pollBlindNotice');
+      const myVoteBox = document.getElementById('myVoteBox');
+      const myVotedSummary = document.getElementById('myVotedSummaryBox');
+      const myVotedChoiceText = document.getElementById('myVotedChoiceText');
+      const myVoteIdentityLabel = document.getElementById('myVoteIdentityLabel');
+      const pollResultsTray = document.getElementById('pollResultsTray');
+      const votersBreakdownCard = document.getElementById('votersBreakdownCard');
+      const finalizeActions = document.getElementById('pollFinalizeActions');
 
-      // Count votes per option
-      const tally = {};
-      poll.options.forEach(opt => tally[opt] = 0);
-      Object.values(votes).forEach(v => {
-        if (tally[v.option] !== undefined) tally[v.option]++;
-      });
+      if (myVoteIdentityLabel) myVoteIdentityLabel.textContent = SyncEngine.identity || 'You';
 
-      poll.options.forEach(opt => {
-        const count = tally[opt] || 0;
-        const pct = totalVotesCast > 0 ? ((count / totalVotesCast) * 100).toFixed(0) : 0;
-
-        const barItem = document.createElement('div');
-        barItem.className = 'poll-bar-item';
-        barItem.innerHTML = `
-          <div class="poll-bar-header">
-            <span>${escapeHtml(opt)}</span>
-            <span>${count} vote${count === 1 ? '' : 's'} (${pct}%)</span>
-          </div>
-          <div class="poll-bar-track">
-            <div class="poll-bar-fill" style="width: ${pct}%"></div>
-          </div>
-        `;
-        resultsContainer.appendChild(barItem);
-      });
-    }
-
-    // Who Voted for What Breakdown
-    const chipsWrap = document.getElementById('votersChipsWrap');
-    const votersCountLabel = document.getElementById('votersCountLabel');
-    if (chipsWrap && poll.votes) {
-      chipsWrap.innerHTML = '';
-      const votes = poll.votes || {};
-      const count = Object.keys(votes).length;
-      if (votersCountLabel) votersCountLabel.textContent = `${count} / ${ROOMMATES.length} Voted`;
-
-      ROOMMATES.forEach(r => {
-        const v = votes[r.id];
-        const chip = document.createElement('div');
-        chip.className = 'voter-chip';
-        if (v) {
-          const portionDisp = v.portion === 'No' ? 'No Tiffin' : v.portion;
-          const choiceDisp = (v.portion === 'No' && (!v.option || v.option === 'No Tiffin'))
-            ? 'No Tiffin'
-            : `${escapeHtml(v.option)} (${portionDisp})`;
-          chip.innerHTML = `<span>✓</span> <strong>${r.name}:</strong> <span>${choiceDisp}</span>`;
-          chip.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-        } else {
-          chip.innerHTML = `<span style="opacity:0.5">○</span> <span style="opacity:0.7">${r.name}: Pending</span>`;
-          chip.style.opacity = '0.6';
+      // Blind Voting Enforcement
+      if (!hasVoted) {
+        if (blindNotice) blindNotice.style.display = 'flex';
+        if (myVoteBox) myVoteBox.style.display = 'block';
+        if (myVotedSummary) myVotedSummary.style.display = 'none';
+        if (pollResultsTray) pollResultsTray.style.display = 'none';
+        if (votersBreakdownCard) votersBreakdownCard.style.display = 'none';
+        if (finalizeActions) finalizeActions.style.display = 'none';
+      } else {
+        if (blindNotice) blindNotice.style.display = 'none';
+        if (myVoteBox) myVoteBox.style.display = 'none';
+        if (myVotedSummary) {
+          myVotedSummary.style.display = 'block';
+          if (myVotedChoiceText) {
+            const portionText = myVote.portion === 'No' ? 'No Tiffin' : myVote.portion;
+            const dishText = (myVote.portion === 'No' && (!myVote.option || myVote.option === 'No Tiffin')) ? 'Opted out' : escapeHtml(myVote.option);
+            myVotedChoiceText.textContent = `You voted: ${dishText} • ${portionText}`;
+          }
         }
-        chipsWrap.appendChild(chip);
+        if (pollResultsTray) pollResultsTray.style.display = 'block';
+        if (votersBreakdownCard) votersBreakdownCard.style.display = 'block';
+        if (finalizeActions) finalizeActions.style.display = 'block';
+      }
+
+      // Radio Options for Current User to Vote
+      const radioGrid = document.getElementById('pollOptionsRadioGrid');
+      if (radioGrid) {
+        radioGrid.innerHTML = '';
+        const currentVoteOption = myVote ? myVote.option : null;
+
+        poll.options.forEach((optText) => {
+          const isSelected = currentVoteOption === optText;
+          const label = document.createElement('label');
+          label.className = `poll-radio-label ${isSelected ? 'selected' : ''}`;
+          label.innerHTML = `
+            <input type="radio" name="pollDishChoice" value="${escapeHtml(optText)}" ${isSelected ? 'checked' : ''}>
+            <strong>${escapeHtml(optText)}</strong>
+          `;
+          label.addEventListener('click', () => {
+            radioGrid.querySelectorAll('.poll-radio-label').forEach(l => l.classList.remove('selected'));
+            label.classList.add('selected');
+          });
+          radioGrid.appendChild(label);
+        });
+      }
+
+      // Set portion buttons active state
+      const currentPortion = myVote ? myVote.portion : 'Half';
+      document.querySelectorAll('#pollPortionToggle .seg-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-portion') === currentPortion);
       });
+
+      // Live Tally Progress Bars
+      const resultsContainer = document.getElementById('pollResultsBars');
+      if (resultsContainer) {
+        resultsContainer.innerHTML = '';
+        const votes = poll.votes || {};
+        const totalVotesCast = Object.keys(votes).length;
+
+        const tally = {};
+        poll.options.forEach(opt => tally[opt] = 0);
+        Object.values(votes).forEach(v => {
+          if (tally[v.option] !== undefined) tally[v.option]++;
+        });
+
+        poll.options.forEach(opt => {
+          const count = tally[opt] || 0;
+          const pct = totalVotesCast > 0 ? ((count / totalVotesCast) * 100).toFixed(0) : 0;
+
+          const barItem = document.createElement('div');
+          barItem.className = 'poll-bar-item';
+          barItem.innerHTML = `
+            <div class="poll-bar-header">
+              <span>${escapeHtml(opt)}</span>
+              <span>${count} vote${count === 1 ? '' : 's'} (${pct}%)</span>
+            </div>
+            <div class="poll-bar-track">
+              <div class="poll-bar-fill" style="width: ${pct}%"></div>
+            </div>
+          `;
+          resultsContainer.appendChild(barItem);
+        });
+      }
+
+      // Who Voted for What Breakdown
+      const chipsWrap = document.getElementById('votersChipsWrap');
+      const votersCountLabel = document.getElementById('votersCountLabel');
+      if (chipsWrap && poll.votes) {
+        chipsWrap.innerHTML = '';
+        const votes = poll.votes || {};
+        const count = Object.keys(votes).length;
+        if (votersCountLabel) votersCountLabel.textContent = `${count} / ${ROOMMATES.length} Voted`;
+
+        ROOMMATES.forEach(r => {
+          const v = votes[r.id];
+          const chip = document.createElement('div');
+          chip.className = 'voter-chip';
+          if (v) {
+            const portionDisp = v.portion === 'No' ? 'No Tiffin' : v.portion;
+            const choiceDisp = (v.portion === 'No' && (!v.option || v.option === 'No Tiffin'))
+              ? 'No Tiffin'
+              : `${escapeHtml(v.option)} (${portionDisp})`;
+            chip.innerHTML = `<span>✓</span> <strong>${r.name}:</strong> <span>${choiceDisp}</span>`;
+            chip.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+          } else {
+            chip.innerHTML = `<span style="opacity:0.5">○</span> <span style="opacity:0.7">${r.name}: Pending</span>`;
+            chip.style.opacity = '0.6';
+          }
+          chipsWrap.appendChild(chip);
+        });
+      }
+    }
+
+    // --- Render Previous Polls Archive Section ---
+    const prevListContainer = document.getElementById('previousPollsList');
+    const prevCountBadge = document.getElementById('prevPollsCountBadge');
+    const pollHistory = appState.pollHistory || [];
+
+    if (prevCountBadge) {
+      prevCountBadge.textContent = `${pollHistory.length} Saved`;
+    }
+
+    if (prevListContainer) {
+      prevListContainer.innerHTML = '';
+      if (pollHistory.length === 0) {
+        prevListContainer.innerHTML = `
+          <div class="empty-archive-box">
+            No previous polls saved yet. When a poll is finalized or replaced, it will appear here.
+          </div>
+        `;
+      } else {
+        pollHistory.forEach(pastPoll => {
+          const card = document.createElement('div');
+          card.className = 'previous-poll-card-item';
+
+          const votes = pastPoll.votes || {};
+          const totalVotes = Object.keys(votes).length;
+          const dateStr = `Day ${pastPoll.day || '?'}`;
+          const slotStr = (pastPoll.mealSlot || 'Dinner').toUpperCase();
+
+          const tally = {};
+          (pastPoll.options || []).forEach(opt => tally[opt] = 0);
+          Object.values(votes).forEach(v => {
+            if (v.portion !== 'No' && tally[v.option] !== undefined) {
+              tally[v.option]++;
+            }
+          });
+
+          let optionsBarsHtml = '';
+          (pastPoll.options || []).forEach(opt => {
+            const count = tally[opt] || 0;
+            const pct = totalVotes > 0 ? ((count / totalVotes) * 100).toFixed(0) : 0;
+            const isWinner = pastPoll.winner === opt;
+            optionsBarsHtml += `
+              <div class="prev-opt-bar-row">
+                <div class="prev-opt-text-row">
+                  <span>${escapeHtml(opt)}</span>
+                  <span>${count} (${pct}%)</span>
+                </div>
+                <div class="prev-opt-progress-track">
+                  <div class="prev-opt-progress-bar ${isWinner ? 'winner' : ''}" style="width: ${pct}%"></div>
+                </div>
+              </div>
+            `;
+          });
+
+          let votersChipsHtml = '';
+          ROOMMATES.forEach(r => {
+            const v = votes[r.id];
+            if (v) {
+              const portionDisp = v.portion === 'No' ? 'No Tiffin' : v.portion;
+              const choiceDisp = (v.portion === 'No' && (!v.option || v.option === 'No Tiffin'))
+                ? 'No Tiffin'
+                : `${escapeHtml(v.option)} (${portionDisp})`;
+              votersChipsHtml += `<span class="prev-voter-chip"><strong>${r.name}:</strong> ${choiceDisp}</span>`;
+            }
+          });
+
+          card.innerHTML = `
+            <div class="prev-poll-top-row">
+              <div>
+                <div class="prev-poll-tag-wrap">
+                  <span class="poll-tag" style="font-size:0.65rem;">${slotStr} • ${dateStr}</span>
+                  ${pastPoll.winner ? `<span class="prev-winner-badge">✓ Winner: ${escapeHtml(pastPoll.winner)}</span>` : ''}
+                </div>
+                <h4 class="prev-poll-title">${pastPoll.options ? pastPoll.options.join(' vs ') : 'Poll'}</h4>
+                <p class="prev-poll-meta">By ${pastPoll.author || 'Flatmate'} • ${totalVotes} / ${ROOMMATES.length} voted</p>
+              </div>
+            </div>
+            <div class="prev-poll-options-summary">
+              ${optionsBarsHtml}
+            </div>
+            ${votersChipsHtml ? `<div class="prev-voters-list">${votersChipsHtml}</div>` : ''}
+          `;
+
+          prevListContainer.appendChild(card);
+        });
+      }
     }
   }
 
@@ -1501,6 +1708,11 @@
     const dayData = appState.days[selectedDay];
     if (!dayData) return;
 
+    if (!appState.amulMembers || !Array.isArray(appState.amulMembers) || appState.amulMembers.length === 0) {
+      appState.amulMembers = ['anjan', 'saurabh'];
+    }
+    const members = appState.amulMembers;
+
     const rates = getRates();
     const amulBadge = document.getElementById('amulPriceBadge');
     if (amulBadge) amulBadge.textContent = `₹${rates.amulPacket || 35} / packet`;
@@ -1508,71 +1720,118 @@
     const amulDayLabel = document.getElementById('amulCurrentDayLabel');
     if (amulDayLabel) amulDayLabel.textContent = dayData.dateShort;
 
-    const anjanDayPkt = Number(dayData.amul?.anjan) || 0;
-    const saurabhDayPkt = Number(dayData.amul?.saurabh) || 0;
-
-    const dayAnjanVal = document.getElementById('amulDayAnjanVal');
-    const daySaurabhVal = document.getElementById('amulDaySaurabhVal');
-    if (dayAnjanVal) dayAnjanVal.textContent = anjanDayPkt ? `${anjanDayPkt} pkt` : '0 pkt';
-    if (daySaurabhVal) daySaurabhVal.textContent = saurabhDayPkt ? `${saurabhDayPkt} pkt` : '0 pkt';
-
-    // Highlight active pills in dedicated Amul tab
-    document.querySelectorAll('#view-amul .amul-pill-group').forEach(group => {
-      const p = group.getAttribute('data-person');
-      const curVal = Number(dayData.amul?.[p]) || 0;
-      group.querySelectorAll('.amul-pill-btn').forEach(b => {
-        const qty = parseFloat(b.getAttribute('data-qty'));
-        b.classList.toggle('active', qty === curVal);
-      });
-    });
-
-    // Monthly totals
-    const anjanStats = getRoommateMonthlyStats('anjan');
-    const saurabhStats = getRoommateMonthlyStats('saurabh');
-    const totalMilkPackets = anjanStats.milkPackets + saurabhStats.milkPackets;
-    const grandMilkCost = anjanStats.milkTotal + saurabhStats.milkTotal;
-
     const formatRupees = (val) => (val % 1 === 0 ? `₹${val}` : `₹${val.toFixed(1)}`);
-    const formatPkts = (val) => (val % 1 === 0 ? `${val} packets` : `${val.toFixed(1)} packets`);
+    const formatPkts = (val) => (val % 1 === 0 ? `${val} pkt` : `${val.toFixed(1)} pkt`);
 
-    const elAnjanTot = document.getElementById('amulAnjanTotal');
-    const elAnjanPkts = document.getElementById('amulAnjanPackets');
-    const elSaurabhTot = document.getElementById('amulSaurabhTotal');
-    const elSaurabhPkts = document.getElementById('amulSaurabhPackets');
-    const elGrandTot = document.getElementById('amulGrandTotal');
-    const elGrandPkts = document.getElementById('amulTotalPackets');
+    // 1. Dynamic Summary Cards Row
+    const summaryRow = document.getElementById('amulSummaryRow');
+    if (summaryRow) {
+      summaryRow.innerHTML = '';
+      let grandTotalPackets = 0;
+      let grandTotalCost = 0;
 
-    if (elAnjanTot) elAnjanTot.textContent = formatRupees(anjanStats.milkTotal);
-    if (elAnjanPkts) elAnjanPkts.textContent = formatPkts(anjanStats.milkPackets);
-    if (elSaurabhTot) elSaurabhTot.textContent = formatRupees(saurabhStats.milkTotal);
-    if (elSaurabhPkts) elSaurabhPkts.textContent = formatPkts(saurabhStats.milkPackets);
-    if (elGrandTot) elGrandTot.textContent = formatRupees(grandMilkCost);
-    if (elGrandPkts) elGrandPkts.textContent = formatPkts(totalMilkPackets);
+      members.forEach(personId => {
+        const stats = getRoommateMonthlyStats(personId);
+        grandTotalPackets += stats.milkPackets;
+        grandTotalCost += stats.milkTotal;
 
-    // Table
+        const displayName = capitalize(ROOMMATES.find(r => r.id === personId)?.name || personId);
+        const card = document.createElement('div');
+        card.className = 'mini-stat-card';
+        card.innerHTML = `
+          <span class="mini-label">${escapeHtml(displayName)}</span>
+          <h4 class="mini-val">${formatRupees(stats.milkTotal)}</h4>
+          <span class="mini-sub">${stats.milkPackets} packets</span>
+          ${members.length > 1 ? `<button class="amul-remove-btn" data-person="${personId}" title="Remove from Amul Tracker">✕</button>` : ''}
+        `;
+        summaryRow.appendChild(card);
+      });
+
+      // Total Card
+      const totalCard = document.createElement('div');
+      totalCard.className = 'mini-stat-card accent';
+      totalCard.innerHTML = `
+        <span class="mini-label">Total Milk Bill</span>
+        <h4 class="mini-val text-cyan">${formatRupees(grandTotalCost)}</h4>
+        <span class="mini-sub">${grandTotalPackets} packets</span>
+      `;
+      summaryRow.appendChild(totalCard);
+    }
+
+    // 2. Dynamic Daily Quick Logging Grid
+    const dailyGrid = document.getElementById('amulOptionsGrid');
+    if (dailyGrid) {
+      dailyGrid.innerHTML = '';
+      members.forEach(personId => {
+        const displayName = capitalize(ROOMMATES.find(r => r.id === personId)?.name || personId);
+        const curVal = Number(dayData.amul?.[personId]) || 0;
+
+        const box = document.createElement('div');
+        box.className = 'amul-person-box';
+        box.innerHTML = `
+          <div class="amul-person-header">
+            <span class="stepper-name">${escapeHtml(displayName)}</span>
+            <span class="amul-current-selected">${curVal ? `${curVal} pkt` : '0 pkt'}</span>
+          </div>
+          <div class="amul-pill-group" data-person="${personId}">
+            <button class="amul-pill-btn ${curVal === 0 ? 'active' : ''}" data-qty="0">Off</button>
+            <button class="amul-pill-btn ${curVal === 0.5 ? 'active' : ''}" data-qty="0.5">0.5</button>
+            <button class="amul-pill-btn ${curVal === 1 ? 'active' : ''}" data-qty="1">1</button>
+            <button class="amul-pill-btn ${curVal === 2 ? 'active' : ''}" data-qty="2">2</button>
+          </div>
+        `;
+        dailyGrid.appendChild(box);
+      });
+    }
+
+    // 3. Dynamic Table Header
+    const theadRow = document.getElementById('amulTableHeadRow');
+    if (theadRow) {
+      theadRow.innerHTML = `<th class="th-sticky">Date</th>`;
+      members.forEach(personId => {
+        const displayName = capitalize(ROOMMATES.find(r => r.id === personId)?.name || personId);
+        const th = document.createElement('th');
+        th.textContent = `${displayName} (Pkt)`;
+        theadRow.appendChild(th);
+      });
+      const thTotal = document.createElement('th');
+      thTotal.textContent = 'Day Total';
+      theadRow.appendChild(thTotal);
+    }
+
+    // 4. Dynamic Table Body
     const tbody = document.getElementById('amulTableBody');
     if (tbody) {
       tbody.innerHTML = '';
+      const pktRate = Number(rates.amulPacket) || 35;
+
       for (let d = 1; d <= CONFIG.daysInMonth; d++) {
         const dData = appState.days[d];
-        const anjanPkt = Number(dData?.amul?.anjan) || 0;
-        const saurabhPkt = Number(dData?.amul?.saurabh) || 0;
-        const dayCost = (anjanPkt + saurabhPkt) * (Number(rates.amulPacket) || 35);
+        let dayTotalPkts = 0;
 
         const tr = document.createElement('tr');
         if (d === selectedDay) tr.style.backgroundColor = 'rgba(6, 182, 212, 0.12)';
-        tr.innerHTML = `
-          <td class="td-sticky-date">${dData.dateShort}</td>
-          <td class="cell-interactive ${anjanPkt > 0 ? 'val-special' : 'val-off'} cell-amul-interactive" data-day="${d}" data-person="anjan" title="Click to cycle: Off -> 0.5 -> 1 -> 2 -> Off">
-            ${anjanPkt ? `${anjanPkt} pkt` : '-'}
-          </td>
-          <td class="cell-interactive ${saurabhPkt > 0 ? 'val-special' : 'val-off'} cell-amul-interactive" data-day="${d}" data-person="saurabh" title="Click to cycle: Off -> 0.5 -> 1 -> 2 -> Off">
-            ${saurabhPkt ? `${saurabhPkt} pkt` : '-'}
-          </td>
+
+        let cellsHtml = `<td class="td-sticky-date">${dData.dateShort}</td>`;
+
+        members.forEach(personId => {
+          const pkt = Number(dData?.amul?.[personId]) || 0;
+          dayTotalPkts += pkt;
+          cellsHtml += `
+            <td class="cell-interactive ${pkt > 0 ? 'val-special' : 'val-off'} cell-amul-interactive" data-day="${d}" data-person="${personId}" title="Click to cycle: Off -> 0.5 -> 1 -> 2 -> Off">
+              ${pkt ? `${pkt} pkt` : '-'}
+            </td>
+          `;
+        });
+
+        const dayCost = dayTotalPkts * pktRate;
+        cellsHtml += `
           <td style="font-family:var(--font-mono); font-weight:700; color:${dayCost > 0 ? 'var(--cyan)' : 'var(--text-dim)'}">
             ${dayCost > 0 ? formatRupees(dayCost) : '-'}
           </td>
         `;
+
+        tr.innerHTML = cellsHtml;
         tbody.appendChild(tr);
       }
 
@@ -1589,7 +1848,7 @@
           else if (cur === 1) next = 2;
           else next = 0;
 
-          if (!appState.days[d].amul) appState.days[d].amul = { anjan: 0, saurabh: 0 };
+          if (!appState.days[d].amul) appState.days[d].amul = {};
           appState.days[d].amul[p] = next;
           logActivity(SyncEngine.identity, 'Milk Packets', `${capitalize(p)}: ${next} pkt (Day ${d})`);
           persistAndBroadcast({
@@ -1600,6 +1859,7 @@
             person: p,
             value: next
           });
+          renderAmulTracker();
         });
       });
     }
@@ -1933,14 +2193,40 @@
           winner: null
         };
 
+        if (appState.activePoll && appState.activePoll.id !== newPoll.id) {
+          appState.pollHistory = appState.pollHistory || [];
+          const exists = appState.pollHistory.some(p => p.id === appState.activePoll.id);
+          if (!exists) appState.pollHistory.unshift(appState.activePoll);
+        }
+
         appState.activePoll = newPoll;
         logActivity(SyncEngine.identity, 'Created Poll', `${slot} poll for Day ${day}: ${options.join(', ')}`);
         persistAndBroadcast({
           type: 'poll_created',
           poll: newPoll
         });
-        showToast('🚀 Poll launched to all roommates!');
+        showToast('Poll launched to flatmates!');
+        NotificationManager.send(`New ${slot} Poll Scheduled!`, {
+          body: `Options: ${options.join(', ')} (Day ${day}). Tap to vote!`,
+          tag: 'poll-' + newPoll.id
+        });
         renderPollView();
+      });
+    }
+
+    const pollNotifBtn = document.getElementById('pollNotificationBtn');
+    if (pollNotifBtn) {
+      pollNotifBtn.addEventListener('click', () => {
+        triggerHaptic();
+        NotificationManager.requestPermission(true);
+      });
+    }
+
+    const settingsNotifBtn = document.getElementById('settingsNotificationBtn');
+    if (settingsNotifBtn) {
+      settingsNotifBtn.addEventListener('click', () => {
+        triggerHaptic();
+        NotificationManager.requestPermission(true);
       });
     }
 
@@ -1976,7 +2262,7 @@
           option: dishChoice,
           portion: portionChoice
         });
-        showToast(`Vote submitted! Live results unlocked 🔓`);
+        showToast(`Vote submitted! Live results unlocked`);
         renderPollView();
       });
     }
@@ -1993,7 +2279,7 @@
           return;
         }
 
-        // Count votes and find winner (only count dish preferences where portion != 'No' and dish is valid)
+        // Count votes and find winner
         const tally = {};
         poll.options.forEach(opt => tally[opt] = 0);
         Object.values(votes).forEach(v => {
@@ -2014,7 +2300,7 @@
         // Apply winning sabzi to selected day
         appState.days[poll.day].sabzi = winningDish;
 
-        // Apply each roommate's chosen portion (or default Off)
+        // Apply each roommate's chosen portion
         const slotKey = (poll.mealSlot || 'Dinner').toLowerCase();
         const mealsApplied = {};
 
@@ -2028,6 +2314,14 @@
         poll.status = 'finalized';
         poll.winner = winningDish;
 
+        appState.pollHistory = appState.pollHistory || [];
+        const existingIdx = appState.pollHistory.findIndex(p => p.id === poll.id);
+        if (existingIdx >= 0) {
+          appState.pollHistory[existingIdx] = { ...poll };
+        } else {
+          appState.pollHistory.unshift({ ...poll });
+        }
+
         logActivity(SyncEngine.identity, 'Finalized Poll', `Winner: ${winningDish} (${maxVotes > 0 ? maxVotes : 0} votes)`);
         persistAndBroadcast({
           type: 'poll_finalized',
@@ -2037,11 +2331,16 @@
           mealsApplied: mealsApplied
         });
 
+        NotificationManager.send(`Poll Finalized: ${winningDish}!`, {
+          body: `${poll.mealSlot || 'Dinner'} menu finalized for Day ${poll.day}.`,
+          tag: 'poll-winner-' + poll.day
+        });
+
         // Generate WhatsApp Order Message
         const rates = getRates();
         const provider = appState.provider || CONFIG.defaultProvider;
 
-        let waOrder = `🍲 *TIFFIN ORDER - DAY ${poll.day} (${(poll.mealSlot || 'DINNER').toUpperCase()})*\n`;
+        let waOrder = `*TIFFIN ORDER - DAY ${poll.day} (${(poll.mealSlot || 'DINNER').toUpperCase()})*\n`;
         waOrder += `Cook: ${provider.name}\n`;
         waOrder += `Selected Sabzi: *${winningDish}*\n`;
         waOrder += `────────────────────\n`;
@@ -2133,6 +2432,7 @@
   }
 
   function setupAmulControls() {
+    // 1. Delegated click on pill buttons
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.amul-pill-btn');
       if (!btn) return;
@@ -2146,7 +2446,7 @@
       const nextVal = (targetQty === cur && targetQty !== 0) ? 0 : targetQty;
 
       if (!appState.days[selectedDay].amul) {
-        appState.days[selectedDay].amul = { anjan: 0, saurabh: 0 };
+        appState.days[selectedDay].amul = {};
       }
       appState.days[selectedDay].amul[person] = nextVal;
       logActivity(SyncEngine.identity, 'Milk Packets', `${capitalize(person)}: ${nextVal} pkt (Day ${selectedDay})`);
@@ -2158,7 +2458,121 @@
         person: person,
         value: nextVal
       });
+      renderAmulTracker();
     });
+
+    // 2. Remove Member from Amul Tracker
+    document.addEventListener('click', (e) => {
+      const removeBtn = e.target.closest('.amul-remove-btn');
+      if (!removeBtn) return;
+      triggerHaptic();
+      const personId = removeBtn.getAttribute('data-person');
+      if (!personId) return;
+
+      if ((appState.amulMembers || []).length <= 1) {
+        showToast('At least 1 member must remain in Amul tracker.');
+        return;
+      }
+
+      appState.amulMembers = (appState.amulMembers || []).filter(p => p !== personId);
+      logActivity(SyncEngine.identity, 'Milk Tracker', `Removed ${capitalize(personId)} from Amul Tracker`);
+      persistAndBroadcast({
+        type: 'amul_members_update',
+        members: appState.amulMembers
+      });
+      showToast(`Removed ${capitalize(personId)} from milk tracker`);
+      renderAmulTracker();
+    });
+
+    // 3. Add Member Modal controls
+    const addMemberBtn = document.getElementById('addAmulMemberBtn');
+    const modal = document.getElementById('addAmulMemberModal');
+    const closeBtn = document.getElementById('closeAddAmulMemberBtn');
+    const memberSelect = document.getElementById('amulMemberSelect');
+    const customGroup = document.getElementById('amulCustomNameGroup');
+    const customInput = document.getElementById('amulCustomNameInput');
+    const confirmBtn = document.getElementById('confirmAddAmulMemberBtn');
+
+    if (addMemberBtn && modal && memberSelect) {
+      addMemberBtn.addEventListener('click', () => {
+        triggerHaptic();
+        const currentMembers = appState.amulMembers || ['anjan', 'saurabh'];
+        memberSelect.innerHTML = '';
+
+        ROOMMATES.forEach(r => {
+          if (!currentMembers.includes(r.id)) {
+            const opt = document.createElement('option');
+            opt.value = r.id;
+            opt.textContent = r.name;
+            memberSelect.appendChild(opt);
+          }
+        });
+
+        const customOpt = document.createElement('option');
+        customOpt.value = 'custom';
+        customOpt.textContent = '+ Add Custom Name...';
+        memberSelect.appendChild(customOpt);
+
+        if (customGroup) customGroup.style.display = memberSelect.value === 'custom' ? 'block' : 'none';
+        if (customInput) customInput.value = '';
+
+        modal.classList.add('active');
+      });
+
+      memberSelect.addEventListener('change', () => {
+        if (customGroup) {
+          customGroup.style.display = memberSelect.value === 'custom' ? 'block' : 'none';
+          if (memberSelect.value === 'custom' && customInput) customInput.focus();
+        }
+      });
+
+      if (closeBtn) {
+        closeBtn.addEventListener('click', () => modal.classList.remove('active'));
+      }
+
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('active');
+      });
+
+      if (confirmBtn) {
+        confirmBtn.addEventListener('click', () => {
+          triggerHaptic();
+          let newId = memberSelect.value;
+          let displayName = '';
+
+          if (newId === 'custom') {
+            const typed = (customInput ? customInput.value : '').trim();
+            if (!typed) {
+              alert('Please enter a member name');
+              return;
+            }
+            newId = typed.toLowerCase().replace(/[^a-z0-9]/g, '');
+            displayName = typed;
+          } else {
+            displayName = ROOMMATES.find(r => r.id === newId)?.name || newId;
+          }
+
+          if (!newId) return;
+
+          if (!appState.amulMembers) appState.amulMembers = ['anjan', 'saurabh'];
+          if (appState.amulMembers.includes(newId)) {
+            showToast('Member already in Amul tracker');
+            modal.classList.remove('active');
+            return;
+          }
+
+          appState.amulMembers.push(newId);
+          logActivity(SyncEngine.identity, 'Added Milk Member', `Added ${displayName} to Amul Tracker`);
+          persistAndBroadcast({
+            type: 'amul_members_update',
+            members: appState.amulMembers
+          });
+          modal.classList.remove('active');
+          showToast(`Added ${displayName} to Amul Milk Tracker!`);
+          renderAmulTracker();
+        });
+      }
+    }
   }
 
   // --- Sheet Column Filter Controls ---
@@ -2844,6 +3258,19 @@
           });
         })
         .catch(err => console.log('Service Worker registration skipped:', err));
+
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'NAVIGATE_TAB' && event.data.tab) {
+          const target = event.data.tab;
+          document.querySelectorAll('.nav-tab, .m-nav-tab').forEach(t => {
+            t.classList.toggle('active', t.getAttribute('data-tab') === target);
+          });
+          document.querySelectorAll('.view-panel').forEach(panel => {
+            panel.classList.toggle('active', panel.id === `view-${target}`);
+          });
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      });
     }
   }
 
@@ -2868,6 +3295,9 @@
 
     updateMonthUI();
     populateDateSelectors();
+
+    // Initialize notification status
+    NotificationManager.updateUI();
 
     // Start Real-Time Cloud Sync Engine
     SyncEngine.init();

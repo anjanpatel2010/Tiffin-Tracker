@@ -1,10 +1,10 @@
-const CACHE_NAME = 'tiffin-tracker-v3.0';
+const CACHE_NAME = 'tiffin-tracker-v3.1';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=3.0',
-  './app.js?v=3.0',
-  './qr.js?v=3.0',
+  './styles.css?v=3.1',
+  './app.js?v=3.1',
+  './qr.js?v=3.1',
   './manifest.json',
   './icon.svg'
 ];
@@ -30,6 +30,29 @@ self.addEventListener('activate', (e) => {
         })
       );
     }).then(() => self.clients.claim())
+  );
+});
+
+// Native Notification Click Handler (Brings PWA / browser window to foreground)
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || './#view-poll';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url && 'focus' in client) {
+          client.focus();
+          if ('postMessage' in client) {
+            client.postMessage({ type: 'NAVIGATE_TAB', tab: 'poll' });
+          }
+          return;
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
   );
 });
 

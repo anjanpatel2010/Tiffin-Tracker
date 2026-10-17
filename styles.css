@@ -81,6 +81,16 @@ a[href*="netlify.com"] {
   -webkit-tap-highlight-color: transparent;
 }
 
+html {
+  font-size: 16.5px;
+}
+
+@media (min-width: 640px) {
+  html {
+    font-size: 17px;
+  }
+}
+
 html, body {
   width: 100%;
   min-height: 100%;
@@ -451,20 +461,21 @@ body {
 }
 
 .card-title {
-  font-size: 1.02rem;
+  font-size: 1.08rem;
   font-weight: 700;
   color: var(--text-main);
   letter-spacing: -0.015em;
 }
 
 .card-desc {
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   color: var(--text-muted);
-  margin-bottom: 10px;
+  margin-bottom: 6px;
+  line-height: 1.35;
 }
 
 .helper-text {
-  font-size: 0.74rem;
+  font-size: 0.78rem;
   color: var(--text-dim);
   font-weight: 600;
 }
@@ -1837,7 +1848,7 @@ body {
 
 .milk-summary-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -2351,4 +2362,221 @@ body {
   .sheet-scroll-container {
     max-height: 72vh;
   }
+}
+
+/* ==========================================================================
+   Notification Bar Alert Chips & Header Actions
+   ========================================================================== */
+.poll-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.1);
+  color: #fbbf24;
+  font-family: var(--font-sans);
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.notification-chip-btn:hover {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #fbbf24;
+}
+
+.notification-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--emerald);
+  box-shadow: 0 0 6px var(--emerald);
+}
+
+/* ==========================================================================
+   Previous Polls Archive Cards & List
+   ========================================================================== */
+.previous-polls-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.previous-poll-card-item {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  transition: border-color 0.2s ease;
+}
+
+.previous-poll-card-item:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.prev-poll-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.prev-poll-tag-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.prev-poll-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-top: 4px;
+}
+
+.prev-poll-meta {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.prev-winner-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--emerald);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.prev-poll-options-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.prev-opt-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.prev-opt-text-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.prev-opt-progress-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.prev-opt-progress-bar {
+  height: 100%;
+  background: var(--accent-light);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.prev-opt-progress-bar.winner {
+  background: var(--emerald);
+}
+
+.prev-voters-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.prev-voter-chip {
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   Amul Member Controls & Summary Row
+   ========================================================================== */
+.amul-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mini-stat-card {
+  position: relative;
+}
+
+.mini-stat-card .amul-remove-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--rose);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+}
+
+.mini-stat-card .amul-remove-btn:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.3);
+}
+
+.empty-archive-box {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-color);
 }

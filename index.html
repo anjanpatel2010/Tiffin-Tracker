@@ -177,12 +177,15 @@
           <div class="card-header-compact">
             <div class="card-title-wrap">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--accent-light)"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-              <div>
-                <h2 class="card-title" id="pollCardTitle">Daily Menu Voting Poll</h2>
-                <p class="card-desc" id="pollCardSubtitle">Ask flatmates and finalize today's order for cook</p>
-              </div>
+              <h2 class="card-title" id="pollCardTitle">Menu Voting Poll</h2>
             </div>
-            <span id="pollStatusBadge" class="badge-pill today-pill">No Active Poll</span>
+            <div class="poll-header-actions">
+              <button id="pollNotificationBtn" class="notification-chip-btn" title="Phone Notification Bar Alerts">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span id="pollNotificationBtnText">Enable Alerts</span>
+              </button>
+              <span id="pollStatusBadge" class="badge-pill today-pill">No Active Poll</span>
+            </div>
           </div>
 
           <!-- Active Poll Live Display -->
@@ -195,10 +198,10 @@
 
             <!-- Blind Voting Notice (Shown until user votes) -->
             <div id="pollBlindNotice" class="card-inner-box poll-blind-banner" style="display:none;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22" style="color:var(--amber); flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="color:var(--amber); flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               <div class="blind-notice-content">
                 <strong>Blind Voting Active</strong>
-                <p>Flatmates cannot see other responses beforehand. Select your preferred sabzi and tiffin type below to submit your vote and reveal live results.</p>
+                <p>Results are hidden until you submit your vote.</p>
               </div>
             </div>
 
@@ -280,8 +283,7 @@
 
           <!-- Create New Poll Form (Visible when no active poll or admin wants new poll) -->
           <div id="createPollContainer" class="create-poll-box mt-3">
-            <h3 class="inner-box-title">Create a New Sabzi Poll</h3>
-            <p class="card-desc">Ask your cook what sabzi options she has, enter them below, and launch the poll to roommates.</p>
+            <h3 class="inner-box-title">Create New Sabzi Poll</h3>
 
             <div class="create-poll-grid">
               <div class="form-group">
@@ -308,15 +310,29 @@
                 <input type="text" class="text-input poll-opt-input" placeholder="Option 3 (e.g. Dal Tadka)" value="Aloo Gobi">
               </div>
               <button id="addPollOptionBtn" class="secondary-btn btn-sm mt-2">
-                <span>+ Add Another Option</span>
+                <span>+ Add Option</span>
               </button>
             </div>
 
             <button id="launchPollBtn" class="primary-btn glow-btn w-full mt-4">
-              <span>Launch Poll to All Flatmates</span>
+              <span>Launch Poll to Flatmates</span>
             </button>
           </div>
 
+        </div>
+
+        <!-- Previous Polls Archive Section -->
+        <div class="card mt-3" id="previousPollsCard">
+          <div class="card-header-compact">
+            <div class="card-title-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--purple)"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <h3 class="card-title">Previous Polls</h3>
+            </div>
+            <span id="prevPollsCountBadge" class="badge-pill">0 Saved</span>
+          </div>
+          <div id="previousPollsList" class="previous-polls-list">
+            <!-- Dynamically populated via JS -->
+          </div>
         </div>
 
       </section>
@@ -330,7 +346,7 @@
           <div class="sheet-toolbar">
             <div class="sheet-info">
               <h2 class="section-title" id="sheetMatrixTitle">Master Matrix</h2>
-              <p class="section-subtitle">Click meal cells to cycle: <span class="kbd">Off</span> ➜ <span class="kbd">Half</span> ➜ <span class="kbd">Full</span>. Click sabzi cell to edit dish name.</p>
+              <p class="section-subtitle">Tap cells to cycle portion. Tap sabzi to edit.</p>
             </div>
             <div class="sheet-actions">
               <div class="filter-box">
@@ -521,78 +537,42 @@
           <div class="card-header-compact">
             <div class="card-title-wrap">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--cyan)"><path d="M6 3h12l2 6v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9l2-6z"/><line x1="4" y1="9" x2="20" y2="9"/></svg>
-              <div>
-                <h2 class="card-title" id="amulSectionTitle">Amul Milk Tracker</h2>
-                <p class="card-desc">Tracks daily milk packets consumed (Options: 0.5, 1, or 2 packets)</p>
+              <h2 class="card-title" id="amulSectionTitle">Amul Milk Tracker</h2>
+            </div>
+            <div class="amul-header-actions">
+              <div class="milk-rate-chip">
+                <span>Price:</span>
+                <strong id="amulPriceBadge">₹35 / packet</strong>
               </div>
-            </div>
-            <div class="milk-rate-chip">
-              <span>Price:</span>
-              <strong id="amulPriceBadge">₹35 / packet</strong>
-            </div>
-          </div>
-
-          <!-- Milk Summary Cards -->
-          <div class="milk-summary-row">
-            <div class="mini-stat-card">
-              <span class="mini-label">Anjan</span>
-              <h4 class="mini-val" id="amulAnjanTotal">₹70</h4>
-              <span class="mini-sub" id="amulAnjanPackets">2 packets</span>
-            </div>
-            <div class="mini-stat-card">
-              <span class="mini-label">Saurabh</span>
-              <h4 class="mini-val" id="amulSaurabhTotal">₹70</h4>
-              <span class="mini-sub" id="amulSaurabhPackets">2 packets</span>
-            </div>
-            <div class="mini-stat-card accent">
-              <span class="mini-label">Total Milk Bill</span>
-              <h4 class="mini-val text-cyan" id="amulGrandTotal">₹140</h4>
-              <span class="mini-sub" id="amulTotalPackets">4 packets</span>
+              <button id="addAmulMemberBtn" class="secondary-btn btn-xs">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>+ Member</span>
+              </button>
             </div>
           </div>
 
-          <!-- Quick Milk Logging for Selected Date with EXACT 3 options: 0.5, 1, 2 -->
+          <!-- Milk Summary Cards (Rendered Dynamically) -->
+          <div class="milk-summary-row" id="amulSummaryRow">
+            <!-- Populated via renderAmulTracker() -->
+          </div>
+
+          <!-- Quick Milk Logging for Selected Date -->
           <div class="card-inner-box">
             <div class="card-header-compact" style="margin-bottom:6px;">
-              <h4 class="inner-box-title" style="margin:0;">Select Milk Packets for <span id="amulCurrentDayLabel">Today</span>:</h4>
-              <span class="helper-text">Options: 0.5, 1, or 2 (Tap active to clear)</span>
+              <h4 class="inner-box-title" style="margin:0;">Milk Packets for <span id="amulCurrentDayLabel">Today</span>:</h4>
             </div>
-            <div class="amul-options-grid">
-              <div class="amul-person-box">
-                <div class="amul-person-header">
-                  <span class="stepper-name">Anjan</span>
-                  <span class="amul-current-selected" id="amulDayAnjanVal">0 pkt</span>
-                </div>
-                <div class="amul-pill-group" data-person="anjan">
-                  <button class="amul-pill-btn" data-qty="0">Off</button>
-                  <button class="amul-pill-btn" data-qty="0.5">0.5</button>
-                  <button class="amul-pill-btn" data-qty="1">1</button>
-                  <button class="amul-pill-btn" data-qty="2">2</button>
-                </div>
-              </div>
-              <div class="amul-person-box">
-                <div class="amul-person-header">
-                  <span class="stepper-name">Saurabh</span>
-                  <span class="amul-current-selected" id="amulDaySaurabhVal">0 pkt</span>
-                </div>
-                <div class="amul-pill-group" data-person="saurabh">
-                  <button class="amul-pill-btn" data-qty="0">Off</button>
-                  <button class="amul-pill-btn" data-qty="0.5">0.5</button>
-                  <button class="amul-pill-btn" data-qty="1">1</button>
-                  <button class="amul-pill-btn" data-qty="2">2</button>
-                </div>
-              </div>
+            <div class="amul-options-grid" id="amulOptionsGrid">
+              <!-- Populated via renderAmulTracker() -->
             </div>
           </div>
 
           <!-- Milk Calendar Table -->
           <div class="sheet-scroll-container mt-4">
             <table class="master-table">
-              <thead>
-                <tr>
+              <thead id="amulTableHead">
+                <tr id="amulTableHeadRow">
                   <th class="th-sticky">Date</th>
-                  <th>Anjan (Pkt)</th>
-                  <th>Saurabh (Pkt)</th>
+                  <!-- Dynamic Member Columns Injected via JS -->
                   <th>Day Total</th>
                 </tr>
               </thead>
@@ -773,7 +753,6 @@
 
           <!-- Sub Tab 1: Pricing Rates -->
           <div id="subtab-pricing" class="subtab-content active">
-            <p class="card-desc">Edit meal rates. Updating prices here updates calculations for all roommates instantly:</p>
             <div class="settings-grid">
               <div class="form-group">
                 <label for="rateHalfInput" class="input-label">Half Meal Rate (₹):</label>
@@ -799,7 +778,6 @@
 
           <!-- Sub Tab 2: Tiffin Provider Info -->
           <div id="subtab-provider" class="subtab-content">
-            <p class="card-desc">Configure who receives payments via Google Pay / PhonePe:</p>
             <div class="settings-grid">
               <div class="form-group">
                 <label for="providerNameInput" class="input-label">Provider / Cook Name:</label>
@@ -821,9 +799,8 @@
 
           <!-- Sub Tab 3: Roommate Identity -->
           <div id="subtab-identity" class="subtab-content">
-            <p class="card-desc">Select your name so flatmates know who is logging meals and voting:</p>
             <div class="form-group">
-              <label for="settingsIdentitySelect" class="input-label">I am:</label>
+              <label for="settingsIdentitySelect" class="input-label">My Identity Name:</label>
               <select id="settingsIdentitySelect" class="select-dropdown w-full">
                 <option value="Anjan">Anjan</option>
                 <option value="Saurabh">Saurabh</option>
@@ -833,6 +810,12 @@
                 <option value="Chetan">Chetan</option>
                 <option value="Hitesh">Hitesh</option>
               </select>
+            </div>
+
+            <div class="mt-3">
+              <button id="settingsNotificationBtn" class="secondary-btn btn-sm w-full">
+                <span>Phone Notification Bar Alerts</span>
+              </button>
             </div>
 
             <div class="mt-4">
@@ -852,19 +835,18 @@
 
           <!-- Sub Tab 4: Share & Export -->
           <div id="subtab-share" class="subtab-content">
-            <p class="card-desc">Share monthly ledger statements, live link, or export reports:</p>
             <div class="share-actions-grid" style="display: flex; flex-direction: column; gap: 10px;">
               <button id="settingsShareLinkBtn" class="primary-btn btn-sm w-full">
-                <span>🔗 Copy Live App Link</span>
+                <span>Copy Live App Link</span>
               </button>
               <button id="settingsShareWhatsAppBtn" class="primary-btn btn-sm w-full" style="background: #25d366; color: #000; font-weight: 700;">
-                <span>💬 WhatsApp Group Monthly Summary</span>
+                <span>WhatsApp Group Monthly Summary</span>
               </button>
               <button id="settingsExportCsvBtn" class="secondary-btn btn-sm w-full">
-                <span>📊 Export Excel / CSV File</span>
+                <span>Export Excel / CSV File</span>
               </button>
               <button id="settingsPrintInvoiceBtn" class="secondary-btn btn-sm w-full">
-                <span>🖨️ Print / Save PDF Invoice</span>
+                <span>Print / Save PDF Invoice</span>
               </button>
             </div>
             <div class="sync-status-box mt-3" style="font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
@@ -1053,6 +1035,39 @@
     </div>
 
 
+    <!-- ========================================== -->
+    <!-- MODAL 6: ADD AMUL MEMBER                   -->
+    <!-- ========================================== -->
+    <div id="addAmulMemberModal" class="modal-backdrop">
+      <div class="modal-box modal-sm">
+        <div class="modal-header">
+          <div class="card-title-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="color:var(--cyan)"><path d="M6 3h12l2 6v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9l2-6z"/><line x1="4" y1="9" x2="20" y2="9"/></svg>
+            <h3 class="modal-title">Add Member to Milk Tracker</h3>
+          </div>
+          <button class="modal-close-btn" id="closeAddAmulMemberBtn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="amulMemberSelect" class="input-label">Select Roommate:</label>
+            <select id="amulMemberSelect" class="select-dropdown w-full">
+              <!-- Populated dynamically via JS -->
+            </select>
+          </div>
+          <div class="form-group mt-3" id="amulCustomNameGroup" style="display:none;">
+            <label for="amulCustomNameInput" class="input-label">Custom Member Name:</label>
+            <input type="text" id="amulCustomNameInput" class="text-input w-full" placeholder="Enter name">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="confirmAddAmulMemberBtn" class="primary-btn w-full">
+            <span>Add Member</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+
     <!-- Toast Notification Overlay -->
     <div id="toastContainer" class="toast-container"></div>
 
@@ -1064,8 +1079,8 @@
   </div>
 
   <!-- QR Generator Script -->
-  <script src="qr.js?v=3.0"></script>
+  <script src="qr.js?v=3.1"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=3.0"></script>
+  <script src="app.js?v=3.1"></script>
 </body>
 </html>
