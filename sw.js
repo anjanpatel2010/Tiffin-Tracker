@@ -81,7 +81,13 @@ self.addEventListener('fetch', (e) => {
           return networkRes;
         })
         .catch(() => {
-          return caches.match(e.request).then((cached) => cached || caches.match('./index.html'));
+          return caches.match(e.request).then((cached) => {
+            if (cached) return cached;
+            if (e.request.mode === 'navigate' || e.request.destination === 'document') {
+              return caches.match('./index.html');
+            }
+            return new Response('', { status: 404, statusText: 'Not Found' });
+          });
         })
     );
     return;
