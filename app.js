@@ -1173,6 +1173,71 @@
     });
   }
 
+  // --- Tiffin Supplier WhatsApp Order Text Generator ---
+  function generateSupplierOrderText(poll, winningDish, mealsApplied) {
+    const halfNames = [];
+    const fullNames = [];
+    const specialNames = [];
+
+    ROOMMATES.forEach(r => {
+      let portion = mealsApplied ? mealsApplied[r.id] : null;
+      if (!portion && poll && poll.votes && poll.votes[r.id]) {
+        portion = poll.votes[r.id].portion;
+      }
+      if (!portion || portion === 'Off' || portion === 'No') return;
+
+      // Remove "Sir" from names as requested
+      const cleanName = (r.name || '').replace(/\bSir\b/gi, '').trim();
+      if (portion === 'Half') halfNames.push(cleanName);
+      else if (portion === 'Full') fullNames.push(cleanName);
+      else if (portion === 'Special') specialNames.push(cleanName);
+    });
+
+    const groups = [];
+    if (halfNames.length > 0) groups.push({ type: 'Half', names: halfNames });
+    if (fullNames.length > 0) groups.push({ type: 'Full', names: fullNames });
+    if (specialNames.length > 0) groups.push({ type: 'Special', names: specialNames });
+
+    if (groups.length === 0) {
+      return `No tiffin needed today (${winningDish || ''}).`;
+    }
+
+    // Sort by count descending so main group comes first
+    groups.sort((a, b) => b.names.length - a.names.length);
+
+    const mainGroup = groups[0];
+    const otherGroups = groups.slice(1);
+
+    let msg = '';
+
+    // Primary group
+    if (mainGroup.names.length === 1) {
+      msg += `${mainGroup.type} for ${mainGroup.names[0]}\n`;
+    } else {
+      msg += `${mainGroup.type} tiffin for ${mainGroup.names.length}\n`;
+      msg += `${mainGroup.names.join(' ')}\n`;
+    }
+
+    // Sabzi name
+    const dish = winningDish || (poll ? poll.winner : '') || '';
+    if (dish) {
+      msg += `${dish}\n`;
+    }
+
+    // Secondary group(s)
+    otherGroups.forEach(g => {
+      msg += `\n`;
+      if (g.names.length === 1) {
+        msg += `${g.type} for ${g.names[0]}`;
+      } else {
+        msg += `${g.type} tiffin for ${g.names.length}\n`;
+        msg += `${g.names.join(' ')}`;
+      }
+    });
+
+    return msg.trim();
+  }
+
   // 2. Menu Voting Poll Render
   function renderPollView() {
     NotificationManager.updateUI();
@@ -1427,15 +1492,29 @@
               <h4 class="prev-poll-title">${pastPoll.options ? pastPoll.options.join(' vs ') : 'Poll'}</h4>
               <p class="prev-poll-meta">By ${pastPoll.author || 'Flatmate'} • ${totalVotes} / ${ROOMMATES.length} voted</p>
             </div>
-            <button class="pill-btn-ghost btn-xs text-muted delete-single-poll-btn" data-poll-id="${pastPoll.id}" title="Delete this old poll" style="flex-shrink:0; font-size:0.75rem; padding:3px 8px; border:1px solid rgba(255,255,255,0.08);">
-              Delete
-            </button>
+            <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+              ${pastPoll.winner ? `<button class="pill-btn-ghost btn-xs resend-past-poll-btn" data-poll-id="${pastPoll.id}" title="Forward order to cook" style="color:var(--wa-green); font-size:0.75rem; padding:3px 8px; border:1px solid rgba(37,211,102,0.3);">Forward</button>` : ''}
+              <button class="pill-btn-ghost btn-xs text-muted delete-single-poll-btn" data-poll-id="${pastPoll.id}" title="Delete this old poll" style="font-size:0.75rem; padding:3px 8px; border:1px solid rgba(255,255,255,0.08);">Delete</button>
+            </div>
           </div>
           <div class="prev-poll-options-summary">
             ${optionsBarsHtml}
           </div>
           ${votersChipsHtml ? `<div class="prev-voters-list">${votersChipsHtml}</div>` : ''}
         `;
+
+        card.querySelector('.resend-past-poll-btn')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const provider = appState.provider || CONFIG.defaultProvider;
+          const msg = generateSupplierOrderText(pastPoll, pastPoll.winner, null);
+          copyToClipboard(msg);
+          showToast(`Order copied for ${provider.name || 'cook'}!`);
+          const phoneParam = provider.phone ? `&phone=${encodeURIComponent(provider.phone.replace(/[^0-9]/g, ''))}` : '';
+          const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}${phoneParam}`;
+          setTimeout(() => {
+            window.open(waUrl, '_blank');
+          }, 300);
+        });
 
         card.querySelector('.delete-single-poll-btn')?.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -2533,42 +2612,13 @@
           renotify: true
         });
 
-        // Generate WhatsApp Order Message
-        const rates = getRates();
+        // Generate WhatsApp Order Message for Tiffin Supplier
         const provider = appState.provider || CONFIG.defaultProvider;
-
-        let waOrder = `*TIFFIN ORDER - DAY ${poll.day} (${(poll.mealSlot || 'DINNER').toUpperCase()})*\n`;
-        waOrder += `Cook: ${provider.name}\n`;
-        waOrder += `Selected Sabzi: *${winningDish}*\n`;
-        waOrder += `────────────────────\n`;
-
-        let halfCount = 0, fullCount = 0, specCount = 0, noCount = 0;
-        ROOMMATES.forEach(r => {
-          const p = mealsApplied[r.id];
-          if (p === 'Half') halfCount++;
-          else if (p === 'Full') fullCount++;
-          else if (p === 'Special') specCount++;
-          else noCount++;
-
-          let displayStatus = p;
-          if (p === 'Special') displayStatus = 'Special (5 Roti, Sabji, Dal)';
-          else if (p === 'Off') displayStatus = 'No Tiffin (Off)';
-
-          waOrder += `• ${r.name}: ${displayStatus}\n`;
-        });
-
-        waOrder += `────────────────────\n`;
-        const countSummary = [];
-        if (halfCount) countSummary.push(`${halfCount} Half`);
-        if (fullCount) countSummary.push(`${fullCount} Full`);
-        if (specCount) countSummary.push(`${specCount} Special`);
-        if (noCount) countSummary.push(`${noCount} Off`);
-        waOrder += `*Total Order:* ${countSummary.join(', ')}\n\n`;
-        waOrder += `Please prepare as per count. Thank you!`;
+        const waOrder = generateSupplierOrderText(poll, winningDish, mealsApplied);
 
         // Copy and open WhatsApp
         copyToClipboard(waOrder);
-        showToast(`Copied order message for ${provider.name}!`);
+        showToast(`Order copied for ${provider.name || 'cook'}!`);
         renderPollView();
         renderDailyLogger();
         renderMasterSheet();
@@ -2577,7 +2627,7 @@
         const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(waOrder)}${phoneParam}`;
         setTimeout(() => {
           window.open(waUrl, '_blank');
-        }, 400);
+        }, 300);
       });
     }
   }
