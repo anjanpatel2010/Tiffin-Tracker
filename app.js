@@ -22,8 +22,11 @@
   }
 
   const now = new Date();
-  let currentYear = now.getFullYear();
-  let currentMonth = now.getMonth() + 1; // 1-indexed
+  const storedYear = parseInt(localStorage.getItem('tiffin_last_viewed_year'), 10);
+  const storedMonth = parseInt(localStorage.getItem('tiffin_last_viewed_month'), 10);
+
+  let currentYear = (!isNaN(storedYear) && storedYear >= 2024 && storedYear <= 2035) ? storedYear : now.getFullYear();
+  let currentMonth = (!isNaN(storedMonth) && storedMonth >= 1 && storedMonth <= 12) ? storedMonth : (now.getMonth() + 1);
 
   // Application State declaration (initialized to null to prevent TDZ reference errors)
   let appState = null;
@@ -258,6 +261,9 @@
 
     currentYear = targetYear;
     currentMonth = targetMonth;
+    localStorage.setItem('tiffin_last_viewed_year', currentYear.toString());
+    localStorage.setItem('tiffin_last_viewed_month', currentMonth.toString());
+
     CONFIG.year = currentYear;
     CONFIG.month = currentMonth;
     CONFIG.daysInMonth = getDaysInMonth(currentYear, currentMonth);
@@ -273,15 +279,24 @@
   }
 
   function updateMonthUI() {
+    const monthShortStr = `${MONTH_SHORTS[currentMonth - 1]} ${currentYear}`;
+    const monthFullStr = `${MONTH_NAMES[currentMonth - 1]} ${currentYear}`;
+
     const monthText = document.getElementById('headerMonthText');
+    const dateStripMonthName = document.getElementById('dateStripMonthName');
+    const sheetMonthText = document.getElementById('sheetMonthText');
     const sheetTitle = document.getElementById('sheetMatrixTitle');
     const sheetDaysSub = document.getElementById('sheetDaysSubLabel');
     const amulTitle = document.getElementById('amulSectionTitle');
+    const splitRatesSub = document.getElementById('splitRatesSubtitle');
 
-    if (monthText) monthText.textContent = '';
-    if (sheetTitle) sheetTitle.textContent = `Master Matrix`;
+    if (monthText) monthText.textContent = monthShortStr;
+    if (dateStripMonthName) dateStripMonthName.textContent = monthShortStr;
+    if (sheetMonthText) sheetMonthText.textContent = monthShortStr;
+    if (sheetTitle) sheetTitle.textContent = `Master Matrix • ${monthFullStr}`;
     if (sheetDaysSub) sheetDaysSub.textContent = `${CONFIG.daysInMonth} Days`;
-    if (amulTitle) amulTitle.textContent = `Amul Milk Tracker`;
+    if (amulTitle) amulTitle.textContent = `Amul Milk Tracker • ${monthFullStr}`;
+    if (splitRatesSub) splitRatesSub.textContent = `${monthFullStr} Live Bill`;
   }
 
   function populateDateSelectors() {
@@ -1036,12 +1051,22 @@
     const sabziInput = document.getElementById('sabziInput');
     const jumpLabel = document.getElementById('jumpTodayLabel');
 
-    if (dayTitle) dayTitle.textContent = dayData.dateFormatted;
+    const dateObj = new Date(currentYear, currentMonth - 1, selectedDay);
+    const dayOfWeek = DAY_NAMES[dateObj.getDay()];
+    const monthShort = MONTH_SHORTS[currentMonth - 1];
+    const monthName = MONTH_NAMES[currentMonth - 1];
+    const isRealToday = (now.getFullYear() === currentYear && (now.getMonth() + 1) === currentMonth && selectedDay === now.getDate());
+
+    if (dayTitle) dayTitle.textContent = `${dayOfWeek}, ${selectedDay} ${monthShort}`;
     if (dayTagPill) {
-      dayTagPill.style.display = (selectedDay === CONFIG.todayDay) ? 'inline-flex' : 'none';
+      dayTagPill.style.display = isRealToday ? 'inline-flex' : 'none';
     }
     if (jumpLabel) {
-      jumpLabel.textContent = `Jump to Today (Day ${CONFIG.todayDay})`;
+      const realTodayDay = now.getDate();
+      const realTodayMonth = MONTH_SHORTS[now.getMonth()];
+      jumpLabel.textContent = (now.getFullYear() === currentYear && (now.getMonth() + 1) === currentMonth)
+        ? `Jump to Today (Day ${realTodayDay})`
+        : `Jump to Today (${realTodayMonth} ${realTodayDay})`;
     }
 
     const dayCost = getDayTotalCost(selectedDay);
@@ -1603,7 +1628,7 @@
         if (!matchesDate && !matchesSabzi) continue;
       }
 
-      const isToday = (d === CONFIG.todayDay);
+      const isToday = (now.getFullYear() === currentYear && (now.getMonth() + 1) === currentMonth && d === now.getDate());
       const tr = document.createElement('tr');
       if (isToday) tr.classList.add('row-today');
 
@@ -1624,7 +1649,7 @@
       if (isAll) {
         tr.innerHTML = `
           <td class="td-sticky-date" title="${dayData.dateFormatted}">
-            ${dayData.dayOfWeek.slice(0, 3)}, Day ${d}
+            ${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}
           </td>
           <td class="td-sticky-menu" data-day="${d}" title="Click to edit sabzi">
             ${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}
@@ -1661,7 +1686,7 @@
       } else if (activePerson) {
         tr.innerHTML = `
           <td class="td-sticky-date" title="${dayData.dateFormatted}">
-            ${dayData.dayOfWeek.slice(0, 3)}, Day ${d}
+            ${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}
           </td>
           <td class="td-sticky-menu" data-day="${d}" title="Click to edit sabzi">
             ${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}
@@ -1807,8 +1832,8 @@
     const splitRatesSub = document.getElementById('splitRatesSubtitle');
 
     if (statExpense) statExpense.textContent = `₹${flatTotals.tiffinTotal}`;
-    if (statMeals) statMeals.textContent = `${flatTotals.totalMeals} total meals served`;
-    if (splitRatesSub) splitRatesSub.textContent = `Rates: Half ₹${rates.half} • Full ₹${rates.full} • Special ₹${rates.special}`;
+    if (statMeals) statMeals.textContent = `${flatTotals.totalMeals} total meals in ${MONTH_NAMES[currentMonth - 1]}`;
+    if (splitRatesSub) splitRatesSub.textContent = `${MONTH_NAMES[currentMonth - 1]} ${currentYear} • Live Rates: Half ₹${rates.half} • Full ₹${rates.full} • Special ₹${rates.special}`;
 
     // Roommate Expense Split Bars
     const list = document.getElementById('roommateSplitBarsList');
@@ -1909,11 +1934,11 @@
     if (amountNote) {
       amountNote.textContent = customUpiAmount !== null 
         ? `Custom payment entered for ${roommateObj.name}`
-        : `${roommateObj.name}'s Monthly bill (${stats.totalMeals} meals)`;
+        : `${roommateObj.name}'s ${MONTH_NAMES[currentMonth - 1]} bill (${stats.totalMeals} meals)`;
     }
 
     // Dynamic UPI Deep Link
-    const note = encodeURIComponent(`Tiffin Payment - ${roommateObj.name}`);
+    const note = encodeURIComponent(`Tiffin Payment - ${roommateObj.name} (${MONTH_SHORTS[currentMonth - 1]} ${currentYear})`);
     const upiUri = `upi://pay?pa=${encodeURIComponent(provider.upi)}&pn=${encodeURIComponent(provider.name)}&am=${amountToPay}&tn=${note}&cu=INR`;
 
     const payLink = document.getElementById('upiDirectPayLink');
@@ -2105,7 +2130,7 @@
     const provider = appState.provider || CONFIG.defaultProvider;
     const mNameUpper = MONTH_NAMES[currentMonth - 1].toUpperCase();
 
-    let text = `🍛 *TIFFIN EXPENSE SUMMARY*\n`;
+    let text = `🍛 *TIFFIN EXPENSE SUMMARY - ${mNameUpper} ${currentYear}*\n`;
     text += `Flat Tiffin Ledger • Cook: ${provider.name}\n`;
     text += `Rate: Half ₹${rates.half} | Full ₹${rates.full} | Special ₹${rates.special}\n`;
     text += `──────────────────────\n`;
@@ -2236,6 +2261,14 @@
         if (selectedDay > 1) {
           selectedDay--;
           renderAll();
+        } else {
+          // Rollover to previous month's last day
+          let prevY = currentYear;
+          let prevM = currentMonth - 1;
+          if (prevM < 1) { prevM = 12; prevY--; }
+          switchMonth(prevY, prevM);
+          selectedDay = CONFIG.daysInMonth;
+          renderAll();
         }
       });
     }
@@ -2246,6 +2279,14 @@
         if (selectedDay < CONFIG.daysInMonth) {
           selectedDay++;
           renderAll();
+        } else {
+          // Rollover to next month's Day 1
+          let nextY = currentYear;
+          let nextM = currentMonth + 1;
+          if (nextM > 12) { nextM = 1; nextY++; }
+          switchMonth(nextY, nextM);
+          selectedDay = 1;
+          renderAll();
         }
       });
     }
@@ -2253,17 +2294,31 @@
     if (jumpTodayBtn) {
       jumpTodayBtn.addEventListener('click', () => {
         triggerHaptic();
-        selectedDay = CONFIG.todayDay;
-        renderAll();
-        showToast(`Jumped to Today (Day ${CONFIG.todayDay})`);
+        const d = new Date();
+        const realY = d.getFullYear();
+        const realM = d.getMonth() + 1;
+        if (currentYear !== realY || currentMonth !== realM) {
+          switchMonth(realY, realM);
+        } else {
+          selectedDay = CONFIG.todayDay;
+          renderAll();
+        }
+        showToast(`Jumped to Today (Day ${d.getDate()} ${MONTH_SHORTS[realM - 1]})`);
       });
     }
 
     if (sheetJumpTodayBtn) {
       sheetJumpTodayBtn.addEventListener('click', () => {
         triggerHaptic();
-        selectedDay = CONFIG.todayDay;
-        renderAll();
+        const d = new Date();
+        const realY = d.getFullYear();
+        const realM = d.getMonth() + 1;
+        if (currentYear !== realY || currentMonth !== realM) {
+          switchMonth(realY, realM);
+        } else {
+          selectedDay = CONFIG.todayDay;
+          renderAll();
+        }
         const row = document.querySelector('.row-today');
         if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
@@ -2843,6 +2898,10 @@
     const prevBtn = document.getElementById('headerPrevMonthBtn');
     const nextBtn = document.getElementById('headerNextMonthBtn');
     const pickerBtn = document.getElementById('headerMonthPickerBtn');
+    const dateStripPickerBtn = document.getElementById('dateStripMonthPickerBtn');
+    const sheetPrevBtn = document.getElementById('sheetPrevMonthBtn');
+    const sheetNextBtn = document.getElementById('sheetNextMonthBtn');
+    const sheetPickerBtn = document.getElementById('sheetMonthPickerBtn');
     const modal = document.getElementById('monthPickerModal');
     const closeBtn = document.getElementById('closeMonthPickerBtn');
     const prevYearBtn = document.getElementById('pickerPrevYearBtn');
@@ -2851,25 +2910,26 @@
     const monthsGrid = document.getElementById('monthsPickerGrid');
     const jumpCurrentBtn = document.getElementById('jumpCurrentRealMonthBtn');
 
-    if (prevBtn) {
-      prevBtn.addEventListener('click', () => {
-        triggerHaptic();
-        let y = currentYear;
-        let m = currentMonth - 1;
-        if (m < 1) { m = 12; y--; }
-        switchMonth(y, m);
-      });
-    }
+    const handlePrevMonth = () => {
+      triggerHaptic();
+      let y = currentYear;
+      let m = currentMonth - 1;
+      if (m < 1) { m = 12; y--; }
+      switchMonth(y, m);
+    };
 
-    if (nextBtn) {
-      nextBtn.addEventListener('click', () => {
-        triggerHaptic();
-        let y = currentYear;
-        let m = currentMonth + 1;
-        if (m > 12) { m = 1; y++; }
-        switchMonth(y, m);
-      });
-    }
+    const handleNextMonth = () => {
+      triggerHaptic();
+      let y = currentYear;
+      let m = currentMonth + 1;
+      if (m > 12) { m = 1; y++; }
+      switchMonth(y, m);
+    };
+
+    if (prevBtn) prevBtn.addEventListener('click', handlePrevMonth);
+    if (nextBtn) nextBtn.addEventListener('click', handleNextMonth);
+    if (sheetPrevBtn) sheetPrevBtn.addEventListener('click', handlePrevMonth);
+    if (sheetNextBtn) sheetNextBtn.addEventListener('click', handleNextMonth);
 
     function renderMonthPickerGrid() {
       if (!yearDisplay || !monthsGrid) return;
@@ -2893,14 +2953,16 @@
       });
     }
 
-    if (pickerBtn && modal) {
-      pickerBtn.addEventListener('click', () => {
-        triggerHaptic();
-        modalDisplayedYear = currentYear;
-        renderMonthPickerGrid();
-        modal.classList.add('active');
-      });
-    }
+    const openMonthPicker = () => {
+      triggerHaptic();
+      modalDisplayedYear = currentYear;
+      renderMonthPickerGrid();
+      if (modal) modal.classList.add('active');
+    };
+
+    if (pickerBtn && modal) pickerBtn.addEventListener('click', openMonthPicker);
+    if (dateStripPickerBtn && modal) dateStripPickerBtn.addEventListener('click', openMonthPicker);
+    if (sheetPickerBtn && modal) sheetPickerBtn.addEventListener('click', openMonthPicker);
 
     if (closeBtn && modal) {
       closeBtn.addEventListener('click', () => {
@@ -3462,7 +3524,7 @@
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `Tiffin_Expense_Report.csv`);
+    link.setAttribute("download", `Tiffin_Expense_Report_${MONTH_SHORTS[currentMonth - 1]}_${currentYear}.csv`);
     document.body.appendChild(link);
     link.click();
     link.remove();

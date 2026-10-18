@@ -24,7 +24,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css?v=4.0">
+  <link rel="stylesheet" href="styles.css?v=4.1">
 </head>
 <body>
   <!-- App Container -->
@@ -40,6 +40,21 @@
         </button>
         <span class="header-dot-sep">•</span>
         <h1 class="header-title">Tiffin Tracker</h1>
+      </div>
+
+      <!-- Header Month Navigation -->
+      <div class="header-month-nav" id="headerMonthNav">
+        <button id="headerPrevMonthBtn" class="month-nav-arrow" title="Previous Month" aria-label="Previous Month">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <button id="headerMonthPickerBtn" class="header-month-pill" title="Select Month & Year">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" class="month-cal-icon"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span id="headerMonthText">Oct 2026</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="10" height="10" class="month-chevron-icon"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <button id="headerNextMonthBtn" class="month-nav-arrow" title="Next Month" aria-label="Next Month">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
       </div>
 
       <div class="header-right">
@@ -111,6 +126,11 @@
             <button id="jumpTodayBtn" class="action-chip highlight-chip">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <span id="jumpTodayLabel">Jump to Today</span>
+            </button>
+            <button id="dateStripMonthPickerBtn" class="action-chip month-chip" title="Change Month & Year">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" style="color:var(--emerald)"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span id="dateStripMonthName">Oct 2026</span>
+              <span class="chip-chevron">▾</span>
             </button>
             <div class="date-picker-wrap">
               <label for="daySelectInput" class="visually-hidden">Select Date</label>
@@ -356,6 +376,14 @@
               <p class="section-subtitle">Tap cells to cycle portion. Tap sabzi to edit.</p>
             </div>
             <div class="sheet-actions">
+              <div class="sheet-month-nav" id="sheetMonthNav">
+                <button id="sheetPrevMonthBtn" class="sheet-month-arrow" title="Previous Month">‹</button>
+                <button id="sheetMonthPickerBtn" class="sheet-month-btn" title="Choose Month">
+                  <span id="sheetMonthText">Oct 2026</span>
+                  <span class="sheet-month-arrow-down">▾</span>
+                </button>
+                <button id="sheetNextMonthBtn" class="sheet-month-arrow" title="Next Month">›</button>
+              </div>
               <div class="filter-box">
                 <input type="text" id="sheetSearchInput" class="text-input-sm" placeholder="Search sabzi / day...">
               </div>
@@ -1126,8 +1154,8 @@
   </div>
 
   <!-- QR Generator Script -->
-  <script src="qr.js?v=4.0"></script>
+  <script src="qr.js?v=4.1"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=4.0"></script>
+  <script src="app.js?v=4.1"></script>
 </body>
 </html>

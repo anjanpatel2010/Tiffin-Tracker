@@ -217,6 +217,163 @@ body {
   color: var(--text-muted);
 }
 
+/* Header Month Navigator */
+.header-month-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  padding: 3px 6px;
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.header-month-nav:hover {
+  border-color: rgba(0, 245, 160, 0.35);
+  box-shadow: 0 0 12px rgba(0, 245, 160, 0.15);
+}
+
+.month-nav-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.month-nav-arrow:hover {
+  color: var(--emerald);
+  background: rgba(0, 245, 160, 0.12);
+  transform: scale(1.08);
+}
+
+.month-nav-arrow:active {
+  transform: scale(0.92);
+}
+
+.header-month-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.header-month-pill:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--emerald);
+}
+
+.month-cal-icon {
+  color: var(--emerald);
+  flex-shrink: 0;
+}
+
+.month-chevron-icon {
+  color: var(--text-dim);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.header-month-pill:hover .month-chevron-icon {
+  color: var(--emerald);
+  transform: translateY(1px);
+}
+
+/* Sheet Month Navigator */
+.sheet-month-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  padding: 2px 6px;
+  box-shadow: var(--shadow-sm);
+}
+
+.sheet-month-arrow {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 50%;
+  font-size: 0.95rem;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.sheet-month-arrow:hover {
+  color: var(--emerald);
+  background: rgba(0, 245, 160, 0.12);
+}
+
+.sheet-month-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: var(--radius-full);
+  transition: all 0.15s ease;
+}
+
+.sheet-month-btn:hover {
+  color: var(--emerald);
+}
+
+.sheet-month-arrow-down {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+/* Date Strip Month Chip */
+.action-chip.month-chip {
+  background: rgba(0, 245, 160, 0.08);
+  border-color: rgba(0, 245, 160, 0.3);
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.action-chip.month-chip:hover {
+  background: rgba(0, 245, 160, 0.16);
+  border-color: var(--emerald);
+  box-shadow: 0 0 10px rgba(0, 245, 160, 0.2);
+}
+
+.chip-chevron {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
 .header-right {
   display: flex;
   align-items: center;
@@ -2471,31 +2628,59 @@ body {
   .qr-code-box { width: 175px; height: 175px; }
 }
 
+@media (max-width: 680px) {
+  .header-title,
+  .header-dot-sep {
+    display: none !important;
+  }
+}
+
 @media (max-width: 520px) {
   .app-header {
-    padding: 8px 12px;
-    gap: 8px;
+    padding: 7px 10px;
+    gap: 6px;
+    justify-content: space-between;
   }
   .header-left {
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
   }
-  .header-titles {
-    min-width: 0;
-  }
-  .header-title {
-    font-size: 0.96rem;
-  }
-  .month-pill-btn {
+  .user-identity-badge {
+    padding: 3px 9px;
     font-size: 0.76rem;
+  }
+  .header-month-nav {
+    padding: 2px 4px;
+    gap: 1px;
+  }
+  .month-nav-arrow {
+    width: 22px;
+    height: 22px;
+  }
+  .header-month-pill {
+    padding: 2px 6px;
+    font-size: 0.76rem;
+    gap: 4px;
+  }
+  .sync-status-btn {
     padding: 3px 8px;
+    font-size: 0.7rem;
   }
   .icon-btn {
-    width: 38px;
-    height: 38px;
+    width: 34px;
+    height: 34px;
   }
   .sheet-scroll-container {
     max-height: 72vh;
+  }
+}
+
+@media (max-width: 375px) {
+  #syncStatusLabel {
+    display: none;
+  }
+  .sync-status-btn {
+    padding: 4px 6px;
   }
 }
 
