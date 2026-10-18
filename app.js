@@ -69,6 +69,50 @@
     { id: 'hitesh', name: 'Hitesh', slots: ['lunch', 'dinner'], avatarColor: '#38bdf8' }
   ];
 
+  function isMaskedMode() {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('mask') || urlParams.has('demo')) return true;
+      return localStorage.getItem('tiffin_mask_names') === 'true';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function applyMaskingMode(masked) {
+    if (masked) {
+      ROOMMATES[0].name = 'User 1';
+      ROOMMATES[1].name = 'User 2';
+      ROOMMATES[2].name = 'User 3';
+      ROOMMATES[3].name = 'User 4';
+      ROOMMATES[4].name = 'User 5';
+      ROOMMATES[5].name = 'User 6';
+      ROOMMATES[6].name = 'User 7';
+      CONFIG.defaultProvider.name = 'Chef Partner';
+      CONFIG.defaultProvider.upi = 'tiffin.service@oksbi';
+      CONFIG.defaultProvider.phone = '+91 98765 00000';
+      if (appState && appState.provider) {
+        appState.provider.name = 'Chef Partner';
+        appState.provider.upi = 'tiffin.service@oksbi';
+      }
+    } else {
+      ROOMMATES[0].name = 'Anjan';
+      ROOMMATES[1].name = 'Saurabh';
+      ROOMMATES[2].name = 'Alok';
+      ROOMMATES[3].name = 'Rohit';
+      ROOMMATES[4].name = 'Salman';
+      ROOMMATES[5].name = 'Chetan';
+      ROOMMATES[6].name = 'Hitesh';
+      CONFIG.defaultProvider.name = 'Sandhya Tiwari';
+      CONFIG.defaultProvider.upi = 'sandhyatiwari0205@oksbi';
+      CONFIG.defaultProvider.phone = '+91 98765 43210';
+    }
+  }
+
+  if (isMaskedMode()) {
+    applyMaskingMode(true);
+  }
+
   function getStorageKey(year, month) {
     if (year === 2026 && month === 10) return 'tiffin_tracker_oct2026_data_v3';
     return `tiffin_tracker_ledger_${year}_${month}`;
@@ -107,25 +151,36 @@
       };
     }
 
-    // Seed October 2026 historical verified records
+    // Seed October 2026 realistic records
     if (year === 2026 && month === 10) {
-      if (days[5]) {
-        days[5].sabzi = 'Bhindi';
-        days[5].meals.anjan.dinner = 'Half';
-        days[5].meals.alok.dinner = 'Half';
-        days[5].meals.rohit.dinner = 'Half';
-        days[5].meals.chetan.dinner = 'Half';
-        days[5].amul.anjan = 1;
-        days[5].amul.saurabh = 1;
-      }
-      if (days[6]) {
-        days[6].sabzi = 'Tinde';
-        days[6].meals.anjan.dinner = 'Half';
-        days[6].meals.saurabh.dinner = 'Half';
-        days[6].meals.alok.dinner = 'Half';
-        days[6].meals.rohit.dinner = 'Half';
-        days[6].amul.anjan = 1;
-        days[6].amul.saurabh = 1;
+      const demoSabzis = [
+        'Paneer Butter Masala', 'Dal Tadka & Rice', 'Aloo Gobi Matar', 'Kadhai Paneer',
+        'Bhindi Masala', 'Tinde Ki Sabji', 'Mix Veg Curry', 'Chole Bhature',
+        'Dal Makhani', 'Shahi Paneer', 'Rajma Masala', 'Aloo Paratha & Dahi',
+        'Veg Biryani', 'Matar Mushroom', 'Kashmiri Dum Aloo', 'Paneer Bhurji',
+        'Dal Fry & Jeera Rice', 'Paneer Tikka Masala'
+      ];
+
+      for (let d = 1; d <= 18; d++) {
+        if (!days[d]) continue;
+        days[d].sabzi = demoSabzis[(d - 1) % demoSabzis.length];
+        days[d].meals.anjan.lunch = (d % 3 === 0) ? 'Full' : (d % 4 === 0) ? '' : 'Half';
+        days[d].meals.anjan.dinner = 'Half';
+        days[d].meals.saurabh.lunch = (d % 2 === 0) ? 'Half' : '';
+        days[d].meals.saurabh.dinner = (d % 5 === 0) ? 'Full' : 'Half';
+        days[d].meals.alok.lunch = (d % 3 === 0) ? 'Special' : 'Half';
+        days[d].meals.alok.dinner = (d % 4 === 0) ? 'Special' : 'Half';
+        days[d].meals.rohit.lunch = (d % 2 === 1) ? 'Half' : '';
+        days[d].meals.rohit.dinner = 'Half';
+        days[d].meals.salman.lunch = (d % 4 === 1) ? 'Full' : 'Half';
+        days[d].meals.salman.dinner = (d % 3 === 0) ? '' : 'Half';
+        days[d].meals.chetan.lunch = 'Half';
+        days[d].meals.chetan.dinner = (d % 2 === 0) ? 'Half' : 'Full';
+        days[d].meals.hitesh.lunch = (d % 3 === 1) ? 'Half' : '';
+        days[d].meals.hitesh.dinner = 'Half';
+
+        days[d].amul.anjan = (d % 2 === 0) ? 1 : 0;
+        days[d].amul.saurabh = (d % 3 === 0) ? 1 : 0;
       }
     }
 
@@ -140,8 +195,42 @@
       rates: rates,
       provider: provider,
       days: days,
-      activePoll: null,
-      pollHistory: [],
+      activePoll: {
+        id: 'poll_demo_oct18',
+        day: 18,
+        mealSlot: 'Dinner',
+        options: ['Paneer Tikka Masala', 'Dal Makhani & Jeera Rice'],
+        votes: {
+          anjan: { option: 'Paneer Tikka Masala', portion: 'Half' },
+          saurabh: { option: 'Dal Makhani & Jeera Rice', portion: 'Half' },
+          alok: { option: 'Paneer Tikka Masala', portion: 'Special' },
+          rohit: { option: 'Paneer Tikka Masala', portion: 'Full' },
+          salman: { option: 'Dal Makhani & Jeera Rice', portion: 'Half' },
+          chetan: { option: 'Paneer Tikka Masala', portion: 'Half' }
+        },
+        status: 'active',
+        createdAt: Date.now() - 3600000,
+        author: isMaskedMode() ? 'User 1' : 'Anjan'
+      },
+      pollHistory: [
+        {
+          id: 'poll_demo_oct17',
+          day: 17,
+          mealSlot: 'Lunch',
+          options: ['Chole Bhature', 'Dal Fry & Jeera Rice'],
+          winningOption: 'Dal Fry & Jeera Rice',
+          votes: {
+            anjan: { option: 'Dal Fry & Jeera Rice', portion: 'Half' },
+            saurabh: { option: 'Dal Fry & Jeera Rice', portion: 'Half' },
+            alok: { option: 'Dal Fry & Jeera Rice', portion: 'Special' },
+            rohit: { option: 'Chole Bhature', portion: 'Half' },
+            salman: { option: 'Dal Fry & Jeera Rice', portion: 'Half' }
+          },
+          status: 'finalized',
+          author: isMaskedMode() ? 'User 1' : 'Anjan',
+          createdAt: Date.now() - 86400000
+        }
+      ],
       amulMembers: ['anjan', 'saurabh'],
       auditLog: [
         {
@@ -186,6 +275,14 @@
           if (!parsed.auditLog) parsed.auditLog = [];
           if (!parsed.pollHistory) parsed.pollHistory = [];
           if (!parsed.amulMembers || !Array.isArray(parsed.amulMembers)) parsed.amulMembers = ['anjan', 'saurabh'];
+
+          // In masked/demo mode, guarantee rich sample records on October 2026
+          if (isMaskedMode() && year === 2026 && month === 10 && (!parsed.days[18] || !parsed.days[18].sabzi)) {
+            const demoDefault = getDefaultDataForMonth(year, month);
+            parsed.days = demoDefault.days;
+            parsed.activePoll = demoDefault.activePoll;
+            parsed.pollHistory = demoDefault.pollHistory;
+          }
           return parsed;
         }
       }
@@ -536,7 +633,7 @@
       }
 
       // 2. Roommate Identity
-      this.identity = localStorage.getItem('tiffin_my_identity') || 'Anjan';
+      this.identity = localStorage.getItem('tiffin_my_identity') || (isMaskedMode() ? 'User 1' : 'Anjan');
       updateIdentityUI(this.identity);
 
       // 3. Connect EventSource
@@ -1033,10 +1130,17 @@
     const onboardingSelect = document.getElementById('onboardingNameSelect');
     const myVoteLabel = document.getElementById('myVoteIdentityLabel');
 
-    if (headerName) headerName.textContent = name;
+    let displayName = name;
+    if (isMaskedMode()) {
+      const lower = (name || '').toLowerCase();
+      const found = ROOMMATES.find(r => r.id === lower || r.name.toLowerCase() === lower);
+      displayName = found ? found.name : (lower === 'anjan' ? 'User 1' : name);
+    }
+
+    if (headerName) headerName.textContent = displayName;
     if (settingsSelect) settingsSelect.value = name;
     if (onboardingSelect) onboardingSelect.value = name;
-    if (myVoteLabel) myVoteLabel.textContent = name;
+    if (myVoteLabel) myVoteLabel.textContent = displayName;
   }
 
   // 1. Daily Logger Render
@@ -1577,13 +1681,13 @@
           <tr class="header-group-row">
             <th class="th-sticky th-date">Date</th>
             <th class="th-sticky th-menu">Sabzi / Note</th>
-            <th colspan="2" class="th-person">Anjan</th>
-            <th colspan="2" class="th-person">Saurabh</th>
-            <th colspan="3" class="th-person">Alok</th>
-            <th colspan="2" class="th-person">Rohit</th>
-            <th colspan="2" class="th-person">Salman</th>
-            <th colspan="2" class="th-person">Chetan</th>
-            <th colspan="2" class="th-person">Hitesh</th>
+            <th colspan="2" class="th-person">${ROOMMATES[0].name}</th>
+            <th colspan="2" class="th-person">${ROOMMATES[1].name}</th>
+            <th colspan="3" class="th-person">${ROOMMATES[2].name}</th>
+            <th colspan="2" class="th-person">${ROOMMATES[3].name}</th>
+            <th colspan="2" class="th-person">${ROOMMATES[4].name}</th>
+            <th colspan="2" class="th-person">${ROOMMATES[5].name}</th>
+            <th colspan="2" class="th-person">${ROOMMATES[6].name}</th>
             <th class="th-day-total">Day Total</th>
           </tr>
           <tr class="header-sub-row">
@@ -2205,27 +2309,67 @@
   // UI INTERACTIVITY & EVENT HANDLERS
   // ==========================================================================
 
+  function switchTab(target) {
+    document.querySelectorAll('.nav-tab').forEach(t => {
+      t.classList.toggle('active', t.getAttribute('data-tab') === target);
+    });
+    document.querySelectorAll('.m-nav-tab').forEach(t => {
+      t.classList.toggle('active', t.getAttribute('data-tab') === target);
+    });
+    document.querySelectorAll('.view-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.id === `view-${target}`);
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function handleUrlHash() {
+    const raw = (window.location.hash || '').replace('#', '').trim();
+    if (!raw) return;
+    if (raw === 'month-modal') {
+      const modal = document.getElementById('monthPickerModal');
+      if (modal) {
+        modalDisplayedYear = currentYear;
+        const yearDisplay = document.getElementById('pickerYearVal');
+        const monthsGrid = document.getElementById('monthsPickerGrid');
+        if (yearDisplay) yearDisplay.textContent = modalDisplayedYear;
+        if (monthsGrid) {
+          monthsGrid.innerHTML = '';
+          MONTH_SHORTS.forEach((shortName, idx) => {
+            const mNum = idx + 1;
+            const btn = document.createElement('button');
+            btn.className = 'month-select-btn';
+            if (modalDisplayedYear === currentYear && mNum === currentMonth) btn.classList.add('active');
+            btn.textContent = shortName;
+            btn.addEventListener('click', () => {
+              triggerHaptic();
+              switchMonth(modalDisplayedYear, mNum);
+              modal.classList.remove('active');
+            });
+            monthsGrid.appendChild(btn);
+          });
+        }
+        modal.classList.add('active');
+      }
+      return;
+    }
+    const clean = raw.replace('view-', '');
+    if (['logger', 'poll', 'sheet', 'split', 'upi', 'amul'].includes(clean)) {
+      switchTab(clean);
+    }
+  }
+
   function setupNavigation() {
     const tabs = document.querySelectorAll('.nav-tab, .m-nav-tab');
     tabs.forEach(tab => {
       tab.addEventListener('click', () => {
         triggerHaptic();
         const target = tab.getAttribute('data-tab');
-
-        document.querySelectorAll('.nav-tab').forEach(t => {
-          t.classList.toggle('active', t.getAttribute('data-tab') === target);
-        });
-        document.querySelectorAll('.m-nav-tab').forEach(t => {
-          t.classList.toggle('active', t.getAttribute('data-tab') === target);
-        });
-
-        document.querySelectorAll('.view-panel').forEach(panel => {
-          panel.classList.toggle('active', panel.id === `view-${target}`);
-        });
-
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        switchTab(target);
       });
     });
+
+    window.addEventListener('hashchange', handleUrlHash);
+    handleUrlHash();
 
     // Header poll quick button
     const headerPollBtn = document.getElementById('headerPollBtn');
@@ -2879,6 +3023,13 @@
 
   // --- Sheet Column Filter Controls ---
   function setupSheetFilterControls() {
+    const chipsContainer = document.getElementById('sheetFilterChips');
+    if (chipsContainer) {
+      chipsContainer.innerHTML = `
+        <button class="sheet-filter-btn ${activeSheetFilter === 'all' ? 'active' : ''}" data-filter="all">All Flatmates</button>
+        ${ROOMMATES.map(r => `<button class="sheet-filter-btn ${activeSheetFilter === r.id ? 'active' : ''}" data-filter="${r.id}">${r.name}</button>`).join('')}
+      `;
+    }
     const filterBtns = document.querySelectorAll('#sheetFilterChips .sheet-filter-btn');
     filterBtns.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -3083,6 +3234,22 @@
         triggerHaptic();
         SyncEngine.setIdentity(e.target.value);
         showToast(`You are now logging as ${e.target.value}`);
+      });
+    }
+
+    // Privacy & Demo Mode Checkbox
+    const maskCheckbox = document.getElementById('settingsMaskNamesCheckbox');
+    if (maskCheckbox) {
+      maskCheckbox.checked = isMaskedMode();
+      maskCheckbox.addEventListener('change', (e) => {
+        triggerHaptic();
+        localStorage.setItem('tiffin_mask_names', e.target.checked ? 'true' : 'false');
+        applyMaskingMode(e.target.checked);
+        SyncEngine.identity = e.target.checked ? 'User 1' : 'Anjan';
+        updateIdentityUI(SyncEngine.identity);
+        setupSheetFilterControls();
+        renderAll();
+        showToast(e.target.checked ? '🎭 Demo Mode Active: Names masked as User 1 – User 7' : 'Flatmate names restored');
       });
     }
 
