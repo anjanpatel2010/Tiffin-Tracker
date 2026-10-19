@@ -1,10 +1,10 @@
-const CACHE_NAME = 'tiffin-tracker-v4.5';
+const CACHE_NAME = 'tiffin-tracker-v4.6';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=4.5',
-  './app.js?v=4.5',
-  './qr.js?v=4.5',
+  './styles.css?v=4.6',
+  './app.js?v=4.6',
+  './qr.js?v=4.6',
   './manifest.json',
   './icon.svg'
 ];

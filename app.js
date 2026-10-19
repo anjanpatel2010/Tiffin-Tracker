@@ -2649,11 +2649,6 @@
       });
     }
 
-    const resetMonthBtn = document.getElementById('resetMonthLedgerBtn');
-    if (resetMonthBtn) {
-      resetMonthBtn.addEventListener('click', handleMonthReset);
-    }
-
     const settingsResetMonthBtn = document.getElementById('settingsResetMonthBtn');
     if (settingsResetMonthBtn) {
       settingsResetMonthBtn.addEventListener('click', () => {
@@ -3424,7 +3419,16 @@
     if (pPhone) pPhone.value = provider.phone || '';
 
     const idSelect = document.getElementById('settingsIdentitySelect');
-    if (idSelect) idSelect.value = SyncEngine.identity;
+    if (idSelect) {
+      idSelect.innerHTML = '';
+      ROOMMATES.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.name;
+        opt.textContent = r.name;
+        idSelect.appendChild(opt);
+      });
+      idSelect.value = SyncEngine.identity || (ROOMMATES[0] ? ROOMMATES[0].name : 'Anjan');
+    }
   }
 
   // --- Password Prompt Modal ("Flower") ---
