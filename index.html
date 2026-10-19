@@ -24,7 +24,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css?v=4.3">
+  <link rel="stylesheet" href="styles.css?v=4.4">
 </head>
 <body>
   <!-- App Container -->
@@ -33,12 +33,6 @@
     <!-- Top Bar / Header (Minimalist & Polished) -->
     <header class="app-header">
       <div class="header-left">
-        <button id="headerUserIdentityPill" class="user-identity-badge" title="Tap to switch your name">
-          <span class="user-avatar-dot"></span>
-          <span id="headerIdentityName">Anjan</span>
-          <span class="switch-icon">▾</span>
-        </button>
-        <span class="header-dot-sep">•</span>
         <h1 class="header-title">Tiffin Tracker</h1>
       </div>
 
@@ -58,6 +52,13 @@
       </div>
 
       <div class="header-right">
+        <!-- Direct User Identity Dropdown -->
+        <div class="header-user-select-wrap">
+          <span class="user-avatar-dot"></span>
+          <select id="headerUserIdentitySelect" class="header-user-dropdown" title="Switch your active profile">
+            <!-- Populated via JS -->
+          </select>
+        </div>
         <button id="headerSettingsBtn" class="icon-btn circle-btn" title="Settings, Pricing & Theme" aria-label="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
@@ -378,7 +379,6 @@
               <div class="filter-box">
                 <input type="text" id="sheetSearchInput" class="text-input-sm" placeholder="Search sabzi / day...">
               </div>
-              <button id="sheetJumpTodayBtn" class="secondary-btn btn-sm">Jump to Today</button>
             </div>
           </div>
 
@@ -446,7 +446,7 @@
         <div class="stats-overview-grid single-hero-grid">
           <div class="stat-card stat-accent">
             <div class="stat-icon-wrap">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="color:var(--emerald)"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              <span class="stat-rupee-icon" style="font-family:var(--font-display); font-size:1.55rem; font-weight:900; color:var(--emerald); line-height:1; display:flex; align-items:center; justify-content:center;">₹</span>
             </div>
             <div class="stat-content">
               <span class="stat-label">Total Monthly Tiffin Expense</span>
@@ -458,12 +458,9 @@
 
         <!-- Roommate Expense Split Bars -->
         <div class="card">
-          <div class="card-header-compact">
-            <div class="card-title-wrap">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--accent-light)"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-              <h3 class="card-title">Roommate Expense Breakdown</h3>
-            </div>
-            <span class="helper-text" id="splitRatesSubtitle">Live Monthly Bill</span>
+          <div class="card-header-stacked">
+            <h3 class="card-title split-sheet-main-title">Roommate Expense Breakdown</h3>
+            <span class="helper-text mt-1" id="splitRatesSubtitle">Live Monthly Bill</span>
           </div>
 
           <div class="split-list" id="roommateSplitBarsList">
@@ -560,12 +557,9 @@
       <!-- ========================================== -->
       <section id="view-amul" class="view-panel">
         <div class="card">
-          <div class="card-header-compact">
-            <div class="card-title-wrap">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--cyan)"><path d="M6 3h12l2 6v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9l2-6z"/><line x1="4" y1="9" x2="20" y2="9"/></svg>
-              <h2 class="card-title" id="amulSectionTitle">Amul Milk Tracker</h2>
-            </div>
-            <div class="amul-header-actions">
+          <div class="card-header-stacked">
+            <h2 class="card-title split-sheet-main-title" id="amulSectionTitle">Amul Milk Tracker</h2>
+            <div class="amul-header-subrow mt-2">
               <div class="milk-rate-chip">
                 <span>Price:</span>
                 <strong id="amulPriceBadge">₹35 / packet</strong>
@@ -577,9 +571,9 @@
             </div>
           </div>
 
-          <!-- Milk Summary Cards (Rendered Dynamically) -->
-          <div class="milk-summary-row" id="amulSummaryRow">
-            <!-- Populated via renderAmulTracker() -->
+          <!-- Milk Relative Breakdown Graph (Like Split Sheet) -->
+          <div class="split-list mt-2 mb-3" id="amulSplitBarsList">
+            <!-- Populated dynamically via renderAmulTracker() -->
           </div>
 
           <!-- Quick Milk Logging for Selected Date -->
@@ -605,6 +599,9 @@
               <tbody id="amulTableBody">
                 <!-- 31 days of milk entries -->
               </tbody>
+              <tfoot id="amulTableFooter">
+                <!-- Grand Totals Row Injected via JS -->
+              </tfoot>
             </table>
           </div>
         </div>
@@ -838,13 +835,6 @@
               </select>
             </div>
 
-            <div class="form-group mt-3" style="display:flex; align-items:center; justify-content:space-between; background:var(--bg-input); padding:10px 14px; border-radius:var(--radius-sm); border:1px solid var(--border-color);">
-              <div>
-                <label for="settingsMaskNamesCheckbox" class="input-label" style="margin:0; font-weight:700;">Demo / Privacy Mode</label>
-                <span class="helper-text" style="display:block; font-size:0.72rem; color:var(--text-muted);">Mask names as User 1 – User 7 for videos & screenshots</span>
-              </div>
-              <input type="checkbox" id="settingsMaskNamesCheckbox" style="width:18px; height:18px; accent-color:var(--emerald); cursor:pointer;">
-            </div>
 
             <div class="mt-3">
               <button id="settingsNotificationBtn" class="secondary-btn btn-sm w-full">
@@ -1103,8 +1093,8 @@
   </div>
 
   <!-- QR Generator Script -->
-  <script src="qr.js?v=4.3"></script>
+  <script src="qr.js?v=4.4"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=4.3"></script>
+  <script src="app.js?v=4.4"></script>
 </body>
 </html>

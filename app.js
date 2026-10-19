@@ -59,7 +59,13 @@
     }
   };
 
-  const ROOMMATES = [
+  let savedRoommates = null;
+  try {
+    const raw = localStorage.getItem('tiffin_custom_roommates');
+    if (raw) savedRoommates = JSON.parse(raw);
+  } catch (e) {}
+
+  const ROOMMATES = (Array.isArray(savedRoommates) && savedRoommates.length > 0) ? savedRoommates : [
     { id: 'anjan', name: 'Anjan', slots: ['lunch', 'dinner'], avatarColor: '#00d26a' },
     { id: 'saurabh', name: 'Saurabh', slots: ['lunch', 'dinner'], avatarColor: '#00d4ff' },
     { id: 'alok', name: 'Alok', slots: ['lunch', 'dinner'], hasSpecial: true, avatarColor: '#a78bfa' },
@@ -69,49 +75,14 @@
     { id: 'hitesh', name: 'Hitesh', slots: ['lunch', 'dinner'], avatarColor: '#38bdf8' }
   ];
 
-  function isMaskedMode() {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.has('mask') || urlParams.has('demo')) return true;
-      return localStorage.getItem('tiffin_mask_names') === 'true';
-    } catch (e) {
-      return false;
+  // Clean up any remaining demo mode storage
+  try {
+    localStorage.removeItem('tiffin_mask_names');
+    const curId = localStorage.getItem('tiffin_my_identity');
+    if (curId && curId.startsWith('User ')) {
+      localStorage.setItem('tiffin_my_identity', 'Anjan');
     }
-  }
-
-  function applyMaskingMode(masked) {
-    if (masked) {
-      ROOMMATES[0].name = 'User 1';
-      ROOMMATES[1].name = 'User 2';
-      ROOMMATES[2].name = 'User 3';
-      ROOMMATES[3].name = 'User 4';
-      ROOMMATES[4].name = 'User 5';
-      ROOMMATES[5].name = 'User 6';
-      ROOMMATES[6].name = 'User 7';
-      CONFIG.defaultProvider.name = 'Chef Partner';
-      CONFIG.defaultProvider.upi = 'tiffin.service@oksbi';
-      CONFIG.defaultProvider.phone = '+91 98765 00000';
-      if (appState && appState.provider) {
-        appState.provider.name = 'Chef Partner';
-        appState.provider.upi = 'tiffin.service@oksbi';
-      }
-    } else {
-      ROOMMATES[0].name = 'Anjan';
-      ROOMMATES[1].name = 'Saurabh';
-      ROOMMATES[2].name = 'Alok';
-      ROOMMATES[3].name = 'Rohit';
-      ROOMMATES[4].name = 'Salman';
-      ROOMMATES[5].name = 'Chetan';
-      ROOMMATES[6].name = 'Hitesh';
-      CONFIG.defaultProvider.name = 'Sandhya Tiwari';
-      CONFIG.defaultProvider.upi = 'sandhyatiwari0205@oksbi';
-      CONFIG.defaultProvider.phone = '+91 98765 43210';
-    }
-  }
-
-  if (isMaskedMode()) {
-    applyMaskingMode(true);
-  }
+  } catch (e) {}
 
   function getStorageKey(year, month) {
     if (year === 2026 && month === 10) return 'tiffin_tracker_oct2026_data_v3';
@@ -151,102 +122,26 @@
       };
     }
 
-    // Seed October 2026 realistic records
-    if (year === 2026 && month === 10) {
-      const demoSabzis = [
-        'Paneer Butter Masala', 'Dal Tadka & Rice', 'Aloo Gobi Matar', 'Kadhai Paneer',
-        'Bhindi Masala', 'Tinde Ki Sabji', 'Mix Veg Curry', 'Chole Bhature',
-        'Dal Makhani', 'Shahi Paneer', 'Rajma Masala', 'Aloo Paratha & Dahi',
-        'Veg Biryani', 'Matar Mushroom', 'Kashmiri Dum Aloo', 'Paneer Bhurji',
-        'Dal Fry & Jeera Rice', 'Paneer Tikka Masala'
-      ];
-
-      for (let d = 1; d <= 18; d++) {
-        if (!days[d]) continue;
-        days[d].sabzi = demoSabzis[(d - 1) % demoSabzis.length];
-        days[d].meals.anjan.lunch = (d % 3 === 0) ? 'Full' : (d % 4 === 0) ? '' : 'Half';
-        days[d].meals.anjan.dinner = 'Half';
-        days[d].meals.saurabh.lunch = (d % 2 === 0) ? 'Half' : '';
-        days[d].meals.saurabh.dinner = (d % 5 === 0) ? 'Full' : 'Half';
-        days[d].meals.alok.lunch = (d % 3 === 0) ? 'Special' : 'Half';
-        days[d].meals.alok.dinner = (d % 4 === 0) ? 'Special' : 'Half';
-        days[d].meals.rohit.lunch = (d % 2 === 1) ? 'Half' : '';
-        days[d].meals.rohit.dinner = 'Half';
-        days[d].meals.salman.lunch = (d % 4 === 1) ? 'Full' : 'Half';
-        days[d].meals.salman.dinner = (d % 3 === 0) ? '' : 'Half';
-        days[d].meals.chetan.lunch = 'Half';
-        days[d].meals.chetan.dinner = (d % 2 === 0) ? 'Half' : 'Full';
-        days[d].meals.hitesh.lunch = (d % 3 === 1) ? 'Half' : '';
-        days[d].meals.hitesh.dinner = 'Half';
-
-        days[d].amul.anjan = (d % 2 === 0) ? 1 : 0;
-        days[d].amul.saurabh = (d % 3 === 0) ? 1 : 0;
-      }
-    }
-
     const rates = (appState && appState.rates) ? { ...appState.rates } : { ...CONFIG.defaultRates };
     const provider = (appState && appState.provider) ? { ...appState.provider } : { ...CONFIG.defaultProvider };
 
     return {
-      version: 3,
+      version: 4,
       year: year,
       month: month,
       lastModified: new Date().toISOString(),
       rates: rates,
       provider: provider,
       days: days,
-      activePoll: {
-        id: 'poll_demo_oct18',
-        day: 18,
-        mealSlot: 'Dinner',
-        options: ['Paneer Tikka Masala', 'Dal Makhani & Jeera Rice'],
-        votes: {
-          anjan: { option: 'Paneer Tikka Masala', portion: 'Half' },
-          saurabh: { option: 'Dal Makhani & Jeera Rice', portion: 'Half' },
-          alok: { option: 'Paneer Tikka Masala', portion: 'Special' },
-          rohit: { option: 'Paneer Tikka Masala', portion: 'Full' },
-          salman: { option: 'Dal Makhani & Jeera Rice', portion: 'Half' },
-          chetan: { option: 'Paneer Tikka Masala', portion: 'Half' }
-        },
-        status: 'active',
-        createdAt: Date.now() - 3600000,
-        author: isMaskedMode() ? 'User 1' : 'Anjan'
-      },
-      pollHistory: [
-        {
-          id: 'poll_demo_oct17',
-          day: 17,
-          mealSlot: 'Lunch',
-          options: ['Chole Bhature', 'Dal Fry & Jeera Rice'],
-          winningOption: 'Dal Fry & Jeera Rice',
-          votes: {
-            anjan: { option: 'Dal Fry & Jeera Rice', portion: 'Half' },
-            saurabh: { option: 'Dal Fry & Jeera Rice', portion: 'Half' },
-            alok: { option: 'Dal Fry & Jeera Rice', portion: 'Special' },
-            rohit: { option: 'Chole Bhature', portion: 'Half' },
-            salman: { option: 'Dal Fry & Jeera Rice', portion: 'Half' }
-          },
-          status: 'finalized',
-          author: isMaskedMode() ? 'User 1' : 'Anjan',
-          createdAt: Date.now() - 86400000
-        }
-      ],
+      activePoll: null,
+      pollHistory: [],
       amulMembers: ['anjan', 'saurabh'],
-      auditLog: [
-        {
-          id: 'log_init_' + year + '_' + month,
-          timestamp: Date.now(),
-          timeFormatted: formatLogTime(Date.now()),
-          author: 'System',
-          action: 'Ledger Initialized',
-          details: `Initialized ledger for Day 1-${daysInM}.`
-        }
-      ]
+      auditLog: []
     };
   }
 
   function loadStateForMonth(year, month) {
-    // 1. Try URL hash state for Oct 2026 initial import
+    // 1. Try URL hash state for initial import
     if (year === 2026 && month === 10 && window.location.hash && window.location.hash.startsWith('#data=')) {
       try {
         const encoded = window.location.hash.slice(6);
@@ -270,19 +165,19 @@
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed && parsed.days) {
+          // If stored data contains the old demo signature, reset to clean fresh ledger
+          if (parsed.activePoll?.id === 'poll_demo_oct18' || parsed.days[1]?.sabzi === 'Paneer Butter Masala') {
+            const cleanDefault = getDefaultDataForMonth(year, month);
+            saveStateForMonth(year, month, cleanDefault);
+            return cleanDefault;
+          }
+
           parsed.rates = { ...CONFIG.defaultRates, ...(parsed.rates || {}) };
           parsed.provider = { ...CONFIG.defaultProvider, ...(parsed.provider || {}) };
           if (!parsed.auditLog) parsed.auditLog = [];
           if (!parsed.pollHistory) parsed.pollHistory = [];
           if (!parsed.amulMembers || !Array.isArray(parsed.amulMembers)) parsed.amulMembers = ['anjan', 'saurabh'];
 
-          // In masked/demo mode, guarantee rich sample records on October 2026
-          if (isMaskedMode() && year === 2026 && month === 10 && (!parsed.days[18] || !parsed.days[18].sabzi)) {
-            const demoDefault = getDefaultDataForMonth(year, month);
-            parsed.days = demoDefault.days;
-            parsed.activePoll = demoDefault.activePoll;
-            parsed.pollHistory = demoDefault.pollHistory;
-          }
           return parsed;
         }
       }
@@ -633,7 +528,7 @@
       }
 
       // 2. Roommate Identity
-      this.identity = localStorage.getItem('tiffin_my_identity') || (isMaskedMode() ? 'User 1' : 'Anjan');
+      this.identity = localStorage.getItem('tiffin_my_identity') || 'Anjan';
       updateIdentityUI(this.identity);
 
       // 3. Connect EventSource
@@ -1125,22 +1020,117 @@
   // --- Rendering UI Modules ---
 
   function updateIdentityUI(name) {
-    const headerName = document.getElementById('headerIdentityName');
+    const headerSelect = document.getElementById('headerUserIdentitySelect');
     const settingsSelect = document.getElementById('settingsIdentitySelect');
     const onboardingSelect = document.getElementById('onboardingNameSelect');
     const myVoteLabel = document.getElementById('myVoteIdentityLabel');
 
-    let displayName = name;
-    if (isMaskedMode()) {
-      const lower = (name || '').toLowerCase();
-      const found = ROOMMATES.find(r => r.id === lower || r.name.toLowerCase() === lower);
-      displayName = found ? found.name : (lower === 'anjan' ? 'User 1' : name);
+    const displayName = name || 'Anjan';
+
+    if (headerSelect && headerSelect.value !== displayName) {
+      headerSelect.value = displayName;
+    }
+    if (settingsSelect) settingsSelect.value = displayName;
+    if (onboardingSelect) onboardingSelect.value = displayName;
+    if (myVoteLabel) myVoteLabel.textContent = displayName;
+  }
+
+  function populateHeaderIdentityDropdown() {
+    const select = document.getElementById('headerUserIdentitySelect');
+    if (!select) return;
+
+    const currentVal = SyncEngine.identity || (ROOMMATES[0] ? ROOMMATES[0].name : 'Anjan');
+    select.innerHTML = '';
+
+    ROOMMATES.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.name;
+      opt.textContent = r.name;
+      select.appendChild(opt);
+    });
+
+    const addOpt = document.createElement('option');
+    addOpt.value = '__add_member__';
+    addOpt.textContent = '+ Add Member';
+    select.appendChild(addOpt);
+
+    select.value = currentVal;
+  }
+
+  function handleAddNewMember() {
+    const raw = prompt('Enter new flatmate / roommate name:');
+    if (!raw || !raw.trim()) {
+      populateHeaderIdentityDropdown();
+      return;
+    }
+    const cleanName = raw.trim();
+    const existing = ROOMMATES.find(r => r.name.toLowerCase() === cleanName.toLowerCase());
+    if (existing) {
+      SyncEngine.setIdentity(existing.name);
+      populateHeaderIdentityDropdown();
+      showToast(`Switched active profile to ${existing.name}`);
+      return;
     }
 
-    if (headerName) headerName.textContent = displayName;
-    if (settingsSelect) settingsSelect.value = name;
-    if (onboardingSelect) onboardingSelect.value = name;
-    if (myVoteLabel) myVoteLabel.textContent = displayName;
+    const newId = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '') || `user_${Date.now()}`;
+    const avatarPalette = ['#00d26a', '#00d4ff', '#a78bfa', '#ff3b5c', '#ffb800', '#10b981', '#38bdf8', '#f43f5e', '#ec4899', '#8b5cf6'];
+    const avatarColor = avatarPalette[ROOMMATES.length % avatarPalette.length];
+
+    const newMember = {
+      id: newId,
+      name: cleanName,
+      slots: ['lunch', 'dinner'],
+      avatarColor: avatarColor
+    };
+
+    ROOMMATES.push(newMember);
+    try {
+      localStorage.setItem('tiffin_custom_roommates', JSON.stringify(ROOMMATES));
+    } catch (e) {}
+
+    // Ensure member exists in all days of current month ledger
+    if (appState && appState.days) {
+      for (let d = 1; d <= CONFIG.daysInMonth; d++) {
+        if (appState.days[d]) {
+          if (!appState.days[d].meals) appState.days[d].meals = {};
+          if (!appState.days[d].meals[newId]) {
+            appState.days[d].meals[newId] = { lunch: '', dinner: '' };
+          }
+        }
+      }
+      saveStateToStorage(appState);
+      persistAndBroadcast({
+        type: 'member_added',
+        member: newMember
+      });
+    }
+
+    // Reset UPI roommate dropdown so new member is included
+    const upiSelect = document.getElementById('upiRoommateSelect');
+    if (upiSelect) upiSelect.innerHTML = '';
+
+    SyncEngine.setIdentity(cleanName);
+    populateHeaderIdentityDropdown();
+    setupSheetFilterControls();
+    renderAll();
+    showToast(`Added ${cleanName} to Tiffin Tracker!`);
+  }
+
+  function setupHeaderIdentityControls() {
+    const select = document.getElementById('headerUserIdentitySelect');
+    if (!select) return;
+
+    populateHeaderIdentityDropdown();
+
+    select.addEventListener('change', (e) => {
+      triggerHaptic();
+      if (e.target.value === '__add_member__') {
+        handleAddNewMember();
+      } else {
+        SyncEngine.setIdentity(e.target.value);
+        showToast(`Switched active profile to ${e.target.value}`);
+      }
+    });
   }
 
   // 1. Daily Logger Render
@@ -2094,39 +2084,55 @@
     const formatRupees = (val) => (val % 1 === 0 ? `₹${val}` : `₹${val.toFixed(1)}`);
     const formatPkts = (val) => (val % 1 === 0 ? `${val} pkt` : `${val.toFixed(1)} pkt`);
 
-    // 1. Dynamic Summary Cards Row
-    const summaryRow = document.getElementById('amulSummaryRow');
-    if (summaryRow) {
-      summaryRow.innerHTML = '';
-      let grandTotalPackets = 0;
-      let grandTotalCost = 0;
+    // 1. Relative Bar Graph (Replacing old summary cards)
+    let grandTotalPackets = 0;
+    let grandTotalCost = 0;
 
-      members.forEach(personId => {
-        const stats = getRoommateMonthlyStats(personId);
-        grandTotalPackets += stats.milkPackets;
-        grandTotalCost += stats.milkTotal;
+    const memberStatsList = members.map(personId => {
+      const stats = getRoommateMonthlyStats(personId);
+      grandTotalPackets += stats.milkPackets;
+      grandTotalCost += stats.milkTotal;
+      const roommateObj = ROOMMATES.find(r => r.id === personId) || {
+        id: personId,
+        name: capitalize(personId),
+        avatarColor: '#00d4ff'
+      };
+      return { personId, r: roommateObj, stats };
+    });
 
-        const displayName = capitalize(ROOMMATES.find(r => r.id === personId)?.name || personId);
-        const card = document.createElement('div');
-        card.className = 'mini-stat-card';
-        card.innerHTML = `
-          <span class="mini-label">${escapeHtml(displayName)}</span>
-          <h4 class="mini-val">${formatRupees(stats.milkTotal)}</h4>
-          <span class="mini-sub">${stats.milkPackets} packets</span>
-          ${members.length > 1 ? `<button class="amul-remove-btn" data-person="${personId}" title="Remove from Amul Tracker">✕</button>` : ''}
+    const maxMilkCost = Math.max(...memberStatsList.map(item => item.stats.milkTotal), 1);
+
+    const amulBarsList = document.getElementById('amulSplitBarsList');
+    if (amulBarsList) {
+      amulBarsList.innerHTML = '';
+      memberStatsList.forEach(({ personId, r, stats }) => {
+        const relativePct = stats.milkTotal > 0 ? Math.min(100, Math.max(10, Math.round((stats.milkTotal / maxMilkCost) * 100))) : 0;
+        const initials = r.name.slice(0, 2).toUpperCase();
+
+        const item = document.createElement('div');
+        item.className = 'split-row-item';
+        item.innerHTML = `
+          <div class="split-row-header">
+            <div class="split-person-details">
+              <div class="roommate-avatar" style="width:28px; height:28px; font-size:0.75rem; background:${r.avatarColor}">${initials}</div>
+              <strong style="font-size:0.95rem">${escapeHtml(r.name)}</strong>
+              ${members.length > 1 ? `<button class="amul-remove-btn" data-person="${personId}" title="Remove ${escapeHtml(r.name)} from Amul Tracker" style="margin-left:8px; cursor:pointer; background:none; border:none; color:var(--text-dim); font-size:0.8rem; line-height:1; padding:2px 4px;">✕</button>` : ''}
+            </div>
+            <div class="split-amount-wrap">
+              <span class="split-share-pct">${relativePct}%</span>
+              <span class="split-cost">${formatRupees(stats.milkTotal)}</span>
+            </div>
+          </div>
+          <div class="split-bar-track">
+            <div class="split-bar-fill" style="width:${relativePct}%; background:${r.avatarColor}"></div>
+          </div>
+          <div class="split-actions-sub">
+            <span>${stats.milkPackets} packet${stats.milkPackets === 1 ? '' : 's'} (${stats.milkPackets} × ₹${rates.amulPacket || 35})</span>
+            <span style="font-family:var(--font-mono); font-weight:700;">${formatRupees(stats.milkTotal)}</span>
+          </div>
         `;
-        summaryRow.appendChild(card);
+        amulBarsList.appendChild(item);
       });
-
-      // Total Card
-      const totalCard = document.createElement('div');
-      totalCard.className = 'mini-stat-card accent';
-      totalCard.innerHTML = `
-        <span class="mini-label">Total Milk Bill</span>
-        <h4 class="mini-val text-cyan">${formatRupees(grandTotalCost)}</h4>
-        <span class="mini-sub">${grandTotalPackets} packets</span>
-      `;
-      summaryRow.appendChild(totalCard);
     }
 
     // 2. Dynamic Daily Quick Logging Grid
@@ -2204,6 +2210,24 @@
 
         tr.innerHTML = cellsHtml;
         tbody.appendChild(tr);
+      }
+
+      // 5. Dynamic Table Footer (Contributions visible at bottom of table)
+      const tfoot = document.getElementById('amulTableFooter');
+      if (tfoot) {
+        let pktsRowHtml = `<td class="td-sticky-date" style="font-weight:700;">Total Pkts</td>`;
+        let costRowHtml = `<td class="td-sticky-date" style="font-weight:800; border-top:1px dashed rgba(255,255,255,0.15); color:var(--text-main);">Total Bill</td>`;
+
+        members.forEach(personId => {
+          const stats = getRoommateMonthlyStats(personId);
+          pktsRowHtml += `<td style="font-family:var(--font-mono); font-weight:700;">${stats.milkPackets} pkt</td>`;
+          costRowHtml += `<td style="font-family:var(--font-mono); font-weight:800; color:var(--cyan); border-top:1px dashed rgba(255,255,255,0.15);">${formatRupees(stats.milkTotal)}</td>`;
+        });
+
+        pktsRowHtml += `<td style="font-family:var(--font-mono); font-weight:800; color:var(--text-main);">${grandTotalPackets} pkt</td>`;
+        costRowHtml += `<td style="font-family:var(--font-mono); font-weight:800; color:var(--emerald); border-top:1px dashed rgba(255,255,255,0.15);">${formatRupees(grandTotalCost)}</td>`;
+
+        tfoot.innerHTML = `<tr>${pktsRowHtml}</tr><tr>${costRowHtml}</tr>`;
       }
 
       // Cell Click to Cycle: 0 -> 0.5 -> 1 -> 2 -> 0
@@ -3246,33 +3270,6 @@
       });
     }
 
-    // Privacy & Demo Mode Checkbox
-    const maskCheckbox = document.getElementById('settingsMaskNamesCheckbox');
-    if (maskCheckbox) {
-      maskCheckbox.checked = isMaskedMode();
-      maskCheckbox.addEventListener('change', (e) => {
-        triggerHaptic();
-        localStorage.setItem('tiffin_mask_names', e.target.checked ? 'true' : 'false');
-        applyMaskingMode(e.target.checked);
-        SyncEngine.identity = e.target.checked ? 'User 1' : 'Anjan';
-        updateIdentityUI(SyncEngine.identity);
-        setupSheetFilterControls();
-        renderAll();
-        showToast(e.target.checked ? '🎭 Demo Mode Active: Names masked as User 1 – User 7' : 'Flatmate names restored');
-      });
-    }
-
-    // Identity Pill in Header
-    const headerIdentityPill = document.getElementById('headerUserIdentityPill');
-    if (headerIdentityPill && modal) {
-      headerIdentityPill.addEventListener('click', () => {
-        triggerHaptic();
-        loadSettingsValues();
-        modal.classList.add('active');
-        const idTab = document.querySelector('.sub-tab[data-subtab="identity"]');
-        if (idTab) idTab.click();
-      });
-    }
 
     // Clear Audit Log
     const clearAuditLogBtn = document.getElementById('clearAuditLogBtn');
@@ -3797,6 +3794,7 @@
     setupUpiControls();
     setupAmulControls();
     setupSettingsControls();
+    setupHeaderIdentityControls();
     setupPasswordPromptControls();
     setupCloudSyncControls();
     setupExportAndSharing();

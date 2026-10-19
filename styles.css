@@ -217,6 +217,97 @@ body {
   color: var(--text-muted);
 }
 
+/* Header User Identity Dropdown (Adjacent to Settings) */
+.header-user-select-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 3px 8px 3px 10px;
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.header-user-select-wrap:hover {
+  border-color: rgba(0, 245, 160, 0.4);
+  box-shadow: 0 0 10px rgba(0, 245, 160, 0.2);
+}
+
+.header-user-dropdown {
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  outline: none;
+  padding-right: 2px;
+}
+
+.header-user-dropdown option {
+  background: #09131c;
+  color: #fff;
+  font-weight: 600;
+  padding: 6px 10px;
+}
+
+/* Stacked Card Headers (Single-Line Main Title + Subtitle Below) */
+.card-header-stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.split-sheet-main-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
+.amul-header-subrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sheet-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 600px) {
+  .sheet-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .sheet-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .sheet-actions .sheet-month-nav {
+    flex-shrink: 0;
+  }
+  .sheet-actions .filter-box {
+    flex: 1;
+    min-width: 0;
+  }
+  .sheet-actions .filter-box input {
+    width: 100%;
+  }
+}
+
 /* Header Month Navigator */
 .header-month-nav {
   display: inline-flex;
