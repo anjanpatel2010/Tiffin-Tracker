@@ -690,17 +690,17 @@
 
       if (btn) {
         btn.className = `sync-status-btn ${status}`;
-        btn.title = `Live Cloud Sync: ${status}. Room: #${this.roomCode}. Tap for settings.`;
+        btn.title = `Cloud Sync: ${status}. Room: #${this.roomCode}. Tap for settings.`;
       }
       if (lbl) {
-        lbl.textContent = label || (status === 'connected' ? 'Live Sync' : status === 'syncing' ? 'Syncing...' : 'Offline');
+        lbl.textContent = label || (status === 'connected' ? 'Connected' : status === 'syncing' ? 'Syncing...' : 'Offline');
       }
       const settingsSync = document.getElementById('settingsSyncStatusText');
       if (settingsSync) {
-        settingsSync.textContent = status === 'connected' ? `Cloud Sync: Connected & Live (#${this.roomCode})` : status === 'syncing' ? 'Cloud Sync: Syncing...' : 'Cloud Sync: Offline';
+        settingsSync.textContent = status === 'connected' ? `Cloud Sync: Connected (#${this.roomCode})` : status === 'syncing' ? 'Cloud Sync: Syncing...' : 'Cloud Sync: Offline';
       }
       if (modalTitle) {
-        modalTitle.textContent = status === 'connected' ? `Live Sync Active (#${this.roomCode})` : status === 'syncing' ? 'Syncing with flatmates...' : 'Connecting to Live Cloud...';
+        modalTitle.textContent = status === 'connected' ? `Connected (#${this.roomCode})` : status === 'syncing' ? 'Syncing with flatmates...' : 'Connecting to Cloud Room...';
       }
       if (modalDesc) {
         modalDesc.textContent = status === 'connected'
@@ -724,7 +724,7 @@
         this.eventSource = new EventSource(url);
 
         this.eventSource.onopen = () => {
-          this.updateStatusUI('connected', 'Live Sync');
+          this.updateStatusUI('connected', 'Connected');
         };
 
         this.eventSource.onmessage = (event) => {
@@ -785,7 +785,7 @@
           body: JSON.stringify(action)
         });
         setTimeout(() => {
-          if (this.status === 'syncing') this.updateStatusUI('connected', 'Live Sync');
+          if (this.status === 'syncing') this.updateStatusUI('connected', 'Connected');
         }, 300);
       } catch (e) {
         console.warn('Broadcast failed', e);
@@ -1679,8 +1679,8 @@
       if (isAll) {
         thead.innerHTML = `
           <tr class="header-group-row">
-            <th class="th-sticky th-date">Date</th>
-            <th class="th-sticky th-menu">Sabzi / Note</th>
+            <th class="th-sticky th-date"><div class="td-sticky-cell-content">Date</div></th>
+            <th class="th-sticky th-menu"><div class="td-sticky-cell-content">Sabzi / Note</div></th>
             <th colspan="2" class="th-person">${ROOMMATES[0].name}</th>
             <th colspan="2" class="th-person">${ROOMMATES[1].name}</th>
             <th colspan="3" class="th-person">${ROOMMATES[2].name}</th>
@@ -1691,8 +1691,8 @@
             <th class="th-day-total">Day Total</th>
           </tr>
           <tr class="header-sub-row">
-            <th class="th-sticky th-date-sub">${CONFIG.daysInMonth} Days</th>
-            <th class="th-sticky th-menu-sub">Dish</th>
+            <th class="th-sticky th-date-sub"><div class="td-sticky-cell-content">${CONFIG.daysInMonth} Days</div></th>
+            <th class="th-sticky th-menu-sub"><div class="td-sticky-cell-content">Dish</div></th>
             <th>Lunch</th><th>Dinner</th>
             <th>Lunch</th><th>Dinner</th>
             <th>Lunch</th><th>Dinner</th><th>Special</th>
@@ -1707,14 +1707,14 @@
         const colSpan = activePerson.hasSpecial ? 3 : 2;
         thead.innerHTML = `
           <tr class="header-group-row">
-            <th class="th-sticky th-date">Date</th>
-            <th class="th-sticky th-menu">Sabzi / Note</th>
+            <th class="th-sticky th-date"><div class="td-sticky-cell-content">Date</div></th>
+            <th class="th-sticky th-menu"><div class="td-sticky-cell-content">Sabzi / Note</div></th>
             <th colspan="${colSpan}" class="th-person" style="background:${activePerson.avatarColor}; color:#ffffff">${activePerson.name}</th>
             <th class="th-day-total">Day Total</th>
           </tr>
           <tr class="header-sub-row">
-            <th class="th-sticky th-date-sub">${CONFIG.daysInMonth} Days</th>
-            <th class="th-sticky th-menu-sub">Dish</th>
+            <th class="th-sticky th-date-sub"><div class="td-sticky-cell-content">${CONFIG.daysInMonth} Days</div></th>
+            <th class="th-sticky th-menu-sub"><div class="td-sticky-cell-content">Dish</div></th>
             <th>Lunch</th><th>Dinner</th>${activePerson.hasSpecial ? '<th>Special</th>' : ''}
             <th>Amount</th>
           </tr>
@@ -1753,10 +1753,10 @@
       if (isAll) {
         tr.innerHTML = `
           <td class="td-sticky-date" title="${dayData.dateFormatted}">
-            ${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}
+            <div class="td-sticky-cell-content">${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}</div>
           </td>
-          <td class="td-sticky-menu" data-day="${d}" title="Click to edit sabzi">
-            ${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}
+          <td class="td-sticky-menu" data-day="${d}" title="${dayData.sabzi ? escapeHtml(dayData.sabzi) : 'Click to edit sabzi'}">
+            <div class="td-sticky-cell-content">${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}</div>
           </td>
           <!-- Anjan -->
           ${makeCell('anjan', 'lunch')}
@@ -1790,10 +1790,10 @@
       } else if (activePerson) {
         tr.innerHTML = `
           <td class="td-sticky-date" title="${dayData.dateFormatted}">
-            ${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}
+            <div class="td-sticky-cell-content">${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}</div>
           </td>
-          <td class="td-sticky-menu" data-day="${d}" title="Click to edit sabzi">
-            ${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}
+          <td class="td-sticky-menu" data-day="${d}" title="${dayData.sabzi ? escapeHtml(dayData.sabzi) : 'Click to edit sabzi'}">
+            <div class="td-sticky-cell-content">${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}</div>
           </td>
           ${makeCell(activePerson.id, 'lunch')}
           ${makeCell(activePerson.id, 'dinner')}
@@ -1900,8 +1900,8 @@
 
       tfoot.innerHTML = `
         <tr>
-          <td class="td-sticky-date" style="font-weight:800; color:var(--text-main);">Total</td>
-          <td class="td-sticky-menu">—</td>
+          <td class="td-sticky-date" style="font-weight:800; color:var(--text-main);"><div class="td-sticky-cell-content">Total</div></td>
+          <td class="td-sticky-menu"><div class="td-sticky-cell-content">—</div></td>
           <td colspan="2">₹${anjanTotal}</td>
           <td colspan="2">₹${saurabhTotal}</td>
           <td colspan="3">₹${alokTotal}</td>
@@ -1917,8 +1917,8 @@
       const colSpan = activePerson.hasSpecial ? 3 : 2;
       tfoot.innerHTML = `
         <tr>
-          <td class="td-sticky-date" style="font-weight:800; color:var(--text-main);">Total</td>
-          <td class="td-sticky-menu">—</td>
+          <td class="td-sticky-date" style="font-weight:800; color:var(--text-main);"><div class="td-sticky-cell-content">Total</div></td>
+          <td class="td-sticky-menu"><div class="td-sticky-cell-content">—</div></td>
           <td colspan="${colSpan}" style="font-size:0.95rem; font-weight:800; color:var(--accent-light);">₹${pStats.tiffinTotal}</td>
           <td style="font-size:1rem; color:var(--emerald);">₹${grandFlatTotal}</td>
         </tr>
@@ -1939,14 +1939,23 @@
     if (statMeals) statMeals.textContent = `${flatTotals.totalMeals} total meals in ${MONTH_NAMES[currentMonth - 1]}`;
     if (splitRatesSub) splitRatesSub.textContent = `${MONTH_NAMES[currentMonth - 1]} ${currentYear} • Live Rates: Half ₹${rates.half} • Full ₹${rates.full} • Special ₹${rates.special}`;
 
-    // Roommate Expense Split Bars
+    // Roommate Expense Split Bars (Relative Scale: Highest Spender at 100%)
     const list = document.getElementById('roommateSplitBarsList');
     if (!list) return;
     list.innerHTML = '';
 
-    ROOMMATES.forEach(r => {
+    // Calculate stats for all roommates and find max spend
+    const roommateStats = ROOMMATES.map(r => {
       const stats = getRoommateMonthlyStats(r.id);
-      const pct = flatTotals.tiffinTotal > 0 ? ((stats.tiffinTotal / flatTotals.tiffinTotal) * 100).toFixed(1) : 0;
+      const shareOfTotal = flatTotals.tiffinTotal > 0 ? ((stats.tiffinTotal / flatTotals.tiffinTotal) * 100).toFixed(1) : 0;
+      return { r, stats, shareOfTotal };
+    });
+
+    const maxSpend = Math.max(...roommateStats.map(item => item.stats.tiffinTotal), 1);
+
+    roommateStats.forEach(({ r, stats, shareOfTotal }) => {
+      // Relative scale: highest spender gets 100%, others scale relatively
+      const relativePct = stats.tiffinTotal > 0 ? Math.min(100, Math.max(10, Math.round((stats.tiffinTotal / maxSpend) * 100))) : 0;
 
       const item = document.createElement('div');
       item.className = 'split-row-item';
@@ -1957,12 +1966,12 @@
             <strong style="font-size:0.95rem">${r.name}</strong>
           </div>
           <div class="split-amount-wrap">
-            <span class="split-share-pct">${pct}%</span>
+            <span class="split-share-pct" title="${shareOfTotal}% of flat total">${relativePct}%</span>
             <span class="split-cost">₹${stats.tiffinTotal}</span>
           </div>
         </div>
         <div class="split-bar-track">
-          <div class="split-bar-fill" style="width:${pct}%; background:${r.avatarColor}"></div>
+          <div class="split-bar-fill" style="width:${relativePct}%; background:${r.avatarColor}"></div>
         </div>
         <div class="split-actions-sub">
           <span>${stats.halfCount} Half (₹${stats.halfCount * rates.half}) • ${stats.fullCount} Full (₹${stats.fullCount * rates.full})${stats.specialCount ? ` • ${stats.specialCount} Special (₹${stats.specialCount * rates.special})` : ''}</span>
@@ -3423,40 +3432,9 @@
 
   // --- Startup Notification Permission Dialog ---
   function setupNotificationStartupPrompt() {
-    if (!NotificationManager.isSupported()) return;
-
+    // Disabled automatic popup in main app to prevent obstructing UI
     const modal = document.getElementById('notificationPromptModal');
-    const allowBtn = document.getElementById('allowStartNotificationBtn');
-    const dismissBtn = document.getElementById('dismissStartNotificationBtn');
-
-    const hasOnboarded = localStorage.getItem('tiffin_onboarded_v2');
-    const dismissed = sessionStorage.getItem('tiffin_notif_prompt_dismissed');
-
-    // If permission is default and user has already completed onboarding, prompt them on start!
-    if (Notification.permission === 'default' && hasOnboarded && !dismissed && modal) {
-      setTimeout(() => {
-        modal.classList.add('active');
-      }, 500);
-    }
-
-    if (allowBtn && modal) {
-      allowBtn.addEventListener('click', async () => {
-        triggerHaptic();
-        modal.classList.remove('active');
-        const granted = await NotificationManager.requestPermission(true);
-        if (granted && appState.activePoll && appState.activePoll.status === 'active') {
-          PollReminderManager.start(appState.activePoll);
-        }
-      });
-    }
-
-    if (dismissBtn && modal) {
-      dismissBtn.addEventListener('click', () => {
-        triggerHaptic();
-        sessionStorage.setItem('tiffin_notif_prompt_dismissed', 'true');
-        modal.classList.remove('active');
-      });
-    }
+    if (modal) modal.classList.remove('active');
 
     // Direct native request on first user touch anywhere if still default
     const requestOnFirstTouch = () => {
@@ -3519,7 +3497,7 @@
         const baseUrl = window.location.href.split('#')[0];
         const link = `${baseUrl}#room=${SyncEngine.roomCode}`;
         copyToClipboard(link);
-        showToast(`Copied Live Sync link for Room #${SyncEngine.roomCode}!`);
+        showToast(`Copied room link (#${SyncEngine.roomCode})!`);
       });
     }
   }
@@ -3541,7 +3519,7 @@
       const input = document.getElementById('shareUrlDisplay');
       if (input) {
         copyToClipboard(input.value);
-        showToast(`Copied Live Sync link (Room #${SyncEngine.roomCode})`);
+        showToast(`Copied share link (#${SyncEngine.roomCode})`);
       }
     };
 

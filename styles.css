@@ -1490,27 +1490,43 @@ body {
   z-index: 27;
 }
 
-/* Sticky Columns with Pixel-Perfect Precision */
+/* Sticky Columns with Pixel-Perfect Precision & Zero Overlap */
+.td-sticky-cell-content {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  box-sizing: border-box;
+}
+
 .th-date, .th-date-sub, .td-sticky-date, .tfoot-sticky-date {
   position: sticky !important;
   left: 0 !important;
-  width: 76px !important;
-  min-width: 76px !important;
-  max-width: 76px !important;
+  width: 82px !important;
+  min-width: 82px !important;
+  max-width: 82px !important;
   box-sizing: border-box !important;
   text-align: left;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  background: #09131c !important;
 }
 
 .th-menu, .th-menu-sub, .td-sticky-menu, .tfoot-sticky-menu {
   position: sticky !important;
-  left: 76px !important;
-  width: 90px !important;
-  min-width: 90px !important;
-  max-width: 90px !important;
+  left: 82px !important;
+  width: 130px !important;
+  min-width: 130px !important;
+  max-width: 130px !important;
   box-sizing: border-box !important;
   text-align: left;
   border-right: 2px solid var(--accent-primary) !important;
-  box-shadow: 3px 0 10px rgba(0, 245, 160, 0.12) !important;
+  box-shadow: 4px 0 14px rgba(0, 0, 0, 0.75) !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  background: #09131c !important;
 }
 
 /* Header sticky corners (highest z-index) */
@@ -1526,14 +1542,14 @@ body {
 /* Body sticky cells */
 .td-sticky-date {
   z-index: 15 !important;
-  background: #070e16 !important;
+  background: #09131c !important;
   font-weight: 600;
   color: var(--text-muted);
 }
 
 .td-sticky-menu {
   z-index: 15 !important;
-  background: #070e16 !important;
+  background: #09131c !important;
   color: var(--accent-primary);
   font-weight: 700;
   cursor: pointer;
@@ -1542,6 +1558,16 @@ body {
 .td-sticky-menu:hover {
   text-decoration: underline;
   color: var(--accent-hover);
+}
+
+.master-table tbody tr:hover td.td-sticky-date,
+.master-table tbody tr:hover td.td-sticky-menu {
+  background: #111f2e !important;
+}
+
+.master-table tbody tr.row-today td.td-sticky-date,
+.master-table tbody tr.row-today td.td-sticky-menu {
+  background: #0e222b !important;
 }
 
 .master-table tbody tr:hover td {
@@ -2909,4 +2935,95 @@ body {
   background: rgba(255, 255, 255, 0.02);
   border-radius: var(--radius-sm);
   border: 1px dashed var(--border-color);
+}
+
+/* ==========================================================================
+   Widescreen 16:9 Desktop Experience (Zero Empty Space, Rich SaaS Layout)
+   ========================================================================== */
+@media (min-width: 1024px) {
+  .main-content {
+    max-width: 1680px;
+    width: calc(100% - 64px);
+    margin: 0 auto;
+    padding: 24px 0 60px 0;
+  }
+
+  /* Desktop Top Sticky Columns Expanded Breathing Room */
+  .th-date, .th-date-sub, .td-sticky-date, .tfoot-sticky-date {
+    width: 96px !important;
+    min-width: 96px !important;
+    max-width: 96px !important;
+  }
+  .th-menu, .th-menu-sub, .td-sticky-menu, .tfoot-sticky-menu {
+    left: 96px !important;
+    width: 165px !important;
+    min-width: 165px !important;
+    max-width: 165px !important;
+  }
+  .master-table th, .master-table td {
+    padding: 8px 10px;
+    font-size: 0.84rem;
+  }
+  .sheet-scroll-container {
+    max-height: 72vh;
+  }
+
+  /* 1. Daily Logger Desktop Layout */
+  #view-logger.active {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+  }
+  #view-logger > .date-strip-card {
+    grid-column: span 2;
+    margin-bottom: 0;
+  }
+  #view-logger > .menu-card {
+    grid-column: span 2;
+    margin-bottom: 0;
+  }
+  #view-logger > .fast-actions-bar {
+    grid-column: span 4;
+  }
+  #view-logger > .roommates-logger-grid {
+    grid-column: span 4;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+  }
+
+  /* 2. Menu Poll Desktop Layout */
+  #view-poll > #activePollCard {
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  /* 3. Split & Analytics Desktop 2-Column Dashboard */
+  #view-split.active {
+    display: grid !important;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 22px;
+    align-items: start;
+  }
+  #view-split > .stats-overview-grid {
+    grid-column: span 2;
+  }
+
+  /* 4. UPI Settlement Desktop 2-Column Layout */
+  .upi-container {
+    max-width: 1100px;
+    margin: 10px auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+}
+
+@media (min-width: 1440px) {
+  .main-content {
+    max-width: 1800px;
+    width: calc(100% - 80px);
+  }
 }
