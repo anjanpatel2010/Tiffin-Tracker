@@ -285,10 +285,10 @@
     if (monthText) monthText.textContent = monthShortStr;
     if (dateStripMonthName) dateStripMonthName.textContent = monthShortStr;
     if (sheetMonthText) sheetMonthText.textContent = monthShortStr;
-    if (sheetTitle) sheetTitle.textContent = `Master Matrix • ${monthFullStr}`;
+    if (sheetTitle) sheetTitle.textContent = 'Master Matrix';
     if (sheetDaysSub) sheetDaysSub.textContent = `${CONFIG.daysInMonth} Days`;
-    if (amulTitle) amulTitle.textContent = `Amul Milk Tracker • ${monthFullStr}`;
-    if (splitRatesSub) splitRatesSub.textContent = `${monthFullStr} Live Bill`;
+    if (amulTitle) amulTitle.textContent = 'Amul Milk Tracker';
+    if (splitRatesSub) splitRatesSub.textContent = `${monthFullStr} • Live Rates`;
   }
 
   function populateDateSelectors() {
@@ -723,6 +723,20 @@
           } else if (action.type === 'amul_update' && otherState.days[action.day]) {
             if (!otherState.days[action.day].amul) otherState.days[action.day].amul = { anjan: 0, saurabh: 0 };
             otherState.days[action.day].amul[action.person] = action.value;
+          } else if (action.type === 'day_reset' && otherState.days[action.day]) {
+            otherState.days[action.day].sabzi = '';
+            ROOMMATES.forEach(r => {
+              if (otherState.days[action.day].meals && otherState.days[action.day].meals[r.id]) {
+                otherState.days[action.day].meals[r.id] = { lunch: '', dinner: '' };
+              }
+            });
+          } else if (action.type === 'month_reset') {
+            const cleanOther = getDefaultDataForMonth(action.year, action.month);
+            cleanOther.rates = otherState.rates;
+            cleanOther.provider = otherState.provider;
+            cleanOther.amulMembers = otherState.amulMembers;
+            saveStateForMonth(action.year, action.month, cleanOther);
+            return;
           }
           saveStateForMonth(action.year, action.month, otherState);
         } catch (e) {}
@@ -880,6 +894,35 @@
         modified = true;
         if (!isCatchUp) {
           showToast(`Meal rates updated by ${action.author}`);
+        }
+      } else if (action.type === 'day_reset') {
+        const { day, author } = action;
+        if (appState.days && appState.days[day]) {
+          appState.days[day].sabzi = '';
+          ROOMMATES.forEach(r => {
+            if (appState.days[day].meals && appState.days[day].meals[r.id]) {
+              appState.days[day].meals[r.id] = { lunch: '', dinner: '' };
+            }
+          });
+          logActivity(author, 'Admin Action', `Reset meals for Day ${day}`);
+          modified = true;
+          if (!isCatchUp) {
+            showToast(`⚡ ${author} reset Day ${day} meals`);
+          }
+        }
+      } else if (action.type === 'month_reset') {
+        const { year, month, author } = action;
+        if (year === currentYear && month === currentMonth) {
+          const cleanState = getDefaultDataForMonth(currentYear, currentMonth);
+          cleanState.rates = { ...appState.rates };
+          cleanState.provider = { ...appState.provider };
+          cleanState.amulMembers = [...(appState.amulMembers || ['anjan', 'saurabh'])];
+          appState = cleanState;
+          logActivity(author, 'Admin Action', `Hard Reset: Erased month ledger for ${MONTH_NAMES[currentMonth - 1]} ${currentYear}`);
+          modified = true;
+          if (!isCatchUp) {
+            showToast(`⚠️ Entire ledger for ${MONTH_NAMES[currentMonth - 1]} ${currentYear} reset by ${author}`);
+          }
         }
       } else if (action.type === 'full_sync' && action.state) {
         if (action.state.days) {
@@ -2571,16 +2614,52 @@
         requireAdminPassword(() => {
           appState.days[selectedDay].sabzi = '';
           ROOMMATES.forEach(r => {
-            appState.days[selectedDay].meals[r.id] = { lunch: '', dinner: '' };
+            if (appState.days[selectedDay].meals && appState.days[selectedDay].meals[r.id]) {
+              appState.days[selectedDay].meals[r.id] = { lunch: '', dinner: '' };
+            }
           });
           logActivity(SyncEngine.identity, 'Admin Action', `Reset meals for Day ${selectedDay}`);
           persistAndBroadcast({
-            type: 'full_sync',
-            state: appState,
-            reason: `Reset day ${selectedDay}`
+            type: 'day_reset',
+            year: currentYear,
+            month: currentMonth,
+            day: selectedDay
           });
           showToast(`Meals for Day ${selectedDay} reset to Off`);
         });
+      });
+    }
+
+    function handleMonthReset() {
+      triggerHaptic();
+      requireAdminPassword(() => {
+        const cleanState = getDefaultDataForMonth(currentYear, currentMonth);
+        cleanState.rates = { ...appState.rates };
+        cleanState.provider = { ...appState.provider };
+        cleanState.amulMembers = [...(appState.amulMembers || ['anjan', 'saurabh'])];
+        appState = cleanState;
+
+        logActivity(SyncEngine.identity, 'Admin Action', `Hard Reset: Erased month ledger for ${MONTH_NAMES[currentMonth - 1]} ${currentYear}`);
+        persistAndBroadcast({
+          type: 'month_reset',
+          year: currentYear,
+          month: currentMonth
+        });
+        showToast(`💥 Month ledger for ${MONTH_NAMES[currentMonth - 1]} ${currentYear} has been reset!`);
+      });
+    }
+
+    const resetMonthBtn = document.getElementById('resetMonthLedgerBtn');
+    if (resetMonthBtn) {
+      resetMonthBtn.addEventListener('click', handleMonthReset);
+    }
+
+    const settingsResetMonthBtn = document.getElementById('settingsResetMonthBtn');
+    if (settingsResetMonthBtn) {
+      settingsResetMonthBtn.addEventListener('click', () => {
+        const modal = document.getElementById('settingsModal');
+        if (modal) modal.classList.remove('active');
+        handleMonthReset();
       });
     }
   }

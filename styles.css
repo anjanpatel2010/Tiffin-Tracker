@@ -284,11 +284,36 @@ body {
   flex-wrap: nowrap;
 }
 
+.sheet-info.card-header-stacked {
+  margin-bottom: 6px;
+}
+
+.btn-danger-ghost {
+  color: #ff5b79 !important;
+  border-color: rgba(255, 91, 121, 0.35) !important;
+  background: rgba(255, 91, 121, 0.06) !important;
+}
+
+.btn-danger-ghost:hover {
+  background: rgba(255, 91, 121, 0.15) !important;
+  border-color: rgba(255, 91, 121, 0.6) !important;
+}
+
 @media (max-width: 600px) {
   .sheet-toolbar {
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
     gap: 8px;
+    margin-bottom: 10px;
+  }
+  .sheet-info.card-header-stacked {
+    width: 100%;
+    margin-bottom: 0;
+    align-items: flex-start;
+  }
+  .sheet-info .split-sheet-main-title {
+    font-size: 1.15rem;
+    font-weight: 800;
   }
   .sheet-actions {
     display: flex;
