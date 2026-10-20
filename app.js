@@ -45,51 +45,28 @@
     daysInMonth: getDaysInMonth(currentYear, currentMonth),
     todayDay: getDynamicTodayForMonth(currentYear, currentMonth),
     adminPassword: 'Flower',
-    defaultRoom: 'flat-oct-2026-tiffin',
+    defaultRoom: 'flat-tiffin-group',
     defaultRates: {
       half: 80,
       full: 110,
-      special: 90, // Alok Special (5 Roti, Sabji and Dal)
+      special: 90,
       amulPacket: 35
     },
     defaultProvider: {
-      name: 'Sandhya Tiwari',
-      upi: 'sandhyatiwari0205@oksbi',
-      phone: '+91 98765 43210'
+      name: '',
+      upi: '',
+      phone: ''
     }
   };
 
-  let savedRoommates = null;
-  try {
-    const raw = localStorage.getItem('tiffin_custom_roommates');
-    if (raw) savedRoommates = JSON.parse(raw);
-  } catch (e) {}
-
-  const ROOMMATES = (Array.isArray(savedRoommates) && savedRoommates.length > 0) ? savedRoommates : [
-    { id: 'anjan', name: 'Anjan', slots: ['lunch', 'dinner'], avatarColor: '#00d26a' },
-    { id: 'saurabh', name: 'Saurabh', slots: ['lunch', 'dinner'], avatarColor: '#00d4ff' },
-    { id: 'alok', name: 'Alok', slots: ['lunch', 'dinner'], hasSpecial: true, avatarColor: '#a78bfa' },
-    { id: 'rohit', name: 'Rohit', slots: ['lunch', 'dinner'], avatarColor: '#ff3b5c' },
-    { id: 'salman', name: 'Salman', slots: ['lunch', 'dinner'], avatarColor: '#ffb800' },
-    { id: 'chetan', name: 'Chetan', slots: ['lunch', 'dinner'], avatarColor: '#10b981' },
-    { id: 'hitesh', name: 'Hitesh', slots: ['lunch', 'dinner'], avatarColor: '#38bdf8' }
-  ];
-
-  // Clean up any remaining demo mode storage
-  try {
-    localStorage.removeItem('tiffin_mask_names');
-    const curId = localStorage.getItem('tiffin_my_identity');
-    if (curId && curId.startsWith('User ')) {
-      localStorage.setItem('tiffin_my_identity', 'Anjan');
-    }
-  } catch (e) {}
+  let ROOMMATES = [];
 
   function getStorageKey(year, month) {
-    if (year === 2026 && month === 10) return 'tiffin_tracker_oct2026_data_v3';
-    return `tiffin_tracker_ledger_${year}_${month}`;
+    const roomCode = (RoomManager?.activeRoom?.code || SyncEngine?.roomCode || 'global').toLowerCase();
+    return `tiffin_tracker_ledger_${roomCode}_${year}_${month}`;
   }
 
-  // Generate blank month dataset (with verified baseline data for Oct 2026)
+  // Generate blank month dataset for active roommates
   function getDefaultDataForMonth(year, month) {
     const daysInM = getDaysInMonth(year, month);
     const monthName = MONTH_NAMES[month - 1];
@@ -99,6 +76,13 @@
     for (let d = 1; d <= daysInM; d++) {
       const dateObj = new Date(year, month - 1, d);
       const dayOfWeek = DAY_NAMES[dateObj.getDay()];
+      const mealsObj = {};
+      const amulObj = {};
+
+      ROOMMATES.forEach(r => {
+        mealsObj[r.id] = { lunch: '', dinner: '' };
+        amulObj[r.id] = 0;
+      });
 
       days[d] = {
         day: d,
@@ -106,19 +90,8 @@
         dateFormatted: `${dayOfWeek}, Day ${d}`,
         dateShort: `Day ${d}`,
         sabzi: '',
-        meals: {
-          anjan: { lunch: '', dinner: '' },
-          saurabh: { lunch: '', dinner: '' },
-          alok: { lunch: '', dinner: '', lunchSpecial: '', dinnerSpecial: '' },
-          rohit: { lunch: '', dinner: '' },
-          salman: { lunch: '', dinner: '' },
-          chetan: { lunch: '', dinner: '' },
-          hitesh: { lunch: '', dinner: '' }
-        },
-        amul: {
-          anjan: 0,
-          saurabh: 0
-        }
+        meals: mealsObj,
+        amul: amulObj
       };
     }
 
@@ -135,7 +108,7 @@
       days: days,
       activePoll: null,
       pollHistory: [],
-      amulMembers: ['anjan', 'saurabh'],
+      amulMembers: ROOMMATES.map(r => r.id),
       auditLog: []
     };
   }
@@ -924,12 +897,56 @@
             showToast(`⚠️ Entire ledger for ${MONTH_NAMES[currentMonth - 1]} ${currentYear} reset by ${author}`);
           }
         }
-      } else if (action.type === 'full_sync' && action.state) {
-        if (action.state.days) {
-          appState = action.state;
-          modified = true;
-          if (!isCatchUp) {
-            showToast(`Ledger synchronized from ${action.author}`);
+      } else if (action.type === 'join_request') {
+        if (RoomManager.session?.role === 'admin' && action.roomCode === RoomManager.activeRoom?.code) {
+          if (!RoomManager.activeRoom.pendingRequests) RoomManager.activeRoom.pendingRequests = [];
+          const exists = RoomManager.activeRoom.pendingRequests.some(p => p.phone === action.request.phone);
+          if (!exists) {
+            RoomManager.activeRoom.pendingRequests.push(action.request);
+            RoomManager.saveActiveRoom();
+            RoomManager.updatePendingBadges();
+            RoomManager.renderSettingsMembersTab();
+            NotificationManager.send('Flatmate Knocking! 🔔', {
+              body: `${action.request.name} (${action.request.phone}) requested to join your room.`,
+              tag: 'join-req-' + action.request.id,
+              renotify: true
+            });
+            showToast(`🔔 New join request from ${action.request.name}`);
+          }
+        }
+      } else if (action.type === 'member_approved') {
+        if (action.roomCode === (RoomManager.session?.roomCode || SyncEngine.roomCode)) {
+          if (RoomManager.session && RoomManager.session.status === 'pending') {
+            if (action.member.phone === RoomManager.session.phone || action.member.name.toLowerCase() === RoomManager.session.name.toLowerCase()) {
+              RoomManager.session.status = 'approved';
+              RoomManager.session.role = 'member';
+              localStorage.setItem('tiffin_user_session', JSON.stringify(RoomManager.session));
+              RoomManager.hideGateModal();
+              showToast('You have been approved by Admin! Welcome.');
+            }
+          }
+          if (RoomManager.activeRoom) {
+            const exists = RoomManager.activeRoom.members.some(m => m.id === action.member.id);
+            if (!exists) {
+              RoomManager.activeRoom.members.push(action.member);
+              RoomManager.saveActiveRoom();
+              ROOMMATES = RoomManager.activeRoom.members;
+              RoomManager.renderSettingsMembersTab();
+              modified = true;
+            }
+          }
+        }
+      } else if (action.type === 'member_added') {
+        if (action.roomCode === (RoomManager.session?.roomCode || SyncEngine.roomCode)) {
+          if (RoomManager.activeRoom) {
+            const exists = RoomManager.activeRoom.members.some(m => m.id === action.member.id);
+            if (!exists) {
+              RoomManager.activeRoom.members.push(action.member);
+              RoomManager.saveActiveRoom();
+              ROOMMATES = RoomManager.activeRoom.members;
+              RoomManager.renderSettingsMembersTab();
+              modified = true;
+            }
           }
         }
       }
@@ -1249,29 +1266,38 @@
     if (!container) return;
     container.innerHTML = '';
 
+    if (ROOMMATES.length === 0) {
+      container.innerHTML = `
+        <div class="card" style="text-align:center; padding:32px 16px; margin:16px 0;">
+          <div style="font-size:2rem; margin-bottom:8px;">👥</div>
+          <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:6px;">No Roommates in this Room</h3>
+          <p style="font-size:0.88rem; color:var(--text-muted); margin-bottom:16px;">Add flatmates or share your room invite link to start logging meals.</p>
+          <button id="emptyStateAddMemberBtn" class="primary-btn glow-btn btn-sm" style="margin:0 auto;">
+            <span>+ Add Roommates</span>
+          </button>
+        </div>
+      `;
+      const btn = document.getElementById('emptyStateAddMemberBtn');
+      if (btn) {
+        btn.addEventListener('click', () => {
+          const settingsBtn = document.getElementById('headerSettingsBtn');
+          if (settingsBtn) settingsBtn.click();
+        });
+      }
+      return;
+    }
+
     const rates = getRates();
 
     ROOMMATES.forEach(r => {
       const m = dayData.meals[r.id] || { lunch: '', dinner: '' };
       const individualCost = getRoommateDayCost(r.id, selectedDay);
-      const initials = r.name.slice(0, 2).toUpperCase();
+      const initials = (r.name || 'RM').slice(0, 2).toUpperCase();
 
       const card = document.createElement('div');
       card.className = 'roommate-card';
 
-      // Special button for Alok with "5 Roti, Sabji and Dal" subtitle
       const renderSlot = (slotName, currentVal) => {
-        let specialBtnHtml = '';
-        if (r.hasSpecial) {
-          specialBtnHtml = `
-            <button class="seg-btn ${currentVal === 'Special' ? 'active special' : ''}" data-person="${r.id}" data-slot="${slotName}" data-val="Special">
-              <span>Special</span>
-              <span class="seg-price">₹${rates.special}</span>
-              <span class="seg-desc">5 Roti, Sabji and Dal</span>
-            </button>
-          `;
-        }
-
         return `
           <div class="meal-slot-group">
             <div class="meal-slot-label-row">
@@ -1291,7 +1317,10 @@
                 <span>Full</span>
                 <span class="seg-price">₹${rates.full}</span>
               </button>
-              ${specialBtnHtml}
+              <button class="seg-btn ${currentVal === 'Special' ? 'active special' : ''}" data-person="${r.id}" data-slot="${slotName}" data-val="Special">
+                <span>Special</span>
+                <span class="seg-price">₹${rates.special}</span>
+              </button>
             </div>
           </div>
         `;
@@ -1300,8 +1329,8 @@
       card.innerHTML = `
         <div class="roommate-card-header">
           <div class="roommate-info">
-            <div class="roommate-avatar" style="background:${r.avatarColor}">${initials}</div>
-            <div class="roommate-name">${r.name}</div>
+            <div class="roommate-avatar" style="background:${r.avatarColor || '#00d26a'}">${initials}</div>
+            <div class="roommate-name">${escapeHtml(r.name)}</div>
           </div>
           <div class="roommate-day-cost">
             <span class="day-cost-val">₹${individualCost}</span>
@@ -1706,53 +1735,71 @@
 
     const isAll = (activeSheetFilter === 'all');
     const activePerson = !isAll ? ROOMMATES.find(x => x.id === activeSheetFilter) : null;
-
     // Render Table Header dynamically
     if (thead) {
       if (isAll) {
-        thead.innerHTML = `
-          <tr class="header-group-row">
-            <th class="th-sticky th-date"><div class="td-sticky-cell-content">Date</div></th>
-            <th class="th-sticky th-menu"><div class="td-sticky-cell-content">Sabzi / Note</div></th>
-            <th colspan="2" class="th-person">${ROOMMATES[0].name}</th>
-            <th colspan="2" class="th-person">${ROOMMATES[1].name}</th>
-            <th colspan="3" class="th-person">${ROOMMATES[2].name}</th>
-            <th colspan="2" class="th-person">${ROOMMATES[3].name}</th>
-            <th colspan="2" class="th-person">${ROOMMATES[4].name}</th>
-            <th colspan="2" class="th-person">${ROOMMATES[5].name}</th>
-            <th colspan="2" class="th-person">${ROOMMATES[6].name}</th>
-            <th class="th-day-total">Day Total</th>
-          </tr>
-          <tr class="header-sub-row">
-            <th class="th-sticky th-date-sub"><div class="td-sticky-cell-content">${CONFIG.daysInMonth} Days</div></th>
-            <th class="th-sticky th-menu-sub"><div class="td-sticky-cell-content">Dish</div></th>
-            <th>Lunch</th><th>Dinner</th>
-            <th>Lunch</th><th>Dinner</th>
-            <th>Lunch</th><th>Dinner</th><th>Special</th>
-            <th>Lunch</th><th>Dinner</th>
-            <th>Lunch</th><th>Dinner</th>
-            <th>Lunch</th><th>Dinner</th>
-            <th>Lunch</th><th>Dinner</th>
-            <th>Amount</th>
-          </tr>
-        `;
+        if (ROOMMATES.length === 0) {
+          thead.innerHTML = `
+            <tr class="header-group-row">
+              <th class="th-sticky th-date"><div class="td-sticky-cell-content">Date</div></th>
+              <th class="th-sticky th-menu"><div class="td-sticky-cell-content">Sabzi / Note</div></th>
+              <th class="th-day-total">Day Total</th>
+            </tr>
+            <tr class="header-sub-row">
+              <th class="th-sticky th-date-sub"><div class="td-sticky-cell-content">${CONFIG.daysInMonth} Days</div></th>
+              <th class="th-sticky th-menu-sub"><div class="td-sticky-cell-content">Dish</div></th>
+              <th>Amount</th>
+            </tr>
+          `;
+        } else {
+          const personHeaders = ROOMMATES.map(r => `
+            <th colspan="2" class="th-person" style="background:${r.avatarColor || '#00d26a'}; color:#ffffff">${escapeHtml(r.name)}</th>
+          `).join('');
+          const slotHeaders = ROOMMATES.map(() => `<th>Lunch</th><th>Dinner</th>`).join('');
+
+          thead.innerHTML = `
+            <tr class="header-group-row">
+              <th class="th-sticky th-date"><div class="td-sticky-cell-content">Date</div></th>
+              <th class="th-sticky th-menu"><div class="td-sticky-cell-content">Sabzi / Note</div></th>
+              ${personHeaders}
+              <th class="th-day-total">Day Total</th>
+            </tr>
+            <tr class="header-sub-row">
+              <th class="th-sticky th-date-sub"><div class="td-sticky-cell-content">${CONFIG.daysInMonth} Days</div></th>
+              <th class="th-sticky th-menu-sub"><div class="td-sticky-cell-content">Dish</div></th>
+              ${slotHeaders}
+              <th>Amount</th>
+            </tr>
+          `;
+        }
       } else if (activePerson) {
-        const colSpan = activePerson.hasSpecial ? 3 : 2;
         thead.innerHTML = `
           <tr class="header-group-row">
             <th class="th-sticky th-date"><div class="td-sticky-cell-content">Date</div></th>
             <th class="th-sticky th-menu"><div class="td-sticky-cell-content">Sabzi / Note</div></th>
-            <th colspan="${colSpan}" class="th-person" style="background:${activePerson.avatarColor}; color:#ffffff">${activePerson.name}</th>
+            <th colspan="2" class="th-person" style="background:${activePerson.avatarColor || '#00d26a'}; color:#ffffff">${escapeHtml(activePerson.name)}</th>
             <th class="th-day-total">Day Total</th>
           </tr>
           <tr class="header-sub-row">
             <th class="th-sticky th-date-sub"><div class="td-sticky-cell-content">${CONFIG.daysInMonth} Days</div></th>
             <th class="th-sticky th-menu-sub"><div class="td-sticky-cell-content">Dish</div></th>
-            <th>Lunch</th><th>Dinner</th>${activePerson.hasSpecial ? '<th>Special</th>' : ''}
+            <th>Lunch</th><th>Dinner</th>
             <th>Amount</th>
           </tr>
         `;
       }
+    }
+
+    if (ROOMMATES.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="4" style="text-align:center; padding:32px 16px; color:var(--text-muted);">
+            No roommates in this room yet. Add members in <strong>Settings &gt; Room &amp; Members</strong>.
+          </td>
+        </tr>
+      `;
+      tfoot.innerHTML = '';
+      return;
     }
 
     for (let d = 1; d <= CONFIG.daysInMonth; d++) {
@@ -1771,9 +1818,9 @@
 
       const dayTotal = getDayTotalCost(d);
 
-      // Helper to generate interactive cell
+      // Helper to generate interactive cell (Lunch / Dinner with Half, Full, Special, Off)
       const makeCell = (person, slot) => {
-        const val = dayData.meals[person][slot] || '';
+        const val = dayData.meals?.[person]?.[slot] || '';
         let valClass = 'val-off';
         let displayVal = '-';
         if (val === 'Half') { valClass = 'val-half'; displayVal = `H (₹${rates.half})`; }
@@ -1784,6 +1831,11 @@
       };
 
       if (isAll) {
+        let memberCells = '';
+        ROOMMATES.forEach(r => {
+          memberCells += makeCell(r.id, 'lunch') + makeCell(r.id, 'dinner');
+        });
+
         tr.innerHTML = `
           <td class="td-sticky-date" title="${dayData.dateFormatted}">
             <div class="td-sticky-cell-content">${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}</div>
@@ -1791,31 +1843,7 @@
           <td class="td-sticky-menu" data-day="${d}" title="${dayData.sabzi ? escapeHtml(dayData.sabzi) : 'Click to edit sabzi'}">
             <div class="td-sticky-cell-content">${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}</div>
           </td>
-          <!-- Anjan -->
-          ${makeCell('anjan', 'lunch')}
-          ${makeCell('anjan', 'dinner')}
-          <!-- Saurabh -->
-          ${makeCell('saurabh', 'lunch')}
-          ${makeCell('saurabh', 'dinner')}
-          <!-- Alok -->
-          ${makeCell('alok', 'lunch')}
-          ${makeCell('alok', 'dinner')}
-          <td class="cell-interactive ${dayData.meals.alok.dinner === 'Special' ? 'val-special' : 'val-off'}" data-day="${d}" data-person="alok" data-slot="special">
-            ${dayData.meals.alok.dinner === 'Special' || dayData.meals.alok.lunch === 'Special' ? `Sp (₹${rates.special})` : '-'}
-          </td>
-          <!-- Rohit -->
-          ${makeCell('rohit', 'lunch')}
-          ${makeCell('rohit', 'dinner')}
-          <!-- Salman -->
-          ${makeCell('salman', 'lunch')}
-          ${makeCell('salman', 'dinner')}
-          <!-- Chetan -->
-          ${makeCell('chetan', 'lunch')}
-          ${makeCell('chetan', 'dinner')}
-          <!-- Hitesh -->
-          ${makeCell('hitesh', 'lunch')}
-          ${makeCell('hitesh', 'dinner')}
-          <!-- Day Total -->
+          ${memberCells}
           <td style="font-weight:700; font-family:var(--font-mono); color:${dayTotal > 0 ? 'var(--emerald)' : 'var(--text-dim)'}">
             ₹${dayTotal}
           </td>
@@ -1830,11 +1858,6 @@
           </td>
           ${makeCell(activePerson.id, 'lunch')}
           ${makeCell(activePerson.id, 'dinner')}
-          ${activePerson.hasSpecial ? `
-            <td class="cell-interactive ${dayData.meals.alok.dinner === 'Special' || dayData.meals.alok.lunch === 'Special' ? 'val-special' : 'val-off'}" data-day="${d}" data-person="alok" data-slot="special">
-              ${dayData.meals.alok.dinner === 'Special' || dayData.meals.alok.lunch === 'Special' ? `Sp (₹${rates.special})` : '-'}
-            </td>
-          ` : ''}
           <td style="font-weight:700; font-family:var(--font-mono); color:${dayTotal > 0 ? 'var(--emerald)' : 'var(--text-dim)'}">
             ₹${dayTotal}
           </td>
@@ -1844,7 +1867,7 @@
       tbody.appendChild(tr);
     }
 
-    // Attach Cell Click Event to Cycle Meal
+    // Attach Cell Click Event to Cycle Meal: Off -> Half -> Full -> Special -> Off
     tbody.querySelectorAll('.cell-interactive').forEach(cell => {
       cell.addEventListener('click', () => {
         triggerHaptic();
@@ -1852,38 +1875,15 @@
         const person = cell.getAttribute('data-person');
         const slot = cell.getAttribute('data-slot');
 
-        if (slot === 'special') {
-          // Toggle special for Alok's dinner
-          const curVal = appState.days[d].meals.alok.dinner;
-          const nextVal = (curVal === 'Special') ? '' : 'Special';
-          appState.days[d].meals.alok.dinner = nextVal;
-          logActivity(SyncEngine.identity, 'Meal Update', `Alok Dinner: ${nextVal || 'Off'} (Day ${d})`);
-          persistAndBroadcast({
-            type: 'meal_update',
-            year: currentYear,
-            month: currentMonth,
-            day: d,
-            person: 'alok',
-            slot: 'dinner',
-            value: nextVal
-          });
-          return;
-        }
+        if (!appState.days[d].meals) appState.days[d].meals = {};
+        if (!appState.days[d].meals[person]) appState.days[d].meals[person] = { lunch: '', dinner: '' };
 
         const curVal = appState.days[d].meals[person][slot] || '';
         let nextVal = '';
-        if (person === 'alok') {
-          // Cycle for Alok: Off -> Half -> Full -> Special -> Off
-          if (!curVal) nextVal = 'Half';
-          else if (curVal === 'Half') nextVal = 'Full';
-          else if (curVal === 'Full') nextVal = 'Special';
-          else nextVal = '';
-        } else {
-          // Cycle for others: Off -> Half -> Full -> Off
-          if (!curVal) nextVal = 'Half';
-          else if (curVal === 'Half') nextVal = 'Full';
-          else nextVal = '';
-        }
+        if (!curVal) nextVal = 'Half';
+        else if (curVal === 'Half') nextVal = 'Full';
+        else if (curVal === 'Full') nextVal = 'Special';
+        else nextVal = '';
 
         appState.days[d].meals[person][slot] = nextVal;
         logActivity(SyncEngine.identity, 'Meal Update', `${capitalize(person)} ${slot}: ${nextVal || 'Off'} (Day ${d})`);
@@ -1923,36 +1923,26 @@
 
     // Master Sheet Footer Totals
     if (isAll) {
-      const anjanTotal = getRoommateMonthlyStats('anjan').tiffinTotal;
-      const saurabhTotal = getRoommateMonthlyStats('saurabh').tiffinTotal;
-      const alokTotal = getRoommateMonthlyStats('alok').tiffinTotal;
-      const rohitTotal = getRoommateMonthlyStats('rohit').tiffinTotal;
-      const salmanTotal = getRoommateMonthlyStats('salman').tiffinTotal;
-      const chetanTotal = getRoommateMonthlyStats('chetan').tiffinTotal;
-      const hiteshTotal = getRoommateMonthlyStats('hitesh').tiffinTotal;
+      const memberFooters = ROOMMATES.map(r => {
+        const stats = getRoommateMonthlyStats(r.id);
+        return `<td colspan="2">₹${stats.tiffinTotal}</td>`;
+      }).join('');
 
       tfoot.innerHTML = `
         <tr>
           <td class="td-sticky-date" style="font-weight:800; color:var(--text-main);"><div class="td-sticky-cell-content">Total</div></td>
           <td class="td-sticky-menu"><div class="td-sticky-cell-content">—</div></td>
-          <td colspan="2">₹${anjanTotal}</td>
-          <td colspan="2">₹${saurabhTotal}</td>
-          <td colspan="3">₹${alokTotal}</td>
-          <td colspan="2">₹${rohitTotal}</td>
-          <td colspan="2">₹${salmanTotal}</td>
-          <td colspan="2">₹${chetanTotal}</td>
-          <td colspan="2">₹${hiteshTotal}</td>
+          ${memberFooters}
           <td style="font-size:1rem; color:var(--emerald);">₹${grandFlatTotal}</td>
         </tr>
       `;
     } else if (activePerson) {
       const pStats = getRoommateMonthlyStats(activePerson.id);
-      const colSpan = activePerson.hasSpecial ? 3 : 2;
       tfoot.innerHTML = `
         <tr>
           <td class="td-sticky-date" style="font-weight:800; color:var(--text-main);"><div class="td-sticky-cell-content">Total</div></td>
           <td class="td-sticky-menu"><div class="td-sticky-cell-content">—</div></td>
-          <td colspan="${colSpan}" style="font-size:0.95rem; font-weight:800; color:var(--accent-light);">₹${pStats.tiffinTotal}</td>
+          <td colspan="2" style="font-size:0.95rem; font-weight:800; color:var(--accent-light);">₹${pStats.tiffinTotal}</td>
           <td style="font-size:1rem; color:var(--emerald);">₹${grandFlatTotal}</td>
         </tr>
       `;
@@ -3480,32 +3470,848 @@
     }
   }
 
-  // --- Onboarding / First Visit Walkthrough ---
-  function setupOnboarding() {
-    const modal = document.getElementById('onboardingModal');
-    const finishBtn = document.getElementById('finishOnboardingBtn');
-    const select = document.getElementById('onboardingNameSelect');
-    const notifToggle = document.getElementById('onboardingNotifToggle');
+  // --- Room & Multi-Tenant Group Access Manager ---
+  const RoomManager = {
+    session: null,
+    activeRoom: null,
 
-    const hasOnboarded = localStorage.getItem('tiffin_onboarded_v2');
-    if (!hasOnboarded && modal) {
-      modal.classList.add('active');
-    }
+    init() {
+      // 1. Check existing session
+      try {
+        const rawSession = localStorage.getItem('tiffin_user_session');
+        if (rawSession) {
+          this.session = JSON.parse(rawSession);
+        }
+      } catch (e) {}
 
-    if (finishBtn && modal) {
-      finishBtn.addEventListener('click', async () => {
-        triggerHaptic();
-        const chosen = select?.value || 'Anjan';
-        SyncEngine.setIdentity(chosen);
-        localStorage.setItem('tiffin_onboarded_v2', 'true');
-        modal.classList.remove('active');
+      // 2. Check room code in URL query or hash
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlRoom = urlParams.get('room') || urlParams.get('join') || (window.location.hash.startsWith('#room=') ? window.location.hash.slice(6) : null);
 
-        // Request native notification bar alerts if toggle is checked
-        if (notifToggle && notifToggle.checked) {
-          await NotificationManager.requestPermission(true);
+      if (urlRoom) {
+        const codeInput = document.getElementById('gateRoomCode');
+        if (codeInput) codeInput.value = urlRoom.toUpperCase().trim();
+      }
+
+      // 3. Load active room data or show Gate
+      if (this.session && this.session.roomCode) {
+        this.loadRoom(this.session.roomCode);
+      } else if (urlRoom) {
+        this.showGateModal('join');
+      } else {
+        // Zero-data start: direct visitor towards group access / creation
+        this.showGateModal('create');
+      }
+
+      this.updateHeaderRoomUI();
+    },
+
+    loadRoom(roomCode) {
+      const codeKey = roomCode.toUpperCase().trim();
+      let roomData = null;
+      try {
+        const raw = localStorage.getItem(`tiffin_room_${codeKey}`);
+        if (raw) roomData = JSON.parse(raw);
+      } catch (e) {}
+
+      if (!roomData) {
+        roomData = {
+          code: codeKey,
+          name: this.session?.groupName || 'My Flat',
+          adminName: this.session?.role === 'admin' ? this.session.name : 'Admin',
+          adminPhone: this.session?.role === 'admin' ? this.session.phone : '',
+          adminPin: CONFIG.adminPassword || 'Flower',
+          createdAt: new Date().toISOString(),
+          members: [],
+          pendingRequests: []
+        };
+      }
+
+      this.activeRoom = roomData;
+      SyncEngine.setRoomCode(codeKey);
+
+      // If user session is pending, check if admin approved them
+      if (this.session && this.session.status === 'pending') {
+        const approvedMember = (roomData.members || []).find(m => m.phone === this.session.phone || m.name.toLowerCase() === this.session.name.toLowerCase());
+        if (approvedMember) {
+          this.session.status = 'approved';
+          this.session.role = approvedMember.role || 'member';
+          localStorage.setItem('tiffin_user_session', JSON.stringify(this.session));
+          showToast('Welcome! You have been approved by Admin.');
+          this.hideGateModal();
+        } else {
+          this.showPendingGateState();
+          return;
+        }
+      }
+
+      // Synchronize ROOMMATES
+      if (roomData.members && roomData.members.length > 0) {
+        ROOMMATES = roomData.members;
+      } else if (this.session && this.session.status === 'approved') {
+        const adminMember = {
+          id: this.sanitizeId(this.session.name),
+          name: this.session.name,
+          phone: this.session.phone,
+          role: this.session.role || 'admin',
+          avatarColor: '#00d26a'
+        };
+        roomData.members = [adminMember];
+        ROOMMATES = [adminMember];
+        this.saveActiveRoom();
+      }
+
+      if (roomData.adminPin) {
+        CONFIG.adminPassword = roomData.adminPin;
+      }
+
+      if (this.session && this.session.name) {
+        SyncEngine.setIdentity(this.session.name);
+      }
+
+      this.updateHeaderRoomUI();
+      this.updatePendingBadges();
+      this.renderSettingsMembersTab();
+    },
+
+    saveActiveRoom() {
+      if (!this.activeRoom) return;
+      try {
+        localStorage.setItem(`tiffin_room_${this.activeRoom.code}`, JSON.stringify(this.activeRoom));
+      } catch (e) {}
+    },
+
+    createRoom(adminName, adminPhone, groupName, adminPin) {
+      const codeSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const roomCode = `TF-${codeSuffix}`;
+      const cleanName = adminName.trim();
+      const cleanPhone = adminPhone.trim();
+      const cleanGroup = groupName.trim() || 'My Flat';
+      const cleanPin = adminPin.trim() || 'Flower';
+
+      const adminMember = {
+        id: this.sanitizeId(cleanName),
+        name: cleanName,
+        phone: cleanPhone,
+        role: 'admin',
+        avatarColor: '#00d26a'
+      };
+
+      this.activeRoom = {
+        code: roomCode,
+        name: cleanGroup,
+        adminName: cleanName,
+        adminPhone: cleanPhone,
+        adminPin: cleanPin,
+        createdAt: new Date().toISOString(),
+        members: [adminMember],
+        pendingRequests: []
+      };
+
+      this.session = {
+        name: cleanName,
+        phone: cleanPhone,
+        role: 'admin',
+        groupName: cleanGroup,
+        roomCode: roomCode,
+        status: 'approved'
+      };
+
+      localStorage.setItem('tiffin_user_session', JSON.stringify(this.session));
+      this.saveActiveRoom();
+
+      ROOMMATES = [adminMember];
+      CONFIG.adminPassword = cleanPin;
+
+      SyncEngine.setRoomCode(roomCode);
+      SyncEngine.setIdentity(cleanName);
+
+      this.hideGateModal();
+      this.updateHeaderRoomUI();
+      this.updatePendingBadges();
+      this.renderSettingsMembersTab();
+
+      // Refresh default month data
+      appState = getDefaultDataForMonth(currentYear, currentMonth);
+      saveStateToStorage(appState);
+      renderAll();
+
+      showToast(`Group "${cleanGroup}" created! Room Code: ${roomCode}`);
+    },
+
+    requestJoin(name, phone, roomCode) {
+      const cleanName = name.trim();
+      const cleanPhone = phone.trim();
+      const cleanCode = roomCode.toUpperCase().trim();
+
+      let targetRoom = null;
+      try {
+        const raw = localStorage.getItem(`tiffin_room_${cleanCode}`);
+        if (raw) targetRoom = JSON.parse(raw);
+      } catch (e) {}
+
+      const requestObj = {
+        id: this.sanitizeId(cleanName) + '_' + Date.now().toString().slice(-4),
+        name: cleanName,
+        phone: cleanPhone,
+        roomCode: cleanCode,
+        requestedAt: new Date().toISOString()
+      };
+
+      if (targetRoom) {
+        if (!targetRoom.pendingRequests) targetRoom.pendingRequests = [];
+        const exists = targetRoom.pendingRequests.some(p => p.phone === cleanPhone);
+        if (!exists) {
+          targetRoom.pendingRequests.push(requestObj);
+          localStorage.setItem(`tiffin_room_${cleanCode}`, JSON.stringify(targetRoom));
+        }
+      }
+
+      this.session = {
+        name: cleanName,
+        phone: cleanPhone,
+        role: 'member',
+        roomCode: cleanCode,
+        status: 'pending'
+      };
+      localStorage.setItem('tiffin_user_session', JSON.stringify(this.session));
+
+      persistAndBroadcast({
+        type: 'join_request',
+        roomCode: cleanCode,
+        request: requestObj
+      });
+
+      this.showPendingGateState();
+      showToast('Join request submitted! Waiting for Admin approval.');
+    },
+
+    checkApprovalStatus() {
+      if (!this.session || !this.session.roomCode) return;
+      this.loadRoom(this.session.roomCode);
+
+      if (this.session.status === 'approved') {
+        showToast('Approved! Welcome to the group.');
+        this.hideGateModal();
+        renderAll();
+      } else {
+        showToast('Your request is still pending approval by Admin.');
+      }
+    },
+
+    cancelJoinRequest() {
+      localStorage.removeItem('tiffin_user_session');
+      this.session = null;
+      const pendingCard = document.getElementById('gatePendingCard');
+      if (pendingCard) pendingCard.style.display = 'none';
+      this.showGateModal('join');
+      showToast('Join request cancelled.');
+    },
+
+    approveRequest(reqId) {
+      if (!this.activeRoom || this.session?.role !== 'admin') {
+        showToast('Only Admin can approve join requests.');
+        return;
+      }
+
+      const reqIndex = (this.activeRoom.pendingRequests || []).findIndex(p => p.id === reqId);
+      if (reqIndex === -1) return;
+
+      const req = this.activeRoom.pendingRequests[reqIndex];
+      this.activeRoom.pendingRequests.splice(reqIndex, 1);
+
+      const avatarColors = ['#00d4ff', '#a78bfa', '#ff3b5c', '#ffb800', '#10b981', '#38bdf8', '#f43f5e', '#ec4899'];
+      const avatarColor = avatarColors[this.activeRoom.members.length % avatarColors.length];
+
+      const newMember = {
+        id: this.sanitizeId(req.name),
+        name: req.name,
+        phone: req.phone,
+        role: 'member',
+        avatarColor: avatarColor,
+        joinedAt: new Date().toISOString()
+      };
+
+      this.activeRoom.members.push(newMember);
+      this.saveActiveRoom();
+      ROOMMATES = this.activeRoom.members;
+
+      if (appState && appState.days) {
+        for (let d = 1; d <= CONFIG.daysInMonth; d++) {
+          if (appState.days[d]) {
+            if (!appState.days[d].meals) appState.days[d].meals = {};
+            if (!appState.days[d].meals[newMember.id]) {
+              appState.days[d].meals[newMember.id] = { lunch: '', dinner: '' };
+            }
+          }
+        }
+        saveStateToStorage(appState);
+      }
+
+      persistAndBroadcast({
+        type: 'member_approved',
+        roomCode: this.activeRoom.code,
+        member: newMember
+      });
+
+      this.updatePendingBadges();
+      this.renderSettingsMembersTab();
+      renderAll();
+      showToast(`Approved ${newMember.name}! Added to flat.`);
+    },
+
+    declineRequest(reqId) {
+      if (!this.activeRoom || this.session?.role !== 'admin') return;
+      this.activeRoom.pendingRequests = (this.activeRoom.pendingRequests || []).filter(p => p.id !== reqId);
+      this.saveActiveRoom();
+      this.updatePendingBadges();
+      this.renderSettingsMembersTab();
+      showToast('Join request declined.');
+    },
+
+    addMemberDirectly(name, phone) {
+      if (!this.activeRoom) return;
+      const cleanName = (name || '').trim();
+      const cleanPhone = (phone || '').trim();
+      if (!cleanName) return;
+
+      const avatarColors = ['#00d4ff', '#a78bfa', '#ff3b5c', '#ffb800', '#10b981', '#38bdf8', '#f43f5e', '#ec4899'];
+      const avatarColor = avatarColors[this.activeRoom.members.length % avatarColors.length];
+
+      const newMember = {
+        id: this.sanitizeId(cleanName),
+        name: cleanName,
+        phone: cleanPhone,
+        role: 'member',
+        avatarColor: avatarColor,
+        joinedAt: new Date().toISOString()
+      };
+
+      this.activeRoom.members.push(newMember);
+      this.saveActiveRoom();
+      ROOMMATES = this.activeRoom.members;
+
+      if (appState && appState.days) {
+        for (let d = 1; d <= CONFIG.daysInMonth; d++) {
+          if (appState.days[d]) {
+            if (!appState.days[d].meals) appState.days[d].meals = {};
+            if (!appState.days[d].meals[newMember.id]) {
+              appState.days[d].meals[newMember.id] = { lunch: '', dinner: '' };
+            }
+          }
+        }
+        saveStateToStorage(appState);
+      }
+
+      persistAndBroadcast({
+        type: 'member_added',
+        roomCode: this.activeRoom.code,
+        member: newMember
+      });
+
+      this.renderSettingsMembersTab();
+      renderAll();
+      showToast(`Added ${cleanName} to room!`);
+    },
+
+    removeMember(memberId) {
+      if (!this.activeRoom || this.session?.role !== 'admin') return;
+      const target = this.activeRoom.members.find(m => m.id === memberId);
+      if (!target) return;
+      if (target.role === 'admin') {
+        alert('Cannot remove the room Admin.');
+        return;
+      }
+
+      if (!confirm(`Remove ${target.name} from the flat? Historical ledger entries will remain.`)) return;
+
+      this.activeRoom.members = this.activeRoom.members.filter(m => m.id !== memberId);
+      this.saveActiveRoom();
+      ROOMMATES = this.activeRoom.members;
+
+      this.renderSettingsMembersTab();
+      renderAll();
+      showToast(`Removed ${target.name} from room.`);
+    },
+
+    updateHeaderRoomUI() {
+      const codePill = document.getElementById('headerRoomCodeText');
+      const pill = document.getElementById('headerRoomPill');
+      const settingsRoomName = document.getElementById('settingsRoomNameDisplay');
+      const settingsRoomCode = document.getElementById('settingsRoomCodeTag');
+
+      const roomCode = this.activeRoom?.code || this.session?.roomCode || 'ROOM';
+      const roomName = this.activeRoom?.name || this.session?.groupName || 'My Flat';
+
+      if (codePill) codePill.textContent = `#${roomCode}`;
+      if (pill) pill.setAttribute('title', `Active Group: ${roomName} (#${roomCode})`);
+      if (settingsRoomName) settingsRoomName.textContent = roomName;
+      if (settingsRoomCode) settingsRoomCode.textContent = `#${roomCode}`;
+    },
+
+    updatePendingBadges() {
+      const pendingCount = (this.activeRoom?.pendingRequests || []).length;
+      const isAdmin = this.session?.role === 'admin';
+
+      const headerPendingBtn = document.getElementById('headerPendingBtn');
+      const headerPendingText = document.getElementById('headerPendingCountText');
+      const sidebarBadge = document.getElementById('sidebarPendingBadge');
+      const sectionCount = document.getElementById('pendingSectionCount');
+      const sectionContainer = document.getElementById('pendingRequestsContainer');
+
+      if (headerPendingBtn) {
+        if (isAdmin && pendingCount > 0) {
+          headerPendingBtn.style.display = 'inline-flex';
+          if (headerPendingText) headerPendingText.textContent = `${pendingCount} Request${pendingCount === 1 ? '' : 's'}`;
+        } else {
+          headerPendingBtn.style.display = 'none';
+        }
+      }
+
+      if (sidebarBadge) {
+        if (isAdmin && pendingCount > 0) {
+          sidebarBadge.style.display = 'inline-block';
+          sidebarBadge.textContent = pendingCount;
+        } else {
+          sidebarBadge.style.display = 'none';
+        }
+      }
+
+      if (sectionCount) sectionCount.textContent = pendingCount;
+      if (sectionContainer) {
+        sectionContainer.style.display = (isAdmin && pendingCount > 0) ? 'block' : 'none';
+      }
+    },
+
+    renderSettingsMembersTab() {
+      const listContainer = document.getElementById('settingsMembersList');
+      const countDisplay = document.getElementById('roommatesCountDisplay');
+      const pendingList = document.getElementById('pendingRoommatesList');
+
+      if (countDisplay) countDisplay.textContent = ROOMMATES.length;
+
+      // 1. Pending Requests (Admin view)
+      if (pendingList && this.activeRoom) {
+        pendingList.innerHTML = '';
+        const requests = this.activeRoom.pendingRequests || [];
+        if (requests.length === 0) {
+          pendingList.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:6px 0;">No pending requests.</div>`;
+        } else {
+          requests.forEach(req => {
+            const card = document.createElement('div');
+            card.className = 'pending-roommate-card';
+            card.innerHTML = `
+              <div>
+                <strong style="font-size:0.88rem; color:var(--text-primary);">${escapeHtml(req.name)}</strong>
+                <span style="font-size:0.78rem; color:var(--text-muted); display:block;">${escapeHtml(req.phone)}</span>
+              </div>
+              <div class="pending-roommate-actions">
+                <button class="btn-approve" data-id="${req.id}">Approve</button>
+                <button class="btn-decline" data-id="${req.id}">Decline</button>
+              </div>
+            `;
+            pendingList.appendChild(card);
+          });
+
+          pendingList.querySelectorAll('.btn-approve').forEach(btn => {
+            btn.addEventListener('click', () => {
+              triggerHaptic();
+              this.approveRequest(btn.getAttribute('data-id'));
+            });
+          });
+
+          pendingList.querySelectorAll('.btn-decline').forEach(btn => {
+            btn.addEventListener('click', () => {
+              triggerHaptic();
+              this.declineRequest(btn.getAttribute('data-id'));
+            });
+          });
+        }
+      }
+
+      // 2. Active Roommates
+      if (listContainer) {
+        listContainer.innerHTML = '';
+        if (ROOMMATES.length === 0) {
+          listContainer.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px 0;">No roommates added yet.</div>`;
+          return;
         }
 
-        showToast(`Welcome ${chosen}! You are ready to log meals.`);
+        ROOMMATES.forEach(r => {
+          const card = document.createElement('div');
+          card.className = 'member-mgmt-card';
+          const isUserAdmin = r.role === 'admin';
+          const canDelete = (this.session?.role === 'admin' && !isUserAdmin);
+
+          card.innerHTML = `
+            <div class="member-mgmt-info">
+              <div class="member-mini-avatar" style="background:${r.avatarColor || '#00d26a'};">
+                ${(r.name || 'RM').slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <strong style="font-size:0.88rem; color:var(--text-primary);">${escapeHtml(r.name)}</strong>
+                ${isUserAdmin ? '<span class="badge-admin-tag">ADMIN</span>' : ''}
+                ${r.phone ? `<span style="display:block; font-size:0.75rem; color:var(--text-muted);">${escapeHtml(r.phone)}</span>` : ''}
+              </div>
+            </div>
+            ${canDelete ? `<button class="pill-btn-ghost btn-xs text-rose remove-member-btn" data-id="${r.id}" title="Remove member">✕</button>` : ''}
+          `;
+          listContainer.appendChild(card);
+        });
+
+        listContainer.querySelectorAll('.remove-member-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            triggerHaptic();
+            this.removeMember(btn.getAttribute('data-id'));
+          });
+        });
+      }
+    },
+
+    showGateModal(defaultTab = 'create') {
+      const modal = document.getElementById('roomAccessModal');
+      const createTabBtn = document.getElementById('tabCreateRoomBtn');
+      const joinTabBtn = document.getElementById('tabJoinRoomBtn');
+      const createForm = document.getElementById('createRoomForm');
+      const joinForm = document.getElementById('joinRoomForm');
+      const pendingCard = document.getElementById('gatePendingCard');
+
+      if (!modal) return;
+      modal.classList.add('active');
+
+      if (pendingCard) pendingCard.style.display = 'none';
+
+      if (defaultTab === 'join') {
+        createTabBtn?.classList.remove('active');
+        joinTabBtn?.classList.add('active');
+        if (createForm) createForm.style.display = 'none';
+        if (joinForm) joinForm.style.display = 'block';
+      } else {
+        createTabBtn?.classList.add('active');
+        joinTabBtn?.classList.remove('active');
+        if (createForm) createForm.style.display = 'block';
+        if (joinForm) joinForm.style.display = 'none';
+      }
+    },
+
+    hideGateModal() {
+      const modal = document.getElementById('roomAccessModal');
+      if (modal) modal.classList.remove('active');
+    },
+
+    showPendingGateState() {
+      const modal = document.getElementById('roomAccessModal');
+      const createForm = document.getElementById('createRoomForm');
+      const joinForm = document.getElementById('joinRoomForm');
+      const pendingCard = document.getElementById('gatePendingCard');
+      const metaBox = document.getElementById('gatePendingMetaBox');
+
+      if (!modal) return;
+      modal.classList.add('active');
+
+      if (createForm) createForm.style.display = 'none';
+      if (joinForm) joinForm.style.display = 'none';
+      if (pendingCard) pendingCard.style.display = 'block';
+
+      if (metaBox && this.session) {
+        metaBox.innerHTML = `
+          <div style="font-size:0.85rem; padding:8px 12px; background:rgba(255,255,255,0.04); border-radius:6px; border:1px solid rgba(255,255,255,0.08);">
+            <div><strong>Room Code:</strong> <span style="font-family:monospace; color:var(--cyan); font-weight:700;">#${this.session.roomCode}</span></div>
+            <div><strong>Applicant:</strong> ${escapeHtml(this.session.name)} (${escapeHtml(this.session.phone)})</div>
+          </div>
+        `;
+      }
+    },
+
+    sanitizeId(name) {
+      return (name || '').toLowerCase().replace(/[^a-z0-9]/g, '') || `user_${Date.now()}`;
+    }
+  };
+
+  // --- Printable Invoice Generator ---
+  function openInvoiceModal() {
+    triggerHaptic();
+    const modal = document.getElementById('invoiceModal');
+    const container = document.getElementById('invoicePrintableArea');
+    if (!modal || !container) return;
+
+    const rates = getRates();
+    const provider = appState.provider || CONFIG.defaultProvider;
+    const totals = getFlatTotals();
+    const room = RoomManager.activeRoom || { name: 'My Flat', code: SyncEngine.roomCode || 'ROOM' };
+    const monthName = MONTH_NAMES[currentMonth - 1];
+    const invoiceNum = `INV-${currentYear}${String(currentMonth).padStart(2, '0')}-${room.code}`;
+    const invoiceDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    let memberRows = '';
+    ROOMMATES.forEach((r, idx) => {
+      const stats = getRoommateMonthlyStats(r.id);
+      const combinedMemberDue = stats.tiffinTotal + stats.milkTotal;
+      memberRows += `
+        <tr>
+          <td style="text-align:center; font-weight:600;">${idx + 1}</td>
+          <td>
+            <strong>${escapeHtml(r.name)}</strong>
+            ${r.phone ? `<div style="font-size:0.75rem; color:#64748b;">${escapeHtml(r.phone)}</div>` : ''}
+          </td>
+          <td>${stats.halfCount} Half, ${stats.fullCount} Full${stats.specialCount ? `, ${stats.specialCount} Sp` : ''}</td>
+          <td style="text-align:center; font-weight:700;">${stats.totalMeals}</td>
+          <td style="text-align:right; font-family:monospace; font-weight:700;">₹${stats.tiffinTotal}</td>
+          <td style="text-align:right; font-family:monospace;">${stats.milkPackets > 0 ? `${stats.milkPackets} pkt (₹${stats.milkTotal})` : '—'}</td>
+          <td style="text-align:right; font-family:monospace; font-weight:800; color:#166534;">₹${combinedMemberDue}</td>
+        </tr>
+      `;
+    });
+
+    if (ROOMMATES.length === 0) {
+      memberRows = `<tr><td colspan="7" style="text-align:center; padding:18px; color:#64748b;">No flatmates added in this room yet.</td></tr>`;
+    }
+
+    container.innerHTML = `
+      <div class="inv-header">
+        <div>
+          <h2 class="inv-brand-title">🍛 TIFFIN EXPENSE STATEMENT</h2>
+          <div style="font-size:0.95rem; font-weight:700; color:#334155; margin-top:2px;">
+            ${escapeHtml(room.name)} <span style="font-family:monospace; background:#f1f5f9; padding:2px 6px; border-radius:4px;">#${escapeHtml(room.code)}</span>
+          </div>
+          <div style="font-size:0.8rem; color:#64748b; margin-top:4px;">Shared Mess &amp; Tiffin Ledger</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:1.1rem; font-weight:900; color:#0f172a; text-transform:uppercase;">${monthName} ${currentYear}</div>
+          <div class="inv-meta-table" style="margin-top:4px;">
+            <div><strong>Invoice:</strong> ${invoiceNum}</div>
+            <div><strong>Date:</strong> ${invoiceDate}</div>
+            <div style="margin-top:4px;"><span style="background:#fef3c7; color:#92400e; font-weight:700; font-size:0.75rem; padding:2px 8px; border-radius:999px;">PAYABLE STATEMENT</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="inv-party-grid">
+        <div class="inv-party-box">
+          <strong>Billed To (Flat Group)</strong>
+          <div style="font-size:1rem; font-weight:700; color:#0f172a;">${escapeHtml(room.name)}</div>
+          <div style="font-size:0.85rem; color:#475569; margin-top:2px;">Admin: ${escapeHtml(room.adminName || 'Admin')} ${room.adminPhone ? `(${escapeHtml(room.adminPhone)})` : ''}</div>
+          <div style="font-size:0.82rem; color:#64748b; margin-top:4px;">Total Flatmates: ${ROOMMATES.length}</div>
+        </div>
+        <div class="inv-party-box">
+          <strong>Payable To (Tiffin Provider)</strong>
+          <div style="font-size:1rem; font-weight:700; color:#0f172a;">${escapeHtml(provider.name || 'Tiffin Provider')}</div>
+          <div style="font-size:0.85rem; color:#475569; margin-top:2px;">Mobile: ${escapeHtml(provider.phone || 'Not configured')}</div>
+          <div style="font-size:0.85rem; color:#0f172a; margin-top:4px; font-weight:600;">UPI ID: <span style="font-family:monospace; color:#2563eb;">${escapeHtml(provider.upi || 'Not configured')}</span></div>
+        </div>
+      </div>
+
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:0.82rem; display:flex; flex-wrap:wrap; gap:16px; justify-content:space-between;">
+        <span><strong>Rate Breakdown:</strong></span>
+        <span>Half Meal: <strong>₹${rates.half}</strong></span>
+        <span>Full Meal: <strong>₹${rates.full}</strong></span>
+        <span>Special Meal: <strong>₹${rates.special}</strong></span>
+        <span>Amul Milk: <strong>₹${rates.amulPacket || 35}/pkt</strong></span>
+      </div>
+
+      <table class="inv-table">
+        <thead>
+          <tr>
+            <th style="width:36px; text-align:center;">#</th>
+            <th>Member Name</th>
+            <th>Meal Breakdown</th>
+            <th style="text-align:center;">Total Meals</th>
+            <th style="text-align:right;">Tiffin (₹)</th>
+            <th style="text-align:right;">Milk (₹)</th>
+            <th style="text-align:right;">Total Due (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${memberRows}
+        </tbody>
+        <tfoot>
+          <tr style="background:#f1f5f9; font-weight:800; font-size:0.92rem;">
+            <td colspan="3" style="text-align:right;">Grand Totals:</td>
+            <td style="text-align:center;">${totals.totalMeals}</td>
+            <td style="text-align:right; font-family:monospace;">₹${totals.tiffinTotal}</td>
+            <td style="text-align:right; font-family:monospace;">₹${totals.milkTotal}</td>
+            <td style="text-align:right; font-family:monospace; color:#166534; font-size:1.05rem;">₹${totals.combinedTotal}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="inv-summary-box">
+        <div>
+          <div style="font-size:0.85rem; color:#15803d; font-weight:700; text-transform:uppercase;">Direct Settlement Instructions</div>
+          <div style="font-size:0.88rem; color:#334155; margin-top:4px;">
+            Flatmates can pay directly via UPI to <strong>${escapeHtml(provider.upi || 'provider')}</strong> with their name in the payment remark.
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <span style="font-size:0.8rem; color:#64748b; font-weight:700; text-transform:uppercase;">Total Flat Due</span>
+          <div class="inv-grand-total">₹${totals.combinedTotal}</div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px; text-align:center; font-size:0.75rem; color:#94a3b8; border-top:1px dashed #cbd5e1; padding-top:12px;">
+        Generated via Tiffin Tracker • Open Source Mess Ledger
+      </div>
+    `;
+
+    modal.classList.add('active');
+  }
+
+  // --- Room Access & Gate Event Controls ---
+  function setupRoomAccessControls() {
+    const tabCreateBtn = document.getElementById('tabCreateRoomBtn');
+    const tabJoinBtn = document.getElementById('tabJoinRoomBtn');
+    const createForm = document.getElementById('createRoomForm');
+    const joinForm = document.getElementById('joinRoomForm');
+    const gateCheckApprovalBtn = document.getElementById('gateCheckApprovalBtn');
+    const gateCancelJoinBtn = document.getElementById('gateCancelJoinBtn');
+    const copyInviteLinkBtn = document.getElementById('copyInviteLinkBtn');
+    const headerPendingBtn = document.getElementById('headerPendingBtn');
+    const addRoommateBtn = document.getElementById('addRoommateBtn');
+    const changeAdminPinBtn = document.getElementById('changeAdminPinBtn');
+
+    if (tabCreateBtn) {
+      tabCreateBtn.addEventListener('click', () => {
+        triggerHaptic();
+        tabCreateBtn.classList.add('active');
+        tabJoinBtn?.classList.remove('active');
+        if (createForm) createForm.style.display = 'block';
+        if (joinForm) joinForm.style.display = 'none';
+      });
+    }
+
+    if (tabJoinBtn) {
+      tabJoinBtn.addEventListener('click', () => {
+        triggerHaptic();
+        tabJoinBtn.classList.add('active');
+        tabCreateBtn?.classList.remove('active');
+        if (joinForm) joinForm.style.display = 'block';
+        if (createForm) createForm.style.display = 'none';
+      });
+    }
+
+    if (createForm) {
+      createForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        triggerHaptic();
+        const name = document.getElementById('gateAdminName')?.value || '';
+        const phone = document.getElementById('gateAdminPhone')?.value || '';
+        const group = document.getElementById('gateGroupName')?.value || 'My Flat';
+        const pin = document.getElementById('gateAdminPin')?.value || 'Flower';
+
+        if (!name.trim()) {
+          alert('Please enter your name.');
+          return;
+        }
+        RoomManager.createRoom(name, phone, group, pin);
+      });
+    }
+
+    if (joinForm) {
+      joinForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        triggerHaptic();
+        const name = document.getElementById('gateUserName')?.value || '';
+        const phone = document.getElementById('gateUserPhone')?.value || '';
+        const code = document.getElementById('gateRoomCode')?.value || '';
+
+        if (!name.trim() || !code.trim()) {
+          alert('Please enter your name and the Room Code.');
+          return;
+        }
+        RoomManager.requestJoin(name, phone, code);
+      });
+    }
+
+    if (gateCheckApprovalBtn) {
+      gateCheckApprovalBtn.addEventListener('click', () => {
+        triggerHaptic();
+        RoomManager.checkApprovalStatus();
+      });
+    }
+
+    if (gateCancelJoinBtn) {
+      gateCancelJoinBtn.addEventListener('click', () => {
+        triggerHaptic();
+        RoomManager.cancelJoinRequest();
+      });
+    }
+
+    if (copyInviteLinkBtn) {
+      copyInviteLinkBtn.addEventListener('click', () => {
+        triggerHaptic();
+        const roomCode = RoomManager.activeRoom?.code || SyncEngine.roomCode || 'ROOM';
+        const baseUrl = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '');
+        const inviteUrl = `${baseUrl}?room=${roomCode}`;
+        copyToClipboard(inviteUrl);
+        showToast(`Copied room invite link: #${roomCode}`);
+      });
+    }
+
+    if (headerPendingBtn) {
+      headerPendingBtn.addEventListener('click', () => {
+        triggerHaptic();
+        const settingsModal = document.getElementById('settingsModal');
+        if (settingsModal) {
+          settingsModal.classList.add('active');
+          document.querySelectorAll('.sub-tab').forEach(t => {
+            t.classList.toggle('active', t.getAttribute('data-subtab') === 'members');
+          });
+          document.querySelectorAll('.subtab-content').forEach(c => {
+            c.classList.toggle('active', c.id === 'subtab-members');
+          });
+          RoomManager.renderSettingsMembersTab();
+        }
+      });
+    }
+
+    if (addRoommateBtn) {
+      addRoommateBtn.addEventListener('click', () => {
+        triggerHaptic();
+        const name = prompt('Enter flatmate name:');
+        if (name && name.trim()) {
+          const phone = prompt('Enter flatmate mobile number (optional):') || '';
+          RoomManager.addMemberDirectly(name.trim(), phone.trim());
+        }
+      });
+    }
+
+    if (changeAdminPinBtn) {
+      changeAdminPinBtn.addEventListener('click', () => {
+        triggerHaptic();
+        requireAdminPassword(() => {
+          const newPin = prompt('Enter new Admin Security PIN:');
+          if (newPin && newPin.trim()) {
+            CONFIG.adminPassword = newPin.trim();
+            if (RoomManager.activeRoom) {
+              RoomManager.activeRoom.adminPin = newPin.trim();
+              RoomManager.saveActiveRoom();
+            }
+            showToast('Admin security PIN updated!');
+          }
+        });
+      });
+    }
+  }
+
+  // --- Invoice Modal Controls ---
+  function setupInvoiceModalControls() {
+    const modal = document.getElementById('invoiceModal');
+    const closeBtn = document.getElementById('closeInvoiceModalBtn');
+    const printBtn = document.getElementById('invoicePrintActionBtn');
+
+    if (closeBtn && modal) {
+      closeBtn.addEventListener('click', () => {
+        modal.classList.remove('active');
+      });
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('active');
+      });
+    }
+
+    if (printBtn) {
+      printBtn.addEventListener('click', () => {
+        triggerHaptic();
+        window.print();
       });
     }
   }
@@ -3641,7 +4447,7 @@
     const settingsPrintInv = document.getElementById('settingsPrintInvoiceBtn');
     if (settingsPrintInv) {
       settingsPrintInv.addEventListener('click', () => {
-        window.print();
+        openInvoiceModal();
       });
     }
 
@@ -3651,7 +4457,7 @@
 
     if (printInvoiceBtn) {
       printInvoiceBtn.addEventListener('click', () => {
-        window.print();
+        openInvoiceModal();
       });
     }
 
@@ -3697,7 +4503,7 @@
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
         requireAdminPassword(() => {
-          appState = getDefaultData();
+          appState = getDefaultDataForMonth(currentYear, currentMonth);
           selectedDay = CONFIG.todayDay;
           logActivity(SyncEngine.identity, 'Admin Action', 'Reset ledger to default starting data');
           persistAndBroadcast({
@@ -3705,6 +4511,7 @@
             state: appState,
             reason: 'Reset to default data'
           });
+          renderAll();
           showToast('Ledger reset to default');
         });
       });
@@ -3713,47 +4520,73 @@
 
   function downloadCsvExport() {
     triggerHaptic();
-    let csv = "Date,Day,Sabzi / Note,Anjan Lunch,Anjan Dinner,Saurabh Lunch,Saurabh Dinner,Alok Lunch,Alok Dinner,Rohit Lunch,Rohit Dinner,Salman Lunch,Salman Dinner,Chetan Lunch,Chetan Dinner,Hitesh Lunch,Hitesh Dinner,Day Total (Rs)\n";
+    const rates = getRates();
+    const provider = appState.provider || CONFIG.defaultProvider;
+    const totals = getFlatTotals();
+    const room = RoomManager.activeRoom || { name: 'My Flat', code: SyncEngine.roomCode || 'ROOM' };
+    const monthName = MONTH_NAMES[currentMonth - 1];
+
+    let csv = "\uFEFF"; // UTF-8 BOM for Excel
+    csv += "TIFFIN TRACKER - MONTHLY EXPENSE REPORT\n";
+    csv += `Month,${monthName} ${currentYear}\n`;
+    csv += `Group / Room,"${room.name.replace(/"/g, '""')} (#${room.code})"\n`;
+    csv += `Tiffin Provider,"${(provider.name || 'Not configured').replace(/"/g, '""')} (UPI: ${(provider.upi || 'Not configured').replace(/"/g, '""')})"\n`;
+    csv += `Rates Snapshot,"Half: Rs.${rates.half}, Full: Rs.${rates.full}, Special: Rs.${rates.special}, Milk: Rs.${rates.amulPacket || 35}"\n\n`;
+
+    // Section 1: Roommate Summary Table
+    csv += "MEMBER MONTHLY SUMMARY\n";
+    csv += "#,Name,Phone,Half Meals,Full Meals,Special Meals,Total Meals,Tiffin Cost (Rs),Milk Packets,Milk Cost (Rs),Total Payable (Rs)\n";
+
+    ROOMMATES.forEach((r, idx) => {
+      const stats = getRoommateMonthlyStats(r.id);
+      const combinedDue = stats.tiffinTotal + stats.milkTotal;
+      csv += `${idx + 1},"${r.name.replace(/"/g, '""')}","${r.phone || ''}",${stats.halfCount},${stats.fullCount},${stats.specialCount},${stats.totalMeals},${stats.tiffinTotal},${stats.milkPackets},${stats.milkTotal},${combinedDue}\n`;
+    });
+
+    csv += `TOTALS,,,,,,${totals.totalMeals},${totals.tiffinTotal},,${totals.milkTotal},${totals.combinedTotal}\n\n`;
+
+    // Section 2: Daily Attendance Matrix
+    csv += "DAILY ATTENDANCE & MEAL MATRIX\n";
+    let headerRow = "Date,Day,Dish / Sabzi";
+    ROOMMATES.forEach(r => {
+      headerRow += `,"${r.name.replace(/"/g, '""')} Lunch","${r.name.replace(/"/g, '""')} Dinner"`;
+    });
+    headerRow += ",Day Total (Rs)\n";
+    csv += headerRow;
 
     for (let d = 1; d <= CONFIG.daysInMonth; d++) {
       const day = appState.days[d];
-      const m = day.meals;
+      if (!day) continue;
       const dayCost = getDayTotalCost(d);
-      const row = [
-        `"${day.dateFormatted}"`,
-        day.dayOfWeek,
-        `"${(day.sabzi || '').replace(/"/g, '""')}"`,
-        m.anjan.lunch || '', m.anjan.dinner || '',
-        m.saurabh.lunch || '', m.saurabh.dinner || '',
-        m.alok.lunch || '', m.alok.dinner || '',
-        m.rohit.lunch || '', m.rohit.dinner || '',
-        m.salman.lunch || '', m.salman.dinner || '',
-        m.chetan.lunch || '', m.chetan.dinner || '',
-        m.hitesh.lunch || '', m.hitesh.dinner || '',
-        dayCost
-      ];
-      csv += row.join(",") + "\n";
+      let row = `"${day.dateFormatted}","${day.dayOfWeek}","${(day.sabzi || '').replace(/"/g, '""')}"`;
+
+      ROOMMATES.forEach(r => {
+        const m = day.meals?.[r.id] || { lunch: '', dinner: '' };
+        row += `,"${m.lunch || ''}","${m.dinner || ''}"`;
+      });
+
+      row += `,${dayCost}\n`;
+      csv += row;
     }
 
-    // Footer Totals Row
-    csv += "\nTotal,,,₹" + getRoommateMonthlyStats('anjan').tiffinTotal + ",,₹" +
-      getRoommateMonthlyStats('saurabh').tiffinTotal + ",,₹" +
-      getRoommateMonthlyStats('alok').tiffinTotal + ",,₹" +
-      getRoommateMonthlyStats('rohit').tiffinTotal + ",,₹" +
-      getRoommateMonthlyStats('salman').tiffinTotal + ",,₹" +
-      getRoommateMonthlyStats('chetan').tiffinTotal + ",,₹" +
-      getRoommateMonthlyStats('hitesh').tiffinTotal + ",₹" +
-      getFlatTotals().tiffinTotal + "\n";
+    // Daily Matrix Footer
+    let footerRow = "TOTAL,,,";
+    ROOMMATES.forEach(r => {
+      const stats = getRoommateMonthlyStats(r.id);
+      footerRow += `,"Rs.${stats.tiffinTotal}",`;
+    });
+    footerRow += `,"Rs.${totals.tiffinTotal}"\n`;
+    csv += footerRow;
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `Tiffin_Expense_Report_${MONTH_SHORTS[currentMonth - 1]}_${currentYear}.csv`);
+    link.setAttribute("download", `Tiffin_Expense_${room.code}_${MONTH_SHORTS[currentMonth - 1]}_${currentYear}.csv`);
     document.body.appendChild(link);
     link.click();
     link.remove();
-    showToast('Downloaded Tiffin Expense CSV');
+    showToast('Downloaded detailed Tiffin Expense CSV!');
   }
 
   function setupTheme() {
@@ -3881,8 +4714,12 @@
     setupPasswordPromptControls();
     setupCloudSyncControls();
     setupExportAndSharing();
-    setupOnboarding();
+    setupRoomAccessControls();
+    setupInvoiceModalControls();
     registerServiceWorker();
+
+    // Initialize Room & Multi-Tenant Access Gate
+    RoomManager.init();
 
     updateMonthUI();
     populateDateSelectors();

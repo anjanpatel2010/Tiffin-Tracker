@@ -24,7 +24,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css?v=4.6">
+  <link rel="stylesheet" href="styles.css?v=4.7">
 </head>
 <body>
   <!-- App Container -->
@@ -34,6 +34,10 @@
     <header class="app-header">
       <div class="header-left">
         <h1 class="header-title">Tiffin Tracker</h1>
+        <div class="header-room-pill" id="headerRoomPill" title="Active Group / Room Code">
+          <span class="room-pill-dot"></span>
+          <span id="headerRoomCodeText">#ROOM</span>
+        </div>
       </div>
 
       <!-- Header Month Navigation -->
@@ -52,6 +56,12 @@
       </div>
 
       <div class="header-right">
+        <!-- Pending Join Requests Indicator (Visible to admin when flatmates knock) -->
+        <button id="headerPendingBtn" class="header-pending-pill" style="display:none;" title="Pending Roommate Join Requests">
+          <span class="pending-pill-pulse"></span>
+          <span id="headerPendingCountText">1 Request</span>
+        </button>
+
         <!-- Direct User Identity Dropdown -->
         <div class="header-user-select-wrap">
           <span class="user-avatar-dot"></span>
@@ -59,7 +69,7 @@
             <!-- Populated via JS -->
           </select>
         </div>
-        <button id="headerSettingsBtn" class="icon-btn circle-btn" title="Settings, Pricing & Theme" aria-label="Settings">
+        <button id="headerSettingsBtn" class="icon-btn circle-btn" title="Settings, Pricing & Members" aria-label="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
       </div>
@@ -382,45 +392,14 @@
           <!-- Roommate Column Filter Chips for Mobile & Focused View -->
           <div class="sheet-filter-chips" id="sheetFilterChips">
             <button class="sheet-filter-btn active" data-filter="all">All Flatmates</button>
-            <button class="sheet-filter-btn" data-filter="anjan">Anjan</button>
-            <button class="sheet-filter-btn" data-filter="saurabh">Saurabh</button>
-            <button class="sheet-filter-btn" data-filter="alok">Alok</button>
-            <button class="sheet-filter-btn" data-filter="rohit">Rohit</button>
-            <button class="sheet-filter-btn" data-filter="salman">Salman</button>
-            <button class="sheet-filter-btn" data-filter="chetan">Chetan</button>
-            <button class="sheet-filter-btn" data-filter="hitesh">Hitesh</button>
+            <!-- Roommate chips rendered dynamically via JS -->
           </div>
 
           <!-- Spreadsheet Scroll Container (Sticky Layout Optimized) -->
           <div class="sheet-scroll-container">
             <table class="master-table" id="masterSheetTable">
               <thead id="masterSheetHead">
-                <!-- Top Group Header -->
-                <tr class="header-group-row">
-                  <th class="th-sticky th-date"><div class="td-sticky-cell-content">Date</div></th>
-                  <th class="th-sticky th-menu"><div class="td-sticky-cell-content">Sabzi / Note</div></th>
-                  <th colspan="2" class="th-person">Anjan</th>
-                  <th colspan="2" class="th-person">Saurabh</th>
-                  <th colspan="3" class="th-person">Alok</th>
-                  <th colspan="2" class="th-person">Rohit</th>
-                  <th colspan="2" class="th-person">Salman</th>
-                  <th colspan="2" class="th-person">Chetan</th>
-                  <th colspan="2" class="th-person">Hitesh</th>
-                  <th class="th-day-total">Day Total</th>
-                </tr>
-                <!-- Sub Columns Header -->
-                <tr class="header-sub-row">
-                  <th class="th-sticky th-date-sub" id="sheetDaysSubLabel"><div class="td-sticky-cell-content">31 Days</div></th>
-                  <th class="th-sticky th-menu-sub"><div class="td-sticky-cell-content">Dish</div></th>
-                  <th>Lunch</th><th>Dinner</th>
-                  <th>Lunch</th><th>Dinner</th>
-                  <th>Lunch</th><th>Dinner</th><th>Special</th>
-                  <th>Lunch</th><th>Dinner</th>
-                  <th>Lunch</th><th>Dinner</th>
-                  <th>Lunch</th><th>Dinner</th>
-                  <th>Lunch</th><th>Dinner</th>
-                  <th>Amount</th>
-                </tr>
+                <!-- Rendered dynamically via JS without hardcoded users or special column -->
               </thead>
               <tbody id="masterSheetBody">
                 <!-- 31 rows generated via JS -->
@@ -767,7 +746,12 @@
         <div class="settings-body-split">
           <!-- Left Sidebar Categories -->
           <nav class="settings-sidebar" aria-label="Settings Categories">
-            <button class="sub-tab active" data-subtab="pricing">
+            <button class="sub-tab active" data-subtab="members">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <span>Room & Members</span>
+              <span class="settings-sidebar-badge" id="sidebarPendingBadge" style="display:none;">0</span>
+            </button>
+            <button class="sub-tab" data-subtab="pricing">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
               <span>Pricing Rates</span>
             </button>
@@ -796,9 +780,71 @@
 
           <!-- Right Content Pane -->
           <div class="settings-content-pane">
+
+            <!-- Sub Tab 0: Room & Members Management -->
+            <div id="subtab-members" class="subtab-content active">
+              <div class="settings-pane-header">
+                <h4 class="settings-pane-title">Room & Members</h4>
+                <p class="settings-pane-desc">Manage room code, invite flatmates, approve join requests, and manage members.</p>
+              </div>
+
+              <!-- Room Info Card -->
+              <div class="settings-room-card">
+                <div class="room-card-info">
+                  <span class="helper-text">Active Group / Room</span>
+                  <div class="room-title-row">
+                    <strong id="settingsRoomNameDisplay" style="font-size:1.05rem; color:var(--text-primary);">My Flat</strong>
+                    <span class="room-code-tag" id="settingsRoomCodeTag">#ROOM</span>
+                  </div>
+                </div>
+                <button id="copyInviteLinkBtn" class="primary-btn btn-xs glow-btn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                  <span>Copy Invite Link</span>
+                </button>
+              </div>
+
+              <!-- Pending Join Requests (Visible to Admin) -->
+              <div class="pending-requests-section mt-3" id="pendingRequestsContainer" style="display:none;">
+                <div class="section-title-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                  <strong style="color:var(--amber); font-size:0.88rem; display:flex; align-items:center; gap:6px;">
+                    <span class="dot-indicator amber"></span>
+                    <span>Pending Join Requests</span>
+                  </strong>
+                  <span class="badge-count" id="pendingSectionCount">0</span>
+                </div>
+                <div class="pending-list" id="pendingRoommatesList">
+                  <!-- Populated via JS -->
+                </div>
+              </div>
+
+              <!-- Roommates List -->
+              <div class="roommates-mgmt-section mt-3">
+                <div class="section-title-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                  <strong style="font-size:0.88rem; color:var(--text-secondary);">Active Roommates (<span id="roommatesCountDisplay">0</span>)</strong>
+                  <button id="addRoommateBtn" class="pill-btn-ghost btn-xs">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span>Add Member</span>
+                  </button>
+                </div>
+                <div class="members-cards-grid" id="settingsMembersList">
+                  <!-- Populated via JS -->
+                </div>
+              </div>
+
+              <!-- Admin Credentials / PIN -->
+              <div class="admin-pin-row mt-4" style="padding:12px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <strong style="font-size:0.88rem; color:var(--text-primary); display:block;">Admin Security PIN</strong>
+                    <span class="helper-text" style="font-size:0.78rem;">Protects ledger reset and administrative actions.</span>
+                  </div>
+                  <button id="changeAdminPinBtn" class="secondary-btn btn-xs">Change PIN</button>
+                </div>
+              </div>
+            </div>
             
             <!-- Sub Tab 1: Pricing Rates -->
-            <div id="subtab-pricing" class="subtab-content active">
+            <div id="subtab-pricing" class="subtab-content">
               <div class="settings-pane-header">
                 <h4 class="settings-pane-title">Meal Pricing Rates</h4>
                 <p class="settings-pane-desc">Configure per-meal costs and Amul milk packet prices for this ledger.</p>
@@ -813,7 +859,7 @@
                   <input type="number" id="rateFullInput" class="text-input" min="0" value="110">
                 </div>
                 <div class="form-group">
-                  <label for="rateSpecialInput" class="input-label">Alok Special Rate (₹) [5 Roti, Sabji, Dal]:</label>
+                  <label for="rateSpecialInput" class="input-label">Special Meal Rate (₹) [5 Roti, Sabji, Dal]:</label>
                   <input type="number" id="rateSpecialInput" class="text-input" min="0" value="90">
                 </div>
                 <div class="form-group">
@@ -837,11 +883,11 @@
               <div class="settings-grid">
                 <div class="form-group">
                   <label for="providerNameInput" class="input-label">Provider / Cook Name:</label>
-                  <input type="text" id="providerNameInput" class="text-input" value="Sandhya Tiwari">
+                  <input type="text" id="providerNameInput" class="text-input" placeholder="e.g. Tiffin Center / Cook Name">
                 </div>
                 <div class="form-group">
                   <label for="providerUpiInput" class="input-label">UPI ID (VPA):</label>
-                  <input type="text" id="providerUpiInput" class="text-input" value="sandhyatiwari0205@oksbi">
+                  <input type="text" id="providerUpiInput" class="text-input" placeholder="e.g. cook@oksbi">
                 </div>
                 <div class="form-group" style="grid-column: 1 / -1;">
                   <label for="providerPhoneInput" class="input-label">WhatsApp / Mobile Number:</label>
@@ -864,13 +910,7 @@
               <div class="form-group">
                 <label for="settingsIdentitySelect" class="input-label">My Active Profile Name:</label>
                 <select id="settingsIdentitySelect" class="select-dropdown w-full">
-                  <option value="Anjan">Anjan</option>
-                  <option value="Saurabh">Saurabh</option>
-                  <option value="Alok">Alok</option>
-                  <option value="Rohit">Rohit</option>
-                  <option value="Salman">Salman</option>
-                  <option value="Chetan">Chetan</option>
-                  <option value="Hitesh">Hitesh</option>
+                  <!-- Populated dynamically via JS -->
                 </select>
               </div>
 
@@ -968,15 +1008,109 @@
 
 
     <!-- ========================================== -->
-    <!-- MODAL 2: ONBOARDING WALKTHROUGH & WELCOME  -->
+    <!-- MODAL 2: ROOM ACCESS GATE & LOGIN          -->
     <!-- ========================================== -->
-    <div id="onboardingModal" class="modal-backdrop">
+    <div id="roomAccessModal" class="modal-backdrop">
+      <div class="modal-box modal-md gate-modal-box">
+        <div class="modal-header gate-header">
+          <div class="gate-brand">
+            <span class="gate-logo-badge">🍱</span>
+            <div>
+              <h3 class="modal-title" style="font-size:1.25rem;">Tiffin Tracker</h3>
+              <p class="card-desc" style="margin:2px 0 0 0;">Shared mess & tiffin expense ledger for flatmates</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-body" style="padding:16px 20px;">
+          <!-- Gate Tab Switcher -->
+          <div class="gate-tab-switcher" id="gateTabSwitcher">
+            <button type="button" class="gate-tab-btn active" id="tabCreateRoomBtn">Create Group (Admin)</button>
+            <button type="button" class="gate-tab-btn" id="tabJoinRoomBtn">Join Group</button>
+          </div>
+
+          <!-- PENDING STATE CARD (Visible when user has requested to join) -->
+          <div id="gatePendingCard" class="gate-pending-card" style="display:none;">
+            <div class="gate-pending-icon-wrap">
+              <span class="pending-pulsar"></span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28" style="color:var(--amber);"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <h4 style="font-size:1.1rem; color:var(--text-primary); margin:8px 0 4px;">Join Request Submitted!</h4>
+            <p style="font-size:0.88rem; color:var(--text-secondary); line-height:1.4; margin-bottom:14px;">
+              Waiting for group Admin to approve your request. Please ask your flat admin to accept you in their Tiffin Tracker app.
+            </p>
+            <div class="gate-pending-meta" id="gatePendingMetaBox">
+              <!-- Room Name & Admin info rendered via JS -->
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px; margin-top:16px;">
+              <button type="button" id="gateCheckApprovalBtn" class="primary-btn glow-btn w-full">
+                <span>Check Approval Status</span>
+              </button>
+              <button type="button" id="gateCancelJoinBtn" class="pill-btn-ghost btn-xs text-muted w-full">
+                <span>Switch Room / Start Over</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- TAB 1 CONTENT: CREATE ROOM (ADMIN) -->
+          <form id="createRoomForm" class="gate-form active">
+            <div class="form-group mb-2">
+              <label for="gateAdminName" class="input-label">Your Name (Admin):</label>
+              <input type="text" id="gateAdminName" class="text-input w-full" placeholder="e.g. Anjan" required>
+            </div>
+            <div class="form-group mb-2">
+              <label for="gateAdminPhone" class="input-label">Mobile Number:</label>
+              <input type="tel" id="gateAdminPhone" class="text-input w-full" placeholder="e.g. 9876543210" maxlength="15" required>
+            </div>
+            <div class="form-group mb-2">
+              <label for="gateGroupName" class="input-label">Flat / Group Name:</label>
+              <input type="text" id="gateGroupName" class="text-input w-full" placeholder="e.g. Flat 402 or Green Valley PG" required>
+            </div>
+            <div class="form-group mb-3">
+              <label for="gateAdminPin" class="input-label">Set Admin Security PIN / Password:</label>
+              <input type="password" id="gateAdminPin" class="text-input w-full" placeholder="e.g. 4-digit PIN or Flower" required>
+              <span class="helper-text">You'll need this PIN to reset ledgers and manage members.</span>
+            </div>
+            <button type="submit" id="gateCreateSubmitBtn" class="primary-btn glow-btn w-full" style="padding:13px; font-weight:700;">
+              <span>Create Group & Open Ledger 🚀</span>
+            </button>
+          </form>
+
+          <!-- TAB 2 CONTENT: JOIN ROOM (ROOMMATE) -->
+          <form id="joinRoomForm" class="gate-form" style="display:none;">
+            <div class="form-group mb-2">
+              <label for="gateUserName" class="input-label">Your Name:</label>
+              <input type="text" id="gateUserName" class="text-input w-full" placeholder="e.g. Saurabh" required>
+            </div>
+            <div class="form-group mb-2">
+              <label for="gateUserPhone" class="input-label">Your Mobile Number:</label>
+              <input type="tel" id="gateUserPhone" class="text-input w-full" placeholder="e.g. 9876500000" maxlength="15" required>
+            </div>
+            <div class="form-group mb-3">
+              <label for="gateRoomCode" class="input-label">Room Code:</label>
+              <input type="text" id="gateRoomCode" class="text-input w-full" placeholder="e.g. TF-402" style="text-transform:uppercase; font-family:var(--font-mono); font-weight:700;" maxlength="10" required>
+              <span class="helper-text">Ask your flat admin for the 6-character room code or invite link.</span>
+            </div>
+            <button type="submit" id="gateJoinSubmitBtn" class="primary-btn glow-btn w-full" style="padding:13px; font-weight:700;">
+              <span>Request to Join Group 📨</span>
+            </button>
+          </form>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 2B: APP WALKTHROUGH & FEATURE GUIDE  -->
+    <!-- ========================================== -->
+    <div id="walkthroughModal" class="modal-backdrop">
       <div class="modal-box">
         <div class="modal-header">
           <div class="card-title-wrap">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="color:var(--emerald)"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-            <h3 class="modal-title">Welcome to Tiffin Tracker</h3>
+            <h3 class="modal-title">Tiffin Tracker Guide</h3>
           </div>
+          <button class="modal-close-btn" id="closeWalkthroughBtn">✕</button>
         </div>
         <div class="modal-body">
           <div class="walkthrough-bullets">
@@ -1002,38 +1136,36 @@
               </div>
             </div>
           </div>
-
-          <div class="form-group mt-4">
-            <label for="onboardingNameSelect" class="input-label">Select your name to begin:</label>
-            <select id="onboardingNameSelect" class="select-dropdown w-full">
-              <option value="Anjan">Anjan</option>
-              <option value="Saurabh">Saurabh</option>
-              <option value="Alok">Alok</option>
-              <option value="Rohit">Rohit</option>
-              <option value="Salman">Salman</option>
-              <option value="Chetan">Chetan</option>
-              <option value="Hitesh">Hitesh</option>
-            </select>
-          </div>
-
-          <div class="form-group mt-3" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.22); border-radius:12px;">
-            <div style="display:flex; align-items:center; gap:10px;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="color:var(--amber); flex-shrink:0;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              <div>
-                <strong style="display:block; font-size:0.95rem; color:var(--text-primary); font-weight:600;">Phone Bar Alerts</strong>
-                <span style="display:block; font-size:0.82rem; color:var(--text-secondary); line-height:1.3;">Alert when poll starts & 5-min reminders</span>
-              </div>
-            </div>
-            <label class="custom-toggle" style="margin:0; flex-shrink:0;">
-              <input type="checkbox" id="onboardingNotifToggle" checked>
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
         </div>
         <div class="modal-footer">
-          <button id="finishOnboardingBtn" class="primary-btn glow-btn w-full">
-            <span>Get Started</span>
+          <button id="finishWalkthroughBtn" class="primary-btn glow-btn w-full">
+            <span>Got it!</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 2C: PRINTABLE INVOICE / PDF PREVIEW  -->
+    <!-- ========================================== -->
+    <div id="invoiceModal" class="modal-backdrop">
+      <div class="modal-box modal-lg invoice-modal-box">
+        <div class="modal-header no-print">
+          <div class="card-title-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="color:var(--emerald);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <h3 class="modal-title">Monthly Tiffin Invoice</h3>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button id="invoicePrintActionBtn" class="primary-btn btn-sm glow-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              <span>Print / Save PDF</span>
+            </button>
+            <button class="modal-close-btn" id="closeInvoiceModalBtn">✕</button>
+          </div>
+        </div>
+        
+        <div class="modal-body invoice-printable-area" id="invoicePrintableArea">
+          <!-- Populated dynamically via JS -->
         </div>
       </div>
     </div>
@@ -1166,8 +1298,8 @@
   </div>
 
   <!-- QR Generator Script -->
-  <script src="qr.js?v=4.6"></script>
+  <script src="qr.js?v=4.7"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=4.6"></script>
+  <script src="app.js?v=4.7"></script>
 </body>
 </html>
