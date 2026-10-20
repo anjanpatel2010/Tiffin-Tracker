@@ -797,10 +797,16 @@
                     <span class="room-code-tag" id="settingsRoomCodeTag">#ROOM</span>
                   </div>
                 </div>
-                <button id="copyInviteLinkBtn" class="primary-btn btn-xs glow-btn">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                  <span>Copy Invite Link</span>
-                </button>
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                  <button id="copyInviteLinkBtn" class="primary-btn btn-xs glow-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    <span>Invite Link</span>
+                  </button>
+                  <button id="copyDeviceSyncBtn" class="secondary-btn btn-xs" title="1-Click login link for your other phone or laptop">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    <span>Sync to Device</span>
+                  </button>
+                </div>
               </div>
 
               <!-- Pending Join Requests (Visible to Admin) -->
@@ -1010,93 +1016,87 @@
     <!-- ========================================== -->
     <!-- MODAL 2: ROOM ACCESS GATE & LOGIN          -->
     <!-- ========================================== -->
-    <div id="roomAccessModal" class="modal-backdrop">
-      <div class="modal-box modal-md gate-modal-box">
-        <div class="modal-header gate-header">
-          <div class="gate-brand">
-            <span class="gate-logo-badge">🍱</span>
-            <div>
-              <h3 class="modal-title" style="font-size:1.25rem;">Tiffin Tracker</h3>
-              <p class="card-desc" style="margin:2px 0 0 0;">Shared mess & tiffin expense ledger for flatmates</p>
-            </div>
+    <div id="roomAccessModal" class="modal-backdrop gate-backdrop">
+      <div class="gate-modal-card">
+        <div class="gate-brand-header">
+          <div class="gate-icon">🍱</div>
+          <h2 class="gate-title">Tiffin Tracker</h2>
+          <p class="gate-subtitle">Shared mess &amp; tiffin expense tracker</p>
+        </div>
+
+        <!-- Gate Tab Switcher -->
+        <div class="gate-tab-switcher" id="gateTabSwitcher">
+          <button type="button" class="gate-tab-btn active" id="tabCreateRoomBtn">Create Flat</button>
+          <button type="button" class="gate-tab-btn" id="tabJoinRoomBtn">Enter / Join Room</button>
+        </div>
+
+        <!-- PENDING STATE CARD (Visible when user has requested to join) -->
+        <div id="gatePendingCard" class="gate-pending-card" style="display:none;">
+          <div class="gate-pending-icon-wrap">
+            <span class="pending-pulsar"></span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="26" height="26" style="color:var(--amber);"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <h4 style="font-size:1.05rem; color:var(--text-primary); margin:6px 0 4px;">Request Submitted</h4>
+          <p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4; margin-bottom:12px;">
+            Waiting for flat admin approval.
+          </p>
+          <div class="gate-pending-meta" id="gatePendingMetaBox"></div>
+          <div style="display:flex; flex-direction:column; gap:8px; margin-top:14px;">
+            <button type="button" id="gateCheckApprovalBtn" class="primary-btn glow-btn w-full btn-sm">
+              <span>Check Status</span>
+            </button>
+            <button type="button" id="gateCancelJoinBtn" class="pill-btn-ghost btn-xs text-muted w-full">
+              <span>Cancel</span>
+            </button>
           </div>
         </div>
 
-        <div class="modal-body" style="padding:16px 20px;">
-          <!-- Gate Tab Switcher -->
-          <div class="gate-tab-switcher" id="gateTabSwitcher">
-            <button type="button" class="gate-tab-btn active" id="tabCreateRoomBtn">Create Group (Admin)</button>
-            <button type="button" class="gate-tab-btn" id="tabJoinRoomBtn">Join Group</button>
+        <!-- TAB 1 CONTENT: CREATE ROOM (ADMIN) -->
+        <form id="createRoomForm" class="gate-form active">
+          <div class="form-group mb-2">
+            <label for="gateAdminName" class="input-label">Your Name</label>
+            <input type="text" id="gateAdminName" class="text-input w-full" placeholder="Your Name" autocomplete="name" required>
           </div>
-
-          <!-- PENDING STATE CARD (Visible when user has requested to join) -->
-          <div id="gatePendingCard" class="gate-pending-card" style="display:none;">
-            <div class="gate-pending-icon-wrap">
-              <span class="pending-pulsar"></span>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28" style="color:var(--amber);"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            </div>
-            <h4 style="font-size:1.1rem; color:var(--text-primary); margin:8px 0 4px;">Join Request Submitted!</h4>
-            <p style="font-size:0.88rem; color:var(--text-secondary); line-height:1.4; margin-bottom:14px;">
-              Waiting for group Admin to approve your request. Please ask your flat admin to accept you in their Tiffin Tracker app.
-            </p>
-            <div class="gate-pending-meta" id="gatePendingMetaBox">
-              <!-- Room Name & Admin info rendered via JS -->
-            </div>
-            <div style="display:flex; flex-direction:column; gap:8px; margin-top:16px;">
-              <button type="button" id="gateCheckApprovalBtn" class="primary-btn glow-btn w-full">
-                <span>Check Approval Status</span>
-              </button>
-              <button type="button" id="gateCancelJoinBtn" class="pill-btn-ghost btn-xs text-muted w-full">
-                <span>Switch Room / Start Over</span>
-              </button>
-            </div>
+          <div class="form-group mb-2">
+            <label for="gateAdminPhone" class="input-label">Mobile Number</label>
+            <input type="tel" id="gateAdminPhone" class="text-input w-full" placeholder="Mobile Number" autocomplete="tel" maxlength="15" required>
           </div>
+          <div class="form-group mb-2">
+            <label for="gateGroupName" class="input-label">Flat / Group Name</label>
+            <input type="text" id="gateGroupName" class="text-input w-full" placeholder="Flat Name" required>
+          </div>
+          <div class="form-group mb-3">
+            <label for="gateAdminPin" class="input-label">Admin Security PIN</label>
+            <input type="password" id="gateAdminPin" class="text-input w-full" placeholder="Security PIN" autocomplete="new-password" required>
+          </div>
+          <button type="submit" id="gateCreateSubmitBtn" class="primary-btn glow-btn w-full" style="padding:12px; font-weight:700;">
+            <span>Create Flat</span>
+          </button>
+        </form>
 
-          <!-- TAB 1 CONTENT: CREATE ROOM (ADMIN) -->
-          <form id="createRoomForm" class="gate-form active">
-            <div class="form-group mb-2">
-              <label for="gateAdminName" class="input-label">Your Name (Admin):</label>
-              <input type="text" id="gateAdminName" class="text-input w-full" placeholder="e.g. Anjan" required>
-            </div>
-            <div class="form-group mb-2">
-              <label for="gateAdminPhone" class="input-label">Mobile Number:</label>
-              <input type="tel" id="gateAdminPhone" class="text-input w-full" placeholder="e.g. 9876543210" maxlength="15" required>
-            </div>
-            <div class="form-group mb-2">
-              <label for="gateGroupName" class="input-label">Flat / Group Name:</label>
-              <input type="text" id="gateGroupName" class="text-input w-full" placeholder="e.g. Flat 402 or Green Valley PG" required>
-            </div>
-            <div class="form-group mb-3">
-              <label for="gateAdminPin" class="input-label">Set Admin Security PIN / Password:</label>
-              <input type="password" id="gateAdminPin" class="text-input w-full" placeholder="e.g. 4-digit PIN or Flower" required>
-              <span class="helper-text">You'll need this PIN to reset ledgers and manage members.</span>
-            </div>
-            <button type="submit" id="gateCreateSubmitBtn" class="primary-btn glow-btn w-full" style="padding:13px; font-weight:700;">
-              <span>Create Group & Open Ledger 🚀</span>
-            </button>
-          </form>
+        <!-- TAB 2 CONTENT: ENTER / JOIN ROOM (FOR BOTH ADMIN ON 2ND DEVICE & FLATMATES) -->
+        <form id="joinRoomForm" class="gate-form" style="display:none;">
+          <div class="form-group mb-2">
+            <label for="gateRoomCode" class="input-label">Room Code</label>
+            <input type="text" id="gateRoomCode" class="text-input w-full" placeholder="Room Code" style="text-transform:uppercase; font-family:var(--font-mono); font-weight:700;" maxlength="10" required>
+          </div>
+          <div class="form-group mb-2">
+            <label for="gateUserPhone" class="input-label">Mobile Number</label>
+            <input type="tel" id="gateUserPhone" class="text-input w-full" placeholder="Mobile Number" autocomplete="tel" maxlength="15" required>
+          </div>
+          <div class="form-group mb-2">
+            <label for="gateLoginPin" class="input-label">Security PIN (If Admin)</label>
+            <input type="password" id="gateLoginPin" class="text-input w-full" placeholder="Admin PIN (Optional for flatmates)" autocomplete="current-password">
+          </div>
+          <div class="form-group mb-3">
+            <label for="gateUserName" class="input-label">Your Name (If new member)</label>
+            <input type="text" id="gateUserName" class="text-input w-full" placeholder="Your Name" autocomplete="name">
+          </div>
+          <button type="submit" id="gateJoinSubmitBtn" class="primary-btn glow-btn w-full" style="padding:12px; font-weight:700;">
+            <span>Enter Room</span>
+          </button>
+        </form>
 
-          <!-- TAB 2 CONTENT: JOIN ROOM (ROOMMATE) -->
-          <form id="joinRoomForm" class="gate-form" style="display:none;">
-            <div class="form-group mb-2">
-              <label for="gateUserName" class="input-label">Your Name:</label>
-              <input type="text" id="gateUserName" class="text-input w-full" placeholder="e.g. Saurabh" required>
-            </div>
-            <div class="form-group mb-2">
-              <label for="gateUserPhone" class="input-label">Your Mobile Number:</label>
-              <input type="tel" id="gateUserPhone" class="text-input w-full" placeholder="e.g. 9876500000" maxlength="15" required>
-            </div>
-            <div class="form-group mb-3">
-              <label for="gateRoomCode" class="input-label">Room Code:</label>
-              <input type="text" id="gateRoomCode" class="text-input w-full" placeholder="e.g. TF-402" style="text-transform:uppercase; font-family:var(--font-mono); font-weight:700;" maxlength="10" required>
-              <span class="helper-text">Ask your flat admin for the 6-character room code or invite link.</span>
-            </div>
-            <button type="submit" id="gateJoinSubmitBtn" class="primary-btn glow-btn w-full" style="padding:13px; font-weight:700;">
-              <span>Request to Join Group 📨</span>
-            </button>
-          </form>
-
-        </div>
       </div>
     </div>
 

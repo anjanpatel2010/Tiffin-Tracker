@@ -1,22 +1,17 @@
 # 🍱 Tiffin Tracker
 
-> **The zero-overhead, multi-tenant mess & tiffin expense tracker built for roommates, bachelors, and flat groups.**  
-> 1-tap meal logging, master spreadsheet, WhatsApp menu voting polls, Amul milk tracking, printable invoices, CSV exports, and dynamic UPI settlements — with **₹0 server costs**.
+> **A shared mess & tiffin expense tracker built for roommates and flat groups.**
 
 [![Live App](https://img.shields.io/badge/Live_App-tiffintracker--xi.vercel.app-emerald?style=for-the-badge&logo=vercel)](https://tiffintracker-xi.vercel.app)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PWA Ready](https://img.shields.io/badge/PWA-Installable-purple.svg)](manifest.json)
-[![Zero Infra](https://img.shields.io/badge/Infra-%E2%82%B90%2Fmonth-orange.svg)](#architecture)
 [![Pure Vanilla JS](https://img.shields.io/badge/Stack-Vanilla_JS_%2B_CSS-yellow.svg)](#technology-stack)
 
 ---
 
 ## 🌐 Live Web App
 
-Launch the application directly in any browser:  
 👉 **[https://tiffintracker-xi.vercel.app](https://tiffintracker-xi.vercel.app)**
-
-*(Note: Clean routing is configured via `vercel.json` with `cleanUrls: true`, so you never need to append `/index.html` to the URL).*
 
 ---
 

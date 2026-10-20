@@ -949,6 +949,39 @@
             }
           }
         }
+      } else if (action.type === 'request_room_sync') {
+        const myRoomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode;
+        if (myRoomCode && myRoomCode.toUpperCase() === (action.roomCode || '').toUpperCase()) {
+          if (RoomManager.session?.status === 'approved' && RoomManager.activeRoom) {
+            SyncEngine.broadcast({
+              type: 'room_meta_sync',
+              roomCode: myRoomCode,
+              roomData: RoomManager.activeRoom,
+              state: appState
+            });
+          }
+        }
+      } else if (action.type === 'room_meta_sync') {
+        const myRoomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode;
+        if (myRoomCode && myRoomCode.toUpperCase() === (action.roomCode || '').toUpperCase()) {
+          if (action.roomData) {
+            const current = RoomManager.activeRoom || {};
+            RoomManager.activeRoom = { ...current, ...action.roomData };
+            RoomManager.saveActiveRoom();
+            if (action.roomData.members && action.roomData.members.length > 0) {
+              ROOMMATES = action.roomData.members;
+            }
+            if (action.roomData.adminPin) {
+              CONFIG.adminPassword = action.roomData.adminPin;
+            }
+            RoomManager.updateHeaderRoomUI();
+            RoomManager.renderSettingsMembersTab();
+          }
+          if (action.state && action.state.days) {
+            appState = action.state;
+            modified = true;
+          }
+        }
       }
 
       if (modified) {
@@ -3484,9 +3517,23 @@
         }
       } catch (e) {}
 
-      // 2. Check room code in URL query or hash
+      // 2. Check room code and credentials in URL query or hash
       const urlParams = new URLSearchParams(window.location.search);
       const urlRoom = urlParams.get('room') || urlParams.get('join') || (window.location.hash.startsWith('#room=') ? window.location.hash.slice(6) : null);
+      const urlPin = urlParams.get('pin');
+      const urlPhone = urlParams.get('phone');
+      const urlName = urlParams.get('name');
+
+      if (urlRoom && urlPin) {
+        // Direct multi-device 1-click sync link (e.g. mobile to PC)
+        const cleanRoom = urlRoom.toUpperCase().trim();
+        this.enterRoom(cleanRoom, urlPhone || '', urlPin, urlName || 'Admin', true);
+        try {
+          window.history.replaceState(null, '', window.location.pathname);
+        } catch (e) {}
+        this.updateHeaderRoomUI();
+        return;
+      }
 
       if (urlRoom) {
         const codeInput = document.getElementById('gateRoomCode');
@@ -3496,6 +3543,9 @@
       // 3. Load active room data or show Gate
       if (this.session && this.session.roomCode) {
         this.loadRoom(this.session.roomCode);
+        if (this.session.status === 'approved') {
+          this.hideGateModal();
+        }
       } else if (urlRoom) {
         this.showGateModal('join');
       } else {
@@ -3637,6 +3687,119 @@
       renderAll();
 
       showToast(`Group "${cleanGroup}" created! Room Code: ${roomCode}`);
+    },
+
+    enterRoom(roomCode, phone, pin, name, isDirectSync = false) {
+      const cleanCode = (roomCode || '').toUpperCase().trim();
+      const cleanPhone = (phone || '').trim();
+      const cleanPin = (pin || '').trim();
+      const cleanName = (name || '').trim();
+
+      if (!cleanCode) {
+        alert('Please enter a valid Room Code.');
+        return false;
+      }
+
+      let targetRoom = null;
+      try {
+        const raw = localStorage.getItem(`tiffin_room_${cleanCode}`);
+        if (raw) targetRoom = JSON.parse(raw);
+      } catch (e) {}
+
+      // Case 1: Entering with Admin Security PIN (Multi-device Admin login, e.g. Phone to PC)
+      if (cleanPin) {
+        if (targetRoom && targetRoom.adminPin && targetRoom.adminPin !== cleanPin) {
+          alert('Incorrect Admin Security PIN for this room.');
+          return false;
+        }
+
+        const adminName = cleanName || targetRoom?.adminName || 'Admin';
+        const adminPhone = cleanPhone || targetRoom?.adminPhone || '';
+
+        this.session = {
+          name: adminName,
+          phone: adminPhone,
+          role: 'admin',
+          groupName: targetRoom?.name || 'My Flat',
+          roomCode: cleanCode,
+          status: 'approved'
+        };
+        localStorage.setItem('tiffin_user_session', JSON.stringify(this.session));
+
+        CONFIG.adminPassword = cleanPin;
+        if (!targetRoom) {
+          targetRoom = {
+            code: cleanCode,
+            name: 'My Flat',
+            adminName: adminName,
+            adminPhone: adminPhone,
+            adminPin: cleanPin,
+            createdAt: new Date().toISOString(),
+            members: [{ id: this.sanitizeId(adminName), name: adminName, phone: adminPhone, role: 'admin', avatarColor: '#00d26a' }],
+            pendingRequests: []
+          };
+        } else {
+          targetRoom.adminPin = cleanPin;
+        }
+
+        this.activeRoom = targetRoom;
+        this.saveActiveRoom();
+        this.loadRoom(cleanCode);
+        this.hideGateModal();
+
+        persistAndBroadcast({
+          type: 'request_room_sync',
+          roomCode: cleanCode,
+          requesterName: adminName,
+          requesterPhone: adminPhone
+        });
+
+        showToast(isDirectSync ? `Synced and connected to room #${cleanCode}!` : `Logged into room #${cleanCode} as Admin!`);
+        renderAll();
+        return true;
+      }
+
+      // Case 2: Roommate entering with mobile / name
+      if (targetRoom && targetRoom.members && targetRoom.members.length > 0) {
+        const matchedMember = targetRoom.members.find(m =>
+          (cleanPhone && m.phone === cleanPhone) ||
+          (cleanName && m.name.toLowerCase() === cleanName.toLowerCase())
+        );
+
+        if (matchedMember) {
+          this.session = {
+            name: matchedMember.name,
+            phone: matchedMember.phone || cleanPhone,
+            role: matchedMember.role || 'member',
+            groupName: targetRoom.name || 'My Flat',
+            roomCode: cleanCode,
+            status: 'approved'
+          };
+          localStorage.setItem('tiffin_user_session', JSON.stringify(this.session));
+          this.loadRoom(cleanCode);
+          this.hideGateModal();
+
+          persistAndBroadcast({
+            type: 'request_room_sync',
+            roomCode: cleanCode,
+            requesterName: matchedMember.name,
+            requesterPhone: matchedMember.phone
+          });
+
+          showToast(`Welcome back, ${matchedMember.name}!`);
+          renderAll();
+          return true;
+        }
+      }
+
+      // Case 3: Flatmate request to join
+      if (!cleanName) {
+        alert('Please enter your name to request joining this flat, or enter Admin PIN if you manage this room.');
+        return false;
+      }
+
+      this.requestJoin(cleanName, cleanPhone, cleanCode);
+      return true;
     },
 
     requestJoin(name, phone, roomCode) {
@@ -3977,6 +4140,7 @@
       const pendingCard = document.getElementById('gatePendingCard');
 
       if (!modal) return;
+      document.body.classList.add('gate-active');
       modal.classList.add('active');
 
       if (pendingCard) pendingCard.style.display = 'none';
@@ -3997,6 +4161,7 @@
     hideGateModal() {
       const modal = document.getElementById('roomAccessModal');
       if (modal) modal.classList.remove('active');
+      document.body.classList.remove('gate-active');
     },
 
     showPendingGateState() {
@@ -4007,6 +4172,7 @@
       const metaBox = document.getElementById('gatePendingMetaBox');
 
       if (!modal) return;
+      document.body.classList.add('gate-active');
       modal.classList.add('active');
 
       if (createForm) createForm.style.display = 'none';
@@ -4210,15 +4376,16 @@
       joinForm.addEventListener('submit', (e) => {
         e.preventDefault();
         triggerHaptic();
-        const name = document.getElementById('gateUserName')?.value || '';
-        const phone = document.getElementById('gateUserPhone')?.value || '';
         const code = document.getElementById('gateRoomCode')?.value || '';
+        const phone = document.getElementById('gateUserPhone')?.value || '';
+        const pin = document.getElementById('gateLoginPin')?.value || '';
+        const name = document.getElementById('gateUserName')?.value || '';
 
-        if (!name.trim() || !code.trim()) {
-          alert('Please enter your name and the Room Code.');
+        if (!code.trim()) {
+          alert('Please enter the Room Code.');
           return;
         }
-        RoomManager.requestJoin(name, phone, code);
+        RoomManager.enterRoom(code, phone, pin, name);
       });
     }
 
@@ -4244,6 +4411,21 @@
         const inviteUrl = `${baseUrl}?room=${roomCode}`;
         copyToClipboard(inviteUrl);
         showToast(`Copied room invite link: #${roomCode}`);
+      });
+    }
+
+    const copyDeviceSyncBtn = document.getElementById('copyDeviceSyncBtn');
+    if (copyDeviceSyncBtn) {
+      copyDeviceSyncBtn.addEventListener('click', () => {
+        triggerHaptic();
+        const roomCode = RoomManager.activeRoom?.code || SyncEngine.roomCode || 'ROOM';
+        const pin = RoomManager.activeRoom?.adminPin || CONFIG.adminPassword || '';
+        const phone = RoomManager.session?.phone || RoomManager.activeRoom?.adminPhone || '';
+        const name = RoomManager.session?.name || RoomManager.activeRoom?.adminName || 'Admin';
+        const baseUrl = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '');
+        const syncUrl = `${baseUrl}?room=${encodeURIComponent(roomCode)}&pin=${encodeURIComponent(pin)}&phone=${encodeURIComponent(phone)}&name=${encodeURIComponent(name)}`;
+        copyToClipboard(syncUrl);
+        showToast(`Copied device sync link! Open on PC or mobile to access the same profile.`);
       });
     }
 

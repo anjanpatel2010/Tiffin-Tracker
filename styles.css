@@ -3429,33 +3429,71 @@ body {
 }
 
 /* =========================================================
-   ROOM ACCESS GATE MODAL
+   ROOM ACCESS GATE MODAL & ISOLATED LOGIN VIEW
    ========================================================= */
-.gate-modal-box {
-  max-width: 480px;
-  width: 92%;
-  border-radius: 20px;
-  background: #0b1118;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+body.gate-active .app-header,
+body.gate-active .desktop-nav,
+body.gate-active .nav-bar,
+body.gate-active .main-content,
+body.gate-active .mobile-nav-bar,
+body.gate-active .mobile-bottom-nav {
+  display: none !important;
 }
-.gate-header {
-  padding: 20px 22px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-.gate-brand {
-  display: flex;
+
+.modal-backdrop.gate-backdrop {
+  display: none;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1000000 !important;
+  background: #05080c !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   align-items: center;
-  gap: 14px;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
 }
-.gate-logo-badge {
+
+.modal-backdrop.gate-backdrop.active {
+  display: flex !important;
+}
+
+.gate-modal-card {
+  width: 100%;
+  max-width: 400px;
+  background: #091019;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 18px;
+  padding: 24px 20px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 210, 106, 0.15);
+  animation: modalScaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gate-brand-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.gate-icon {
   font-size: 2.2rem;
   line-height: 1;
-  background: rgba(0, 210, 106, 0.12);
-  border: 1px solid rgba(0, 210, 106, 0.3);
-  padding: 10px;
-  border-radius: 14px;
+  margin-bottom: 8px;
 }
+
+.gate-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.gate-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 4px 0 0 0;
+}
+
 .gate-tab-switcher {
   display: flex;
   background: rgba(255, 255, 255, 0.04);
@@ -3465,6 +3503,7 @@ body {
   margin-bottom: 18px;
   gap: 4px;
 }
+
 .gate-tab-btn {
   flex: 1;
   padding: 9px 12px;
@@ -3477,27 +3516,32 @@ body {
   cursor: pointer;
   transition: all 0.2s ease;
 }
+
 .gate-tab-btn.active {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
   font-weight: 700;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
+
 .gate-form {
   display: none;
 }
+
 .gate-form.active {
   display: block;
 }
+
 .gate-pending-card {
   text-align: center;
   padding: 16px 8px;
 }
+
 .gate-pending-icon-wrap {
   position: relative;
-  width: 56px;
-  height: 56px;
-  margin: 0 auto 12px;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 10px;
   border-radius: 50%;
   background: rgba(245, 158, 11, 0.12);
   border: 1px solid rgba(245, 158, 11, 0.3);
@@ -3505,8 +3549,9 @@ body {
   align-items: center;
   justify-content: center;
 }
+
 .gate-pending-meta {
-  padding: 12px;
+  padding: 10px 12px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
