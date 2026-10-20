@@ -752,7 +752,7 @@
               <span class="settings-sidebar-badge" id="sidebarPendingBadge" style="display:none;">0</span>
             </button>
             <button class="sub-tab" data-subtab="pricing">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M6 3h12M6 8h12M6 13l8.5 8M6 13h3a4 4 0 0 0 0-8"/></svg>
               <span>Pricing Rates</span>
             </button>
             <button class="sub-tab" data-subtab="provider">
@@ -790,20 +790,22 @@
 
               <!-- Room Info Card -->
               <div class="settings-room-card">
-                <div class="room-card-info">
-                  <span class="helper-text">Active Group / Room</span>
-                  <div class="room-title-row">
-                    <strong id="settingsRoomNameDisplay" style="font-size:1.05rem; color:var(--text-primary);">My Flat</strong>
+                <div class="room-card-header">
+                  <div class="room-title-block">
+                    <span class="room-badge-label">Active Flat</span>
+                    <h3 class="room-name-heading" id="settingsRoomNameDisplay">My Flat</h3>
+                  </div>
+                  <div class="room-code-badge-wrap">
                     <span class="room-code-tag" id="settingsRoomCodeTag">#ROOM</span>
                   </div>
                 </div>
-                <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                  <button id="copyInviteLinkBtn" class="primary-btn btn-xs glow-btn">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                    <span>Invite Link</span>
+                <div class="room-card-actions">
+                  <button id="copyInviteLinkBtn" class="room-action-btn btn-invite" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    <span>Copy Invite Link</span>
                   </button>
-                  <button id="copyDeviceSyncBtn" class="secondary-btn btn-xs" title="1-Click login link for your other phone or laptop">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                  <button id="copyDeviceSyncBtn" class="room-action-btn btn-sync" type="button" title="1-Click login link for your other phone or laptop">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                     <span>Sync to Device</span>
                   </button>
                 </div>
@@ -1262,25 +1264,25 @@
 
 
     <!-- ========================================== -->
-    <!-- MODAL 7: NOTIFICATION PERMISSION PROMPT   -->
+    <!-- MODAL 7: STARTUP WELCOME & NOTIFICATION ACCESS -->
     <!-- ========================================== -->
     <div id="notificationPromptModal" class="modal-backdrop">
       <div class="modal-box modal-sm" style="text-align:center;">
         <div class="modal-header" style="justify-content:center; padding-bottom:4px; border-bottom:none;">
-          <div style="width:52px; height:52px; border-radius:50%; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.28); display:flex; align-items:center; justify-content:center; color:var(--amber); margin:4px auto 6px;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="26" height="26"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <div style="width:58px; height:58px; border-radius:50%; background:linear-gradient(135deg, rgba(0,210,106,0.18), rgba(6,182,212,0.18)); border:1.5px solid rgba(0,210,106,0.35); display:flex; align-items:center; justify-content:center; font-size:1.8rem; margin:6px auto 8px; box-shadow:0 8px 24px rgba(0,210,106,0.2);">
+            🔔
           </div>
         </div>
         <div class="modal-body" style="padding-top:0;">
-          <h3 class="modal-title" style="font-size:1.2rem; margin-bottom:8px; font-weight:700;">Allow Phone Alerts</h3>
-          <p style="font-size:0.95rem; color:var(--text-secondary); line-height:1.5; margin-bottom:20px;">
-            Get notified in your phone notification bar when a flatmate schedules a meal poll, with automatic reminders every 5 minutes until you vote.
+          <h3 class="modal-title" id="welcomeModalTitle" style="font-size:1.25rem; margin-bottom:8px; font-weight:800; color:#fff;">Welcome to Tiffin Tracker! 🎉</h3>
+          <p id="welcomeModalSub" style="font-size:0.88rem; color:var(--text-secondary); line-height:1.5; margin-bottom:20px;">
+            Turn on notifications so you get alerted when flatmates schedule meal polls or update dinner menus.
           </p>
-          <button id="allowStartNotificationBtn" class="primary-btn glow-btn w-full" style="padding:13px; font-weight:600; font-size:1rem; margin-bottom:10px;">
-            <span>Allow Notifications</span>
+          <button id="allowStartNotificationBtn" class="primary-btn glow-btn w-full" style="padding:13px; font-weight:700; font-size:0.95rem; margin-bottom:10px;">
+            <span>Allow Notifications 🔔</span>
           </button>
-          <button id="dismissStartNotificationBtn" class="secondary-btn w-full btn-sm" style="color:var(--text-muted); padding:10px;">
-            <span>Maybe Later</span>
+          <button id="dismissStartNotificationBtn" class="pill-btn-ghost btn-sm text-muted w-full" style="padding:8px;">
+            <span>Continue to Dashboard</span>
           </button>
         </div>
       </div>

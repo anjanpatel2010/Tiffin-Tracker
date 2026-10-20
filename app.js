@@ -1110,6 +1110,46 @@
     };
   }
 
+  // --- Creative Cartoon Headshot Avatar Generator ---
+  function getCartoonAvatarSvg(nameOrId, size = 36) {
+    const seed = String(nameOrId || 'user').toLowerCase();
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      hash = (hash << 5) - hash + seed.charCodeAt(i);
+      hash |= 0;
+    }
+    const idx = Math.abs(hash) % 8;
+    const uid = Math.abs(hash).toString(36);
+
+    const avatars = [
+      // 0: Chef Chill (Toque hat, wink, rosy cheeks)
+      `<defs><linearGradient id="av0_${uid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#047857"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="url(#av0_${uid})"/><circle cx="50" cy="58" r="26" fill="#fde68a"/><path d="M30 46 C25 32, 40 22, 50 26 C60 22, 75 32, 70 46 Z" fill="#ffffff"/><rect x="32" y="44" width="36" height="8" rx="2" fill="#e2e8f0"/><path d="M38 58 Q42 54 46 58" stroke="#1e293b" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="58" cy="57" r="2.5" fill="#1e293b"/><circle cx="36" cy="63" r="4" fill="#f87171" opacity="0.6"/><circle cx="64" cy="63" r="4" fill="#f87171" opacity="0.6"/><path d="M44 64 Q50 72 56 64" stroke="#1e293b" stroke-width="2.5" fill="#f43f5e" stroke-linecap="round"/>`,
+
+      // 1: Cool Dude (Sunglasses & Pompadour)
+      `<defs><linearGradient id="av1_${uid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#06b6d4"/><stop offset="100%" stop-color="#0e7490"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="url(#av1_${uid})"/><circle cx="50" cy="56" r="26" fill="#fed7aa"/><path d="M26 48 C24 30, 48 20, 68 28 C76 34, 76 46, 74 48 C68 40, 52 38, 26 48 Z" fill="#1e293b"/><rect x="32" y="50" width="16" height="11" rx="3" fill="#0f172a"/><rect x="52" y="50" width="16" height="11" rx="3" fill="#0f172a"/><line x1="48" y1="54" x2="52" y2="54" stroke="#0f172a" stroke-width="2.5"/><line x1="34" y1="52" x2="40" y2="58" stroke="#ffffff" stroke-width="1.5" opacity="0.7"/><line x1="54" y1="52" x2="60" y2="58" stroke="#ffffff" stroke-width="1.5" opacity="0.7"/><path d="M46 68 Q56 70 58 64" stroke="#1e293b" stroke-width="2.5" fill="none" stroke-linecap="round"/>`,
+
+      // 2: Nerd Specs (Freckles & circular glasses)
+      `<defs><linearGradient id="av2_${uid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#6b21a8"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="url(#av2_${uid})"/><path d="M24 48 C22 28, 44 24, 52 24 C64 24, 76 30, 76 48 Z" fill="#f97316"/><circle cx="50" cy="57" r="25" fill="#fde68a"/><path d="M32 40 Q40 48 48 40 Q56 48 64 40" stroke="#f97316" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="39" cy="56" r="9" stroke="#1e293b" stroke-width="2.5" fill="#ffffff" opacity="0.9"/><circle cx="61" cy="56" r="9" stroke="#1e293b" stroke-width="2.5" fill="#ffffff" opacity="0.9"/><line x1="48" y1="56" x2="52" y2="56" stroke="#1e293b" stroke-width="2.5"/><circle cx="40" cy="56" r="3" fill="#1e293b"/><circle cx="62" cy="56" r="3" fill="#1e293b"/><circle cx="34" cy="68" r="1.5" fill="#ea580c"/><circle cx="66" cy="68" r="1.5" fill="#ea580c"/><path d="M43 70 Q50 77 57 70 Z" fill="#ffffff" stroke="#1e293b" stroke-width="2"/>`,
+
+      // 3: Beanie Bro (Hipster beanie & cozy beard)
+      `<defs><linearGradient id="av3_${uid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#b45309"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="url(#av3_${uid})"/><circle cx="50" cy="58" r="26" fill="#fed7aa"/><path d="M26 48 C26 26, 74 26, 74 48 Z" fill="#e11d48"/><rect x="24" y="44" width="52" height="8" rx="3" fill="#be123c"/><path d="M36 56 Q41 53 46 56" stroke="#1e293b" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M54 56 Q59 53 64 56" stroke="#1e293b" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M40 66 Q50 63 60 66 Q55 74 50 74 Q45 74 40 66 Z" fill="#451a03"/><path d="M45 76 Q50 79 55 76" stroke="#1e293b" stroke-width="2" fill="none" stroke-linecap="round"/>`,
+
+      // 4: Silly Winker (Tongue Out & Cyan Hair)
+      `<defs><linearGradient id="av4_${uid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ec4899"/><stop offset="100%" stop-color="#be185d"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="url(#av4_${uid})"/><path d="M26 44 L32 26 L42 36 L50 22 L58 36 L68 26 L74 44 Z" fill="#06b6d4"/><circle cx="50" cy="58" r="25" fill="#fde68a"/><path d="M35 56 L44 56 L37 60" stroke="#1e293b" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="61" cy="56" r="4" fill="#1e293b"/><circle cx="62" cy="54" r="1.5" fill="#ffffff"/><circle cx="34" cy="64" r="4" fill="#fb7185" opacity="0.6"/><circle cx="66" cy="64" r="4" fill="#fb7185" opacity="0.6"/><path d="M42 66 Q50 74 58 66" stroke="#1e293b" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M48 69 C48 76, 56 76, 56 69 Z" fill="#f43f5e"/>`,
+
+      // 5: Gentle Monocle (Curled Mustache & Monocle)
+      `<defs><linearGradient id="av5_${uid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#1d4ed8"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="url(#av5_${uid})"/><path d="M26 46 C26 28, 50 24, 74 36 C74 48, 70 48, 26 46 Z" fill="#1e293b"/><circle cx="50" cy="58" r="26" fill="#fed7aa"/><circle cx="60" cy="54" r="7" stroke="#fbbf24" stroke-width="2" fill="none"/><path d="M67 55 Q72 65 70 75" stroke="#fbbf24" stroke-width="1.2" fill="none"/><circle cx="39" cy="54" r="2.5" fill="#1e293b"/><circle cx="60" cy="54" r="2.5" fill="#1e293b"/><path d="M34 64 Q42 61 50 66 Q58 61 66 64 Q68 60 62 60 Q50 62 50 66 Q50 62 38 60 Q32 60 34 64 Z" fill="#0f172a"/>`,
+
+      // 6: Panda Munch (Cute Panda Head)
+      `<defs><linearGradient id="av6_${uid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#14b8a6"/><stop offset="100%" stop-color="#0f766e"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="url(#av6_${uid})"/><circle cx="28" cy="34" r="10" fill="#1e293b"/><circle cx="72" cy="34" r="10" fill="#1e293b"/><circle cx="50" cy="56" r="27" fill="#ffffff"/><ellipse cx="38" cy="52" rx="7" ry="9" fill="#1e293b" transform="rotate(-15 38 52)"/><ellipse cx="62" cy="52" rx="7" ry="9" fill="#1e293b" transform="rotate(15 62 52)"/><circle cx="39" cy="51" r="2.5" fill="#ffffff"/><circle cx="61" cy="51" r="2.5" fill="#ffffff"/><ellipse cx="50" cy="62" rx="3.5" ry="2.5" fill="#1e293b"/><path d="M46 66 Q50 69 54 66" stroke="#1e293b" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="31" cy="62" r="4" fill="#fda4af" opacity="0.7"/><circle cx="69" cy="62" r="4" fill="#fda4af" opacity="0.7"/>`,
+
+      // 7: Cat Chef (Anime Tabby with Bowtie)
+      `<defs><linearGradient id="av7_${uid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f43f5e"/><stop offset="100%" stop-color="#be123c"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="url(#av7_${uid})"/><polygon points="25,44 32,24 45,36" fill="#f97316"/><polygon points="28,40 33,28 41,36" fill="#fecdd3"/><polygon points="75,44 68,24 55,36" fill="#f97316"/><polygon points="72,40 67,28 59,36" fill="#fecdd3"/><circle cx="50" cy="56" r="26" fill="#fb923c"/><path d="M36 53 L41 49 L46 53" stroke="#ffffff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M54 53 L59 49 L64 53" stroke="#ffffff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="24" y1="58" x2="33" y2="59" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/><line x1="24" y1="63" x2="34" y2="62" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/><line x1="76" y1="58" x2="67" y2="59" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/><line x1="76" y1="63" x2="66" y2="62" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/><polygon points="48,60 52,60 50,62" fill="#be123c"/><path d="M44 64 Q47 67 50 64 Q53 67 56 64" stroke="#ffffff" stroke-width="2" fill="none" stroke-linecap="round"/><polygon points="44,78 56,78 50,82" fill="#10b981"/><polygon points="44,86 56,86 50,82" fill="#10b981"/><circle cx="50" cy="82" r="2" fill="#facc15"/>`
+    ];
+
+    return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" class="cartoon-avatar-svg" style="display:block; border-radius:50%; flex-shrink:0;">${avatars[idx]}</svg>`;
+  }
+
   // --- Rendering UI Modules ---
 
   function updateIdentityUI(name) {
@@ -1117,6 +1157,7 @@
     const settingsSelect = document.getElementById('settingsIdentitySelect');
     const onboardingSelect = document.getElementById('onboardingNameSelect');
     const myVoteLabel = document.getElementById('myVoteIdentityLabel');
+    const userAvatarDot = document.querySelector('.user-avatar-dot');
 
     const displayName = name || 'Anjan';
 
@@ -1126,6 +1167,9 @@
     if (settingsSelect) settingsSelect.value = displayName;
     if (onboardingSelect) onboardingSelect.value = displayName;
     if (myVoteLabel) myVoteLabel.textContent = displayName;
+    if (userAvatarDot) {
+      userAvatarDot.innerHTML = getCartoonAvatarSvg(displayName, 22);
+    }
   }
 
   function populateHeaderIdentityDropdown() {
@@ -1362,7 +1406,9 @@
       card.innerHTML = `
         <div class="roommate-card-header">
           <div class="roommate-info">
-            <div class="roommate-avatar" style="background:${r.avatarColor || '#00d26a'}">${initials}</div>
+            <div class="roommate-avatar" style="overflow:hidden; display:flex; align-items:center; justify-content:center; background:none;">
+              ${getCartoonAvatarSvg(r.id || r.name, 34)}
+            </div>
             <div class="roommate-name">${escapeHtml(r.name)}</div>
           </div>
           <div class="roommate-day-cost">
@@ -2018,7 +2064,7 @@
       item.innerHTML = `
         <div class="split-row-header">
           <div class="split-person-details">
-            <div class="roommate-avatar" style="width:28px; height:28px; font-size:0.75rem; background:${r.avatarColor}">${r.name.slice(0, 2)}</div>
+            <div class="roommate-avatar" style="width:30px; height:30px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:none;">${getCartoonAvatarSvg(r.id || r.name, 30)}</div>
             <strong style="font-size:0.95rem">${r.name}</strong>
           </div>
           <div class="split-amount-wrap">
@@ -2180,7 +2226,7 @@
         item.innerHTML = `
           <div class="split-row-header">
             <div class="split-person-details">
-              <div class="roommate-avatar" style="width:28px; height:28px; font-size:0.75rem; background:${r.avatarColor}">${initials}</div>
+              <div class="roommate-avatar" style="width:30px; height:30px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:none;">${getCartoonAvatarSvg(personId || r.name, 30)}</div>
               <strong style="font-size:0.95rem">${escapeHtml(r.name)}</strong>
               ${members.length > 1 ? `<button class="amul-remove-btn" data-person="${personId}" title="Remove ${escapeHtml(r.name)} from Amul Tracker" style="margin-left:8px; cursor:pointer; background:none; border:none; color:var(--text-dim); font-size:0.8rem; line-height:1; padding:2px 4px;">✕</button>` : ''}
             </div>
@@ -3545,6 +3591,7 @@
         this.loadRoom(this.session.roomCode);
         if (this.session.status === 'approved') {
           this.hideGateModal();
+          setTimeout(() => showStartupWelcomePrompt(), 600);
         }
       } else if (urlRoom) {
         this.showGateModal('join');
@@ -3687,6 +3734,7 @@
       renderAll();
 
       showToast(`Group "${cleanGroup}" created! Room Code: ${roomCode}`);
+      setTimeout(() => showStartupWelcomePrompt(), 500);
     },
 
     enterRoom(roomCode, phone, pin, name, isDirectSync = false) {
@@ -3756,6 +3804,7 @@
 
         showToast(isDirectSync ? `Synced and connected to room #${cleanCode}!` : `Logged into room #${cleanCode} as Admin!`);
         renderAll();
+        setTimeout(() => showStartupWelcomePrompt(), 500);
         return true;
       }
 
@@ -3788,6 +3837,7 @@
 
           showToast(`Welcome back, ${matchedMember.name}!`);
           renderAll();
+          setTimeout(() => showStartupWelcomePrompt(), 500);
           return true;
         }
       }
@@ -4108,8 +4158,8 @@
 
           card.innerHTML = `
             <div class="member-mgmt-info">
-              <div class="member-mini-avatar" style="background:${r.avatarColor || '#00d26a'};">
-                ${(r.name || 'RM').slice(0, 2).toUpperCase()}
+              <div class="member-mini-avatar">
+                ${getCartoonAvatarSvg(r.id || r.name, 38)}
               </div>
               <div>
                 <strong style="font-size:0.88rem; color:var(--text-primary);">${escapeHtml(r.name)}</strong>
@@ -4498,22 +4548,55 @@
     }
   }
 
-  // --- Startup Notification Permission Dialog ---
-  function setupNotificationStartupPrompt() {
-    // Disabled automatic popup in main app to prevent obstructing UI
-    const modal = document.getElementById('notificationPromptModal');
-    if (modal) modal.classList.remove('active');
+  // --- Startup Notification Permission & Welcome Dialog ---
+  function showStartupWelcomePrompt() {
+    if (localStorage.getItem('tiffin_welcome_greeted')) return;
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      localStorage.setItem('tiffin_welcome_greeted', 'true');
+      return;
+    }
 
-    // Direct native request on first user touch anywhere if still default
-    const requestOnFirstTouch = () => {
-      if (NotificationManager.isSupported() && Notification.permission === 'default') {
-        NotificationManager.requestPermission(false).catch(() => {});
-      }
-      document.removeEventListener('click', requestOnFirstTouch);
-      document.removeEventListener('touchstart', requestOnFirstTouch);
-    };
-    document.addEventListener('click', requestOnFirstTouch, { once: true, passive: true });
-    document.addEventListener('touchstart', requestOnFirstTouch, { once: true, passive: true });
+    const modal = document.getElementById('notificationPromptModal');
+    const title = document.getElementById('welcomeModalTitle');
+    const sub = document.getElementById('welcomeModalSub');
+
+    const groupName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'Tiffin Tracker';
+    if (title) title.textContent = `Welcome to ${groupName}! 🎉`;
+    if (sub) sub.textContent = `Turn on notifications so you get alerted when flatmates schedule meal polls or update dinner menus.`;
+
+    if (modal) {
+      modal.classList.add('active');
+    }
+  }
+
+  function setupNotificationStartupPrompt() {
+    const modal = document.getElementById('notificationPromptModal');
+    const allowBtn = document.getElementById('allowStartNotificationBtn');
+    const dismissBtn = document.getElementById('dismissStartNotificationBtn');
+
+    if (allowBtn) {
+      allowBtn.addEventListener('click', async () => {
+        triggerHaptic();
+        localStorage.setItem('tiffin_welcome_greeted', 'true');
+        modal?.classList.remove('active');
+        try {
+          const granted = await NotificationManager.requestPermission(true);
+          if (granted) {
+            showToast('🔔 Phone alerts enabled! You will be notified of meal polls.');
+          } else {
+            showToast('Notification permission dismissed.');
+          }
+        } catch (e) {}
+      });
+    }
+
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', () => {
+        triggerHaptic();
+        localStorage.setItem('tiffin_welcome_greeted', 'true');
+        modal?.classList.remove('active');
+      });
+    }
   }
 
   // --- Cloud Sync & Room Controls ---

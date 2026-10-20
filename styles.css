@@ -205,11 +205,15 @@ body {
 }
 
 .user-avatar-dot {
-  width: 7px;
-  height: 7px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: var(--emerald);
-  box-shadow: 0 0 8px var(--emerald);
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .switch-icon {
@@ -2342,18 +2346,18 @@ body {
 .modal-backdrop {
   display: none;
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  z-index: 200;
+  inset: 0;
+  background: rgba(4, 8, 14, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 1000000 !important;
   align-items: center;
   justify-content: center;
   padding: 14px;
 }
 
 .modal-backdrop.active {
-  display: flex;
+  display: flex !important;
   animation: fadeIn 0.2s ease;
 }
 
@@ -2651,14 +2655,27 @@ body {
   display: flex;
 }
 
-/* Mobile adjustments (< 540px): keep sidebar on left with compact icons */
-@media (max-width: 540px) {
+/* Mobile adjustments (< 600px): Bottom-sheet foreground modal with rest of screen & footer blurred */
+@media (max-width: 600px) {
+  .modal-backdrop {
+    padding: 0 !important;
+    align-items: flex-end !important;
+  }
   .modal-box.settings-software-window {
-    width: calc(100vw - 16px) !important;
-    height: 85vh !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 90vh !important;
+    max-height: 90vh !important;
+    border-radius: 20px 20px 0 0 !important;
+    border-bottom: none !important;
+    border-left: none !important;
+    border-right: none !important;
+    margin: 0 !important;
+    box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
+    animation: modalSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
   }
   .settings-sidebar {
-    width: 52px;
+    width: 54px;
     padding: 10px 4px;
     align-items: center;
   }
@@ -2671,7 +2688,7 @@ body {
     display: none;
   }
   .settings-content-pane {
-    padding: 16px 14px;
+    padding: 16px 14px 40px;
   }
   .danger-box-card {
     flex-direction: column;
@@ -3000,6 +3017,7 @@ body {
 @media (max-width: 768px) {
   .desktop-nav { display: none; }
   .mobile-nav-bar { display: flex; }
+  .header-room-pill { display: none !important; }
   .main-content { padding: 12px 10px calc(92px + env(safe-area-inset-bottom)) 10px; }
   .amount-val { font-size: 2.2rem; }
   .qr-code-box { width: 175px; height: 175px; }
@@ -3564,29 +3582,93 @@ body.gate-active .mobile-bottom-nav {
    ========================================================= */
 .settings-room-card {
   display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(0, 210, 106, 0.08) 0%, rgba(8, 25, 18, 0.4) 100%);
+  border: 1px solid rgba(0, 210, 106, 0.25);
+  border-radius: 14px;
+  margin-bottom: 20px;
+}
+.room-card-header {
+  display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 16px;
-  background: rgba(0, 210, 106, 0.06);
-  border: 1px solid rgba(0, 210, 106, 0.22);
-  border-radius: 12px;
-  margin-bottom: 16px;
+  gap: 12px;
 }
-.room-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 2px;
+.room-badge-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--emerald);
+  display: block;
+  margin-bottom: 3px;
+}
+.room-name-heading {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .room-code-tag {
-  background: rgba(0, 210, 106, 0.18);
-  border: 1px solid rgba(0, 210, 106, 0.35);
+  background: rgba(0, 210, 106, 0.16);
+  border: 1px solid rgba(0, 210, 106, 0.38);
   color: var(--emerald);
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   font-weight: 800;
-  padding: 2px 8px;
-  border-radius: 6px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
+.room-card-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.room-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.room-action-btn.btn-invite {
+  background: var(--emerald);
+  color: #050d08;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(0, 210, 106, 0.3);
+}
+.room-action-btn.btn-invite:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 210, 106, 0.4);
+}
+.room-action-btn.btn-sync {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+}
+.room-action-btn.btn-sync:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+@media (max-width: 500px) {
+  .room-card-actions {
+    grid-template-columns: 1fr;
+  }
 }
 .pending-requests-section {
   padding: 12px;
@@ -3631,27 +3713,33 @@ body.gate-active .mobile-bottom-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 10px 14px;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
-  margin-bottom: 6px;
+  border-radius: 10px;
+  margin-bottom: 8px;
 }
 .member-mgmt-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 .member-mini-avatar {
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 0.8rem;
-  color: #fff;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+}
+.cartoon-avatar-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 .badge-admin-tag {
   background: rgba(0, 210, 106, 0.15);
