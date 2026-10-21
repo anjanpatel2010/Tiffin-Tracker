@@ -1080,22 +1080,22 @@
         <form id="joinRoomForm" class="gate-form" style="display:none;">
           <div class="form-group mb-2">
             <label for="gateRoomCode" class="input-label">Room Code</label>
-            <input type="text" id="gateRoomCode" class="text-input w-full" placeholder="Room Code" style="text-transform:uppercase; font-family:var(--font-mono); font-weight:700;" maxlength="10" required>
+            <input type="text" id="gateRoomCode" class="text-input w-full" placeholder="Room Code (e.g. TF-XXXX)" style="text-transform:uppercase; font-family:var(--font-mono); font-weight:700;" maxlength="10" required>
           </div>
           <div class="form-group mb-2">
             <label for="gateUserPhone" class="input-label">Mobile Number</label>
-            <input type="tel" id="gateUserPhone" class="text-input w-full" placeholder="Mobile Number" autocomplete="tel" maxlength="15" required>
+            <input type="tel" id="gateUserPhone" class="text-input w-full" placeholder="Your Mobile Number" autocomplete="tel" maxlength="15" required>
           </div>
           <div class="form-group mb-2">
-            <label for="gateLoginPin" class="input-label">Security PIN (If Admin)</label>
-            <input type="password" id="gateLoginPin" class="text-input w-full" placeholder="Admin PIN (Optional for flatmates)" autocomplete="current-password">
+            <label for="gateUserName" class="input-label">Your Name <span style="color:var(--emerald); font-weight:600;">(Required to join flat)</span></label>
+            <input type="text" id="gateUserName" class="text-input w-full" placeholder="Your Full Name" autocomplete="name">
           </div>
           <div class="form-group mb-3">
-            <label for="gateUserName" class="input-label">Your Name (If new member)</label>
-            <input type="text" id="gateUserName" class="text-input w-full" placeholder="Your Name" autocomplete="name">
+            <label for="gateLoginPin" class="input-label">Security PIN <span style="color:var(--text-dim);">(Only if you manage this flat)</span></label>
+            <input type="password" id="gateLoginPin" class="text-input w-full" placeholder="Leave empty for flatmate join request" autocomplete="current-password">
           </div>
           <button type="submit" id="gateJoinSubmitBtn" class="primary-btn glow-btn w-full" style="padding:12px; font-weight:700;">
-            <span>Enter Room</span>
+            <span id="gateJoinSubmitText">Request to Join Flat</span>
           </button>
         </form>
 
