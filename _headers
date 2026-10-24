@@ -9,16 +9,20 @@
 /manifest.json
   Cache-Control: no-cache, no-store, must-revalidate
 
-# HTML Shell and documents must always revalidate
+# HTML Shell and documents must always revalidate immediately
 /*.html
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: no-cache, no-store, must-revalidate
+  Expires: 0
 
 /
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: no-cache, no-store, must-revalidate
+  Expires: 0
 
-# Scripts and Styles - always revalidate
+# Scripts and Styles - always revalidate immediately
 /*.css
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: no-cache, no-store, must-revalidate
+  Expires: 0
 
 /*.js
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: no-cache, no-store, must-revalidate
+  Expires: 0

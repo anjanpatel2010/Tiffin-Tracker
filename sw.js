@@ -1,10 +1,10 @@
-const CACHE_NAME = 'tiffin-tracker-v4.7';
+const CACHE_NAME = 'tiffin-tracker-v5.0.0';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=4.7',
-  './app.js?v=4.7',
-  './qr.js?v=4.7',
+  './styles.css?v=5.0.0',
+  './app.js?v=5.0.0',
+  './qr.js?v=5.0.0',
   './manifest.json',
   './icon.svg'
 ];
@@ -24,7 +24,7 @@ self.addEventListener('activate', (e) => {
       return Promise.all(
         keys.map((k) => {
           if (k !== CACHE_NAME) {
-            console.log('Purging old cache:', k);
+            console.log('[SW] Purging old cache:', k);
             return caches.delete(k);
           }
         })
@@ -88,7 +88,7 @@ self.addEventListener('fetch', (e) => {
 
   const url = new URL(e.request.url);
 
-  // Network-First for root, HTML, JS, CSS so latest UI updates load instantly
+  // Network-First for root, HTML, JS, CSS so latest UI updates load instantly without stale cache
   const isCoreAsset = e.request.mode === 'navigate' ||
                       e.request.destination === 'document' ||
                       url.pathname === '/' ||
@@ -99,7 +99,7 @@ self.addEventListener('fetch', (e) => {
 
   if (isCoreAsset) {
     e.respondWith(
-      fetch(e.request)
+      fetch(e.request, { cache: 'no-store' })
         .then((networkRes) => {
           if (networkRes && networkRes.status === 200) {
             const clone = networkRes.clone();
