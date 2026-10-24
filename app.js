@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.1.0';
+  const APP_VERSION = '5.2.0';
 
   function checkAndMigrateAppVersion() {
     try {
@@ -119,8 +119,36 @@
 
   let ROOMMATES = [];
 
+  function getActiveRoomCode() {
+    try {
+      if (typeof RoomManager !== 'undefined' && RoomManager?.activeRoom?.code) {
+        return RoomManager.activeRoom.code;
+      }
+      if (typeof RoomManager !== 'undefined' && RoomManager?.session?.roomCode) {
+        return RoomManager.session.roomCode;
+      }
+    } catch (e) {}
+    try {
+      if (typeof SyncEngine !== 'undefined' && SyncEngine?.roomCode) {
+        return SyncEngine.roomCode;
+      }
+    } catch (e) {}
+    try {
+      const rawSession = localStorage.getItem('tiffin_user_session');
+      if (rawSession) {
+        const parsed = JSON.parse(rawSession);
+        if (parsed && parsed.roomCode) return parsed.roomCode;
+      }
+    } catch (e) {}
+    try {
+      const storedSync = localStorage.getItem('tiffin_sync_room');
+      if (storedSync) return storedSync;
+    } catch (e) {}
+    return CONFIG.defaultRoom;
+  }
+
   function getStorageKey(year, month) {
-    const roomCode = (RoomManager?.activeRoom?.code || SyncEngine?.roomCode || 'global').toLowerCase();
+    const roomCode = getActiveRoomCode().toString().trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
     return `tiffin_tracker_ledger_${roomCode}_${year}_${month}`;
   }
 
@@ -148,8 +176,11 @@
         dateFormatted: `${dayOfWeek}, Day ${d}`,
         dateShort: `Day ${d}`,
         sabzi: '',
+        sabziUpdatedAt: 0,
         meals: mealsObj,
-        amul: amulObj
+        mealTimestamps: {},
+        amul: amulObj,
+        amulTimestamps: {}
       };
     }
 
@@ -196,18 +227,21 @@
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed && parsed.days) {
-          // If stored data contains the old demo signature, reset to clean fresh ledger
-          if (parsed.activePoll?.id === 'poll_demo_oct18' || parsed.days[1]?.sabzi === 'Paneer Butter Masala') {
-            const cleanDefault = getDefaultDataForMonth(year, month);
-            saveStateForMonth(year, month, cleanDefault);
-            return cleanDefault;
-          }
-
           parsed.rates = { ...CONFIG.defaultRates, ...(parsed.rates || {}) };
           parsed.provider = { ...CONFIG.defaultProvider, ...(parsed.provider || {}) };
           if (!parsed.auditLog) parsed.auditLog = [];
           if (!parsed.pollHistory) parsed.pollHistory = [];
           if (!parsed.amulMembers || !Array.isArray(parsed.amulMembers)) parsed.amulMembers = ['anjan', 'saurabh'];
+
+          // Ensure timestamps dictionaries exist on every day
+          const daysInM = getDaysInMonth(year, month);
+          for (let d = 1; d <= daysInM; d++) {
+            if (parsed.days[d]) {
+              if (!parsed.days[d].mealTimestamps) parsed.days[d].mealTimestamps = {};
+              if (!parsed.days[d].amulTimestamps) parsed.days[d].amulTimestamps = {};
+              if (typeof parsed.days[d].sabziUpdatedAt !== 'number') parsed.days[d].sabziUpdatedAt = 0;
+            }
+          }
 
           return parsed;
         }
@@ -647,6 +681,42 @@
     }
   };
 
+  // Create lean, reliable sync snapshot (< 2KB) preventing NTFY attachment conversion
+  function getCompactSyncState(state) {
+    if (!state || !state.days) return null;
+    const compactDays = {};
+    for (let d = 1; d <= CONFIG.daysInMonth; d++) {
+      const day = state.days[d];
+      if (!day) continue;
+      const hasSabzi = !!day.sabzi;
+      const hasMeals = day.meals && Object.values(day.meals).some(m => m && (m.lunch || m.dinner));
+      const hasTimestamps = day.mealTimestamps && Object.keys(day.mealTimestamps).length > 0;
+      const hasAmul = day.amul && Object.values(day.amul).some(v => v > 0);
+
+      if (hasSabzi || hasMeals || hasTimestamps || hasAmul) {
+        compactDays[d] = {
+          sabzi: day.sabzi || '',
+          sabziUpdatedAt: day.sabziUpdatedAt || 0,
+          meals: day.meals || {},
+          mealTimestamps: day.mealTimestamps || {},
+          amul: day.amul || {},
+          amulTimestamps: day.amulTimestamps || {}
+        };
+      }
+    }
+
+    return {
+      version: state.version || 4,
+      year: state.year || currentYear,
+      month: state.month || currentMonth,
+      lastModified: state.lastModified || new Date().toISOString(),
+      rates: state.rates || CONFIG.defaultRates,
+      provider: state.provider || CONFIG.defaultProvider,
+      days: compactDays,
+      activePoll: state.activePoll || null
+    };
+  }
+
   // ==========================================================================
   // REAL-TIME MULTI-USER CLOUD SYNC ENGINE
   // ==========================================================================
@@ -779,13 +849,13 @@
           this.updateStatusUI('connected', 'Connected');
         };
 
-        this.eventSource.onmessage = (event) => {
+        this.eventSource.onmessage = async (event) => {
           try {
             const raw = JSON.parse(event.data);
-            if (raw.event === 'message' && raw.message) {
+            if (raw.event === 'message') {
               if (this.processedMessageIds.has(raw.id)) return;
               this.processedMessageIds.add(raw.id);
-              this.handlePayload(raw.message);
+              await this.processRawEvent(raw, false);
             }
           } catch (e) {
             console.warn('Sync parse error', e);
@@ -811,9 +881,9 @@
           if (!line.trim()) continue;
           try {
             const raw = JSON.parse(line);
-            if (raw.event === 'message' && raw.message && !this.processedMessageIds.has(raw.id)) {
+            if (raw.event === 'message' && !this.processedMessageIds.has(raw.id)) {
               this.processedMessageIds.add(raw.id);
-              this.handlePayload(raw.message, true);
+              await this.processRawEvent(raw, true);
             }
           } catch (e) {}
         }
@@ -822,9 +892,24 @@
       }
     },
 
+    async processRawEvent(raw, isCatchUp = false) {
+      let payload = raw.message;
+      if (raw.attachment && raw.attachment.url && (payload?.startsWith('You received a file:') || !payload || payload.startsWith('attachment'))) {
+        try {
+          const fileRes = await fetch(raw.attachment.url);
+          if (fileRes.ok) {
+            payload = await fileRes.text();
+          }
+        } catch (e) {}
+      }
+      if (payload) {
+        this.handlePayload(payload, isCatchUp);
+      }
+    },
+
     async broadcast(action) {
       action.author = this.identity;
-      action.timestamp = Date.now();
+      action.timestamp = action.timestamp || Date.now();
       action.sourceId = this.getClientId();
       action.year = action.year || currentYear;
       action.month = action.month || currentMonth;
@@ -860,11 +945,10 @@
     async broadcastFullState(reason) {
       logActivity(this.identity, 'Broadcast Full Ledger', reason || 'Full cloud sync');
       await this.broadcast({
-        type: 'full_sync',
-        reason: reason || 'Manual broadcast',
-        year: currentYear,
-        month: currentMonth,
-        state: appState
+        type: 'room_meta_sync',
+        roomCode: this.roomCode,
+        roomData: RoomManager.activeRoom,
+        state: getCompactSyncState(appState)
       });
       showToast('Broadcasted complete ledger to all flatmates');
     },
@@ -877,20 +961,33 @@
         return;
       }
 
-      if (action.sourceId && action.sourceId === this.getClientId()) {
-        return; // Ignore self-echo
+      // During live streaming, ignore self-echo to avoid redundant notifications/chimes.
+      // During catch-up, process own actions so the chronological state is preserved.
+      if (action.sourceId && action.sourceId === this.getClientId() && !isCatchUp) {
+        return;
       }
 
       // If action belongs to a different month, persist silently in background
       if (action.year && action.month && (action.year !== currentYear || action.month !== currentMonth)) {
         try {
           const otherState = loadStateForMonth(action.year, action.month);
+          const msgTime = Number(action.timestamp || 0);
           if (action.type === 'meal_update' && otherState.days[action.day]) {
-            otherState.days[action.day].meals[action.person][action.slot] = action.value;
+            if (!otherState.days[action.day].mealTimestamps) otherState.days[action.day].mealTimestamps = {};
+            const key = `${action.person}_${action.slot}`;
+            const existingTime = Number(otherState.days[action.day].mealTimestamps[key] || 0);
+            if (!msgTime || !existingTime || msgTime >= existingTime) {
+              otherState.days[action.day].meals[action.person][action.slot] = action.value;
+              otherState.days[action.day].mealTimestamps[key] = msgTime || Date.now();
+            }
           } else if (action.type === 'sabzi_update' && otherState.days[action.day]) {
-            otherState.days[action.day].sabzi = action.sabzi;
+            const existingTime = Number(otherState.days[action.day].sabziUpdatedAt || 0);
+            if (!msgTime || !existingTime || msgTime >= existingTime) {
+              otherState.days[action.day].sabzi = action.sabzi;
+              otherState.days[action.day].sabziUpdatedAt = msgTime || Date.now();
+            }
           } else if (action.type === 'amul_update' && otherState.days[action.day]) {
-            if (!otherState.days[action.day].amul) otherState.days[action.day].amul = { anjan: 0, saurabh: 0 };
+            if (!otherState.days[action.day].amul) otherState.days[action.day].amul = {};
             otherState.days[action.day].amul[action.person] = action.value;
           } else if (action.type === 'day_reset' && otherState.days[action.day]) {
             otherState.days[action.day].sabzi = '';
@@ -915,31 +1012,62 @@
       let modified = false;
 
       if (action.type === 'meal_update') {
-        const { day, person, slot, value, author } = action;
-        if (appState.days[day] && appState.days[day].meals[person]) {
+        const { day, person, slot, value, author, timestamp } = action;
+        const msgTime = Number(timestamp || action.time || 0);
+
+        if (appState.days && appState.days[day] && appState.days[day].meals && appState.days[day].meals[person]) {
+          if (!appState.days[day].mealTimestamps) appState.days[day].mealTimestamps = {};
+          const existingTime = Number(appState.days[day].mealTimestamps[`${person}_${slot}`] || 0);
+
+          // Reject older stale updates
+          if (msgTime && existingTime && msgTime < existingTime) {
+            console.log(`[Sync] Stale meal_update ignored (${msgTime} < ${existingTime}) for ${person} ${slot}`);
+            return;
+          }
+
           const oldVal = appState.days[day].meals[person][slot];
-          appState.days[day].meals[person][slot] = value;
-          logActivity(author, 'Meal Update', `${capitalize(person)} ${slot}: ${oldVal || 'Off'} ➜ ${value || 'Off'} (Day ${day})`);
-          modified = true;
-          if (!isCatchUp) {
-            showToast(`⚡ ${author} updated ${capitalize(person)}'s ${slot}: ${value || 'Off'}`);
+          if (oldVal !== value) {
+            appState.days[day].meals[person][slot] = value;
+            appState.days[day].mealTimestamps[`${person}_${slot}`] = msgTime || Date.now();
+            logActivity(author, 'Meal Update', `${capitalize(person)} ${slot}: ${oldVal || 'Off'} ➜ ${value || 'Off'} (Day ${day})`);
+            modified = true;
+            if (!isCatchUp) {
+              showToast(`⚡ ${author} updated ${capitalize(person)}'s ${slot}: ${value || 'Off'}`);
+            }
+          } else if (msgTime && msgTime > existingTime) {
+            appState.days[day].mealTimestamps[`${person}_${slot}`] = msgTime;
+            modified = true;
           }
         }
       } else if (action.type === 'sabzi_update') {
-        const { day, sabzi, author } = action;
-        if (appState.days[day]) {
-          appState.days[day].sabzi = sabzi;
-          logActivity(author, 'Sabzi Update', `Day ${day} dish set to "${sabzi}"`);
-          modified = true;
-          if (!isCatchUp) {
-            showToast(`⚡ ${author} set dish to "${sabzi}"`);
+        const { day, sabzi, author, timestamp } = action;
+        const msgTime = Number(timestamp || action.time || 0);
+        if (appState.days && appState.days[day]) {
+          const existingTime = Number(appState.days[day].sabziUpdatedAt || 0);
+          if (msgTime && existingTime && msgTime < existingTime) {
+            console.log(`[Sync] Stale sabzi ignored (${msgTime} < ${existingTime})`);
+            return;
+          }
+          if (appState.days[day].sabzi !== sabzi) {
+            appState.days[day].sabzi = sabzi;
+            appState.days[day].sabziUpdatedAt = msgTime || Date.now();
+            logActivity(author, 'Sabzi Update', `Day ${day} dish set to "${sabzi}"`);
+            modified = true;
+            if (!isCatchUp) {
+              showToast(`⚡ ${author} set dish to "${sabzi}"`);
+            }
           }
         }
       } else if (action.type === 'bulk_dinner_half') {
-        const { day, author } = action;
-        if (appState.days[day]) {
+        const { day, author, timestamp } = action;
+        const msgTime = Number(timestamp || Date.now());
+        if (appState.days && appState.days[day]) {
+          if (!appState.days[day].mealTimestamps) appState.days[day].mealTimestamps = {};
           ROOMMATES.forEach(r => {
-            appState.days[day].meals[r.id].dinner = 'Half';
+            if (appState.days[day].meals && appState.days[day].meals[r.id]) {
+              appState.days[day].meals[r.id].dinner = 'Half';
+              appState.days[day].mealTimestamps[`${r.id}_dinner`] = msgTime;
+            }
           });
           logActivity(author, 'Bulk Dinner Half', `Marked all roommates Dinner Half for Day ${day}`);
           modified = true;
@@ -948,12 +1076,21 @@
           }
         }
       } else if (action.type === 'amul_update') {
-        const { day, person, value, author } = action;
-        if (appState.days[day]) {
-          if (!appState.days[day].amul) appState.days[day].amul = { anjan: 0, saurabh: 0 };
-          appState.days[day].amul[person] = value;
-          logActivity(author, 'Milk Update', `${capitalize(person)} milk packets: ${value} (Day ${day})`);
-          modified = true;
+        const { day, person, value, author, timestamp } = action;
+        const msgTime = Number(timestamp || 0);
+        if (appState.days && appState.days[day]) {
+          if (!appState.days[day].amul) appState.days[day].amul = {};
+          if (!appState.days[day].amulTimestamps) appState.days[day].amulTimestamps = {};
+          const existingTime = Number(appState.days[day].amulTimestamps[person] || 0);
+          if (msgTime && existingTime && msgTime < existingTime) {
+            return;
+          }
+          if (appState.days[day].amul[person] !== value) {
+            appState.days[day].amul[person] = value;
+            appState.days[day].amulTimestamps[person] = msgTime || Date.now();
+            logActivity(author, 'Milk Update', `${capitalize(person)} milk packets: ${value} (Day ${day})`);
+            modified = true;
+          }
         }
       } else if (action.type === 'poll_created') {
         if (appState.activePoll && appState.activePoll.id !== action.poll.id) {
@@ -1246,7 +1383,7 @@
               type: 'room_meta_sync',
               roomCode: targetRoom || myRoom,
               roomData: RoomManager.activeRoom,
-              state: appState
+              state: getCompactSyncState(appState)
             });
           }
         }
@@ -1299,7 +1436,7 @@
               type: 'room_meta_sync',
               roomCode: myRoomCode,
               roomData: RoomManager.activeRoom,
-              state: appState
+              state: getCompactSyncState(appState)
             });
           }
         }
@@ -1370,21 +1507,66 @@
           }
 
           if (action.state && action.state.days) {
-            // Merge days data so any local updates aren't lost
+            const incomingDays = action.state.days;
             for (let d = 1; d <= CONFIG.daysInMonth; d++) {
-              if (action.state.days[d] && appState.days[d]) {
-                if (action.state.days[d].sabzi && !appState.days[d].sabzi) {
-                  appState.days[d].sabzi = action.state.days[d].sabzi;
+              if (incomingDays[d] && appState.days[d]) {
+                const incD = incomingDays[d];
+                const locD = appState.days[d];
+
+                // Merge sabzi with timestamp comparison
+                const incSabziTime = Number(incD.sabziUpdatedAt || 0);
+                const locSabziTime = Number(locD.sabziUpdatedAt || 0);
+                if (incD.sabzi && (!locD.sabzi || incSabziTime >= locSabziTime)) {
+                  locD.sabzi = incD.sabzi;
+                  if (incSabziTime) locD.sabziUpdatedAt = incSabziTime;
                 }
-                const incomingMeals = action.state.days[d].meals || {};
-                Object.keys(incomingMeals).forEach(pId => {
-                  if (!appState.days[d].meals[pId] || (!appState.days[d].meals[pId].lunch && !appState.days[d].meals[pId].dinner)) {
-                    appState.days[d].meals[pId] = incomingMeals[pId];
+
+                // Merge meals per person per slot with timestamps
+                const incMeals = incD.meals || {};
+                const incMealTimes = incD.mealTimestamps || {};
+                if (!locD.mealTimestamps) locD.mealTimestamps = {};
+
+                Object.keys(incMeals).forEach(pId => {
+                  if (!locD.meals[pId]) {
+                    locD.meals[pId] = { lunch: '', dinner: '' };
                   }
+                  ['lunch', 'dinner'].forEach(slot => {
+                    const key = `${pId}_${slot}`;
+                    const incT = Number(incMealTimes[key] || 0);
+                    const locT = Number(locD.mealTimestamps[key] || 0);
+
+                    if (incT > 0 && locT > 0) {
+                      if (incT >= locT) {
+                        locD.meals[pId][slot] = incMeals[pId][slot] || '';
+                        locD.mealTimestamps[key] = incT;
+                      }
+                    } else if (incT > 0 && locT === 0) {
+                      locD.meals[pId][slot] = incMeals[pId][slot] || '';
+                      locD.mealTimestamps[key] = incT;
+                    } else if (locT === 0 && !locD.meals[pId][slot] && incMeals[pId][slot]) {
+                      // Initial baseline copy if never edited locally
+                      locD.meals[pId][slot] = incMeals[pId][slot];
+                    }
+                  });
                 });
+
+                // Merge Amul milk
+                if (incD.amul) {
+                  if (!locD.amul) locD.amul = {};
+                  if (!locD.amulTimestamps) locD.amulTimestamps = {};
+                  const incAmulTimes = incD.amulTimestamps || {};
+                  Object.keys(incD.amul).forEach(pId => {
+                    const incT = Number(incAmulTimes[pId] || 0);
+                    const locT = Number(locD.amulTimestamps[pId] || 0);
+                    if (incT >= locT) {
+                      locD.amul[pId] = incD.amul[pId];
+                      if (incT) locD.amulTimestamps[pId] = incT;
+                    }
+                  });
+                }
               }
             }
-            if (action.state.rates) {
+            if (action.state.rates && RoomManager.isAdmin() === false) {
               appState.rates = { ...appState.rates, ...action.state.rates };
             }
           }
@@ -1838,15 +2020,24 @@
         const person = btn.getAttribute('data-person');
         const slot = btn.getAttribute('data-slot').toLowerCase();
         const val = btn.getAttribute('data-val');
+        const timestamp = Date.now();
 
+        if (!appState.days[selectedDay].mealTimestamps) {
+          appState.days[selectedDay].mealTimestamps = {};
+        }
+        appState.days[selectedDay].mealTimestamps[`${person}_${slot}`] = timestamp;
         appState.days[selectedDay].meals[person][slot] = val;
+
         logActivity(SyncEngine.identity, 'Logged Meal', `${capitalize(person)} ${slot}: ${val || 'Off'}`);
         persistAndBroadcast({
           type: 'meal_update',
+          year: currentYear,
+          month: currentMonth,
           day: selectedDay,
           person: person,
           slot: slot,
-          value: val
+          value: val,
+          timestamp: timestamp
         });
       });
     });
@@ -2373,7 +2564,13 @@
         else if (curVal === 'Full') nextVal = 'Special';
         else nextVal = '';
 
+        const timestamp = Date.now();
+        if (!appState.days[d].mealTimestamps) {
+          appState.days[d].mealTimestamps = {};
+        }
+        appState.days[d].mealTimestamps[`${person}_${slot}`] = timestamp;
         appState.days[d].meals[person][slot] = nextVal;
+
         logActivity(SyncEngine.identity, 'Meal Update', `${capitalize(person)} ${slot}: ${nextVal || 'Off'} (Day ${d})`);
         persistAndBroadcast({
           type: 'meal_update',
@@ -2382,7 +2579,8 @@
           day: d,
           person: person,
           slot: slot,
-          value: nextVal
+          value: nextVal,
+          timestamp: timestamp
         });
       });
     });
@@ -2395,14 +2593,17 @@
         const currentSabzi = appState.days[d].sabzi || '';
         const newDish = prompt(`Enter Sabzi / Dish for ${d} ${MONTH_NAMES[currentMonth - 1]}:`, currentSabzi);
         if (newDish !== null) {
+          const timestamp = Date.now();
           appState.days[d].sabzi = newDish.trim();
+          appState.days[d].sabziUpdatedAt = timestamp;
           logActivity(SyncEngine.identity, 'Updated Sabzi from Sheet', `Day ${d}: "${newDish.trim()}"`);
           persistAndBroadcast({
             type: 'sabzi_update',
             year: currentYear,
             month: currentMonth,
             day: d,
-            sabzi: newDish.trim()
+            sabzi: newDish.trim(),
+            timestamp: timestamp
           });
           showToast(`Updated dish for ${d} ${MONTH_SHORTS[currentMonth - 1]}`);
         }
@@ -3037,7 +3238,9 @@
     let debounceTimer = null;
     if (sabziInput) {
       sabziInput.addEventListener('input', (e) => {
+        const timestamp = Date.now();
         appState.days[selectedDay].sabzi = e.target.value;
+        appState.days[selectedDay].sabziUpdatedAt = timestamp;
         saveStateToStorage(appState);
         renderMasterSheet();
 
@@ -3046,25 +3249,33 @@
           logActivity(SyncEngine.identity, 'Sabzi Update', `Day ${selectedDay} dish set to "${e.target.value}"`);
           SyncEngine.broadcast({
             type: 'sabzi_update',
+            year: currentYear,
+            month: currentMonth,
             day: selectedDay,
-            sabzi: e.target.value
+            sabzi: e.target.value,
+            timestamp: timestamp
           });
-        }, 500);
+        }, 400);
       });
     }
 
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
         triggerHaptic();
+        const timestamp = Date.now();
         appState.days[selectedDay].sabzi = '';
+        appState.days[selectedDay].sabziUpdatedAt = timestamp;
         if (sabziInput) sabziInput.value = '';
         renderDailyLogger();
         renderMasterSheet();
         logActivity(SyncEngine.identity, 'Cleared Sabzi', `Day ${selectedDay}`);
         persistAndBroadcast({
           type: 'sabzi_update',
+          year: currentYear,
+          month: currentMonth,
           day: selectedDay,
-          sabzi: ''
+          sabzi: '',
+          timestamp: timestamp
         });
       });
     }
@@ -3090,10 +3301,17 @@
       clearTodayBtn.addEventListener('click', () => {
         triggerHaptic();
         requireAdminPassword(() => {
+          const timestamp = Date.now();
           appState.days[selectedDay].sabzi = '';
+          appState.days[selectedDay].sabziUpdatedAt = timestamp;
+          if (!appState.days[selectedDay].mealTimestamps) {
+            appState.days[selectedDay].mealTimestamps = {};
+          }
           ROOMMATES.forEach(r => {
             if (appState.days[selectedDay].meals && appState.days[selectedDay].meals[r.id]) {
               appState.days[selectedDay].meals[r.id] = { lunch: '', dinner: '' };
+              appState.days[selectedDay].mealTimestamps[`${r.id}_lunch`] = timestamp;
+              appState.days[selectedDay].mealTimestamps[`${r.id}_dinner`] = timestamp;
             }
           });
           logActivity(SyncEngine.identity, 'Admin Action', `Reset meals for Day ${selectedDay}`);
@@ -3101,7 +3319,8 @@
             type: 'day_reset',
             year: currentYear,
             month: currentMonth,
-            day: selectedDay
+            day: selectedDay,
+            timestamp: timestamp
           });
           showToast(`Meals for Day ${selectedDay} reset to Off`);
         });
@@ -3476,10 +3695,15 @@
       const cur = Number(appState.days[selectedDay]?.amul?.[person]) || 0;
       const nextVal = (targetQty === cur && targetQty !== 0) ? 0 : targetQty;
 
+      const timestamp = Date.now();
       if (!appState.days[selectedDay].amul) {
         appState.days[selectedDay].amul = {};
       }
+      if (!appState.days[selectedDay].amulTimestamps) {
+        appState.days[selectedDay].amulTimestamps = {};
+      }
       appState.days[selectedDay].amul[person] = nextVal;
+      appState.days[selectedDay].amulTimestamps[person] = timestamp;
       logActivity(SyncEngine.identity, 'Milk Packets', `${capitalize(person)}: ${nextVal} pkt (Day ${selectedDay})`);
       persistAndBroadcast({
         type: 'amul_update',
@@ -3487,7 +3711,8 @@
         month: currentMonth,
         day: selectedDay,
         person: person,
-        value: nextVal
+        value: nextVal,
+        timestamp: timestamp
       });
       renderAmulTracker();
     });
@@ -4235,7 +4460,7 @@
         type: 'room_meta_sync',
         roomCode: roomCode,
         roomData: this.activeRoom,
-        state: appState
+        state: getCompactSyncState(appState)
       });
 
       showToast(`Group "${cleanGroup}" created! Room Code: ${roomCode}`);
