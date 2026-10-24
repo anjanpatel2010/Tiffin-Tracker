@@ -1225,6 +1225,27 @@
             }
           }
         }
+      } else if (action.type === 'member_kicked') {
+        const targetRoom = (action.roomCode || '').toString().toUpperCase().trim();
+        const myRoom = (RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
+        if (targetRoom === myRoom) {
+          const myId = RoomManager.sanitizeId(RoomManager.session?.name || '');
+          const isMe = action.memberId === myId ||
+                       (RoomManager.session && RoomManager.session.name.toLowerCase() === (action.memberName || '').toLowerCase());
+          if (isMe) {
+            alert('You have been removed from this flat by the Admin.');
+            RoomManager.leaveRoom();
+            return;
+          }
+          if (RoomManager.activeRoom) {
+            RoomManager.activeRoom.members = (RoomManager.activeRoom.members || []).filter(m => m.id !== action.memberId);
+            RoomManager.saveActiveRoom();
+            ROOMMATES = RoomManager.activeRoom.members;
+            RoomManager.renderSettingsMembersTab();
+            modified = true;
+            showToast(`${action.memberName || 'A member'} was removed from the flat.`);
+          }
+        }
       } else if (action.type === 'request_room_sync') {
         const myRoomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode;
         if (myRoomCode && myRoomCode.toUpperCase() === (action.roomCode || '').toUpperCase()) {
@@ -4206,6 +4227,8 @@
     },
 
     leaveRoom() {
+      const settingsModal = document.getElementById('settingsModal');
+      if (settingsModal) settingsModal.classList.remove('active');
       localStorage.removeItem('tiffin_user_session');
       this.session = null;
       this.activeRoom = null;
@@ -4341,23 +4364,40 @@
     },
 
     removeMember(memberId) {
-      if (!this.activeRoom || this.session?.role !== 'admin') return;
+      const isAdmin = this.session?.role === 'admin' ||
+                      (this.activeRoom && (
+                        (this.session && this.activeRoom.adminPhone === this.session.phone) ||
+                        (this.session && this.activeRoom.adminName === this.session.name) ||
+                        (!this.session && this.activeRoom)
+                      ));
+      if (!this.activeRoom || !isAdmin) {
+        showToast('Only Admin can kick members.');
+        return;
+      }
       const target = this.activeRoom.members.find(m => m.id === memberId);
       if (!target) return;
       if (target.role === 'admin') {
-        alert('Cannot remove the room Admin.');
+        alert('Cannot kick the room Admin.');
         return;
       }
 
-      if (!confirm(`Remove ${target.name} from the flat? Historical ledger entries will remain.`)) return;
+      if (!confirm(`Are you sure you want to kick ${target.name} from this flat? They will be removed immediately.`)) return;
 
       this.activeRoom.members = this.activeRoom.members.filter(m => m.id !== memberId);
       this.saveActiveRoom();
       ROOMMATES = this.activeRoom.members;
 
+      // Broadcast kick to all connected devices in the room
+      SyncEngine.broadcast({
+        type: 'member_kicked',
+        roomCode: this.activeRoom.code,
+        memberId: memberId,
+        memberName: target.name
+      });
+
       this.renderSettingsMembersTab();
       renderAll();
-      showToast(`Removed ${target.name} from room.`);
+      showToast(`Kicked ${target.name} from flat.`);
     },
 
     updateHeaderRoomUI() {
@@ -4485,7 +4525,7 @@
                 ${r.phone ? `<span style="display:block; font-size:0.75rem; color:var(--text-muted);">${escapeHtml(r.phone)}</span>` : ''}
               </div>
             </div>
-            ${canDelete ? `<button class="pill-btn-ghost btn-xs text-rose remove-member-btn" data-id="${r.id}" title="Remove member">✕</button>` : ''}
+            ${canDelete ? `<button class="kick-member-btn remove-member-btn" data-id="${r.id}" title="Kick member from flat">Kick</button>` : ''}
           `;
           listContainer.appendChild(card);
         });
@@ -4668,9 +4708,6 @@
     const tabJoinBtn = document.getElementById('tabJoinRoomBtn');
     const createForm = document.getElementById('createRoomForm');
     const joinForm = document.getElementById('joinRoomForm');
-    const gateCheckApprovalBtn = document.getElementById('gateCheckApprovalBtn');
-    const gateCancelJoinBtn = document.getElementById('gateCancelJoinBtn');
-    const copyInviteLinkBtn = document.getElementById('copyInviteLinkBtn');
     const headerPendingBtn = document.getElementById('headerPendingBtn');
     const addRoommateBtn = document.getElementById('addRoommateBtn');
     const changeAdminPinBtn = document.getElementById('changeAdminPinBtn');
@@ -4733,9 +4770,9 @@
       if (loginPinInput && joinSubmitText) {
         loginPinInput.addEventListener('input', () => {
           if (loginPinInput.value.trim().length > 0) {
-            joinSubmitText.textContent = 'Login as Admin 🔑';
+            joinSubmitText.textContent = 'Admin Login';
           } else {
-            joinSubmitText.textContent = 'Join Flat Now 🚀';
+            joinSubmitText.textContent = 'Join Flat';
           }
         });
       }
@@ -4775,32 +4812,6 @@
         if (confirm('Switch flat or log out? You can rejoin anytime with your Room Code.')) {
           RoomManager.leaveRoom();
         }
-      });
-    }
-
-    if (copyInviteLinkBtn) {
-      copyInviteLinkBtn.addEventListener('click', () => {
-        triggerHaptic();
-        const roomCode = RoomManager.activeRoom?.code || SyncEngine.roomCode || 'ROOM';
-        const baseUrl = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '');
-        const inviteUrl = `${baseUrl}?room=${roomCode}`;
-        copyToClipboard(inviteUrl);
-        showToast(`Copied room invite link: #${roomCode}`);
-      });
-    }
-
-    const copyDeviceSyncBtn = document.getElementById('copyDeviceSyncBtn');
-    if (copyDeviceSyncBtn) {
-      copyDeviceSyncBtn.addEventListener('click', () => {
-        triggerHaptic();
-        const roomCode = RoomManager.activeRoom?.code || SyncEngine.roomCode || 'ROOM';
-        const pin = RoomManager.activeRoom?.adminPin || CONFIG.adminPassword || '';
-        const phone = RoomManager.session?.phone || RoomManager.activeRoom?.adminPhone || '';
-        const name = RoomManager.session?.name || RoomManager.activeRoom?.adminName || 'Admin';
-        const baseUrl = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '');
-        const syncUrl = `${baseUrl}?room=${encodeURIComponent(roomCode)}&pin=${encodeURIComponent(pin)}&phone=${encodeURIComponent(phone)}&name=${encodeURIComponent(name)}`;
-        copyToClipboard(syncUrl);
-        showToast(`Copied device sync link! Open on PC or mobile to access the same profile.`);
       });
     }
 
