@@ -167,7 +167,6 @@ Tiffin-Tracker/
 ├── manifest.json     # PWA mobile installation manifest
 ├── vercel.json       # Clean URL routing and cache control configuration
 ├── icon.svg          # High-resolution vector app icon
-├── screenshots/      # Application screenshots for documentation
 ├── ARCHITECTURE.md   # Architectural design, sync model, and data schema
 ├── DEPLOY.md         # Deployment instructions for Vercel, Cloudflare, etc.
 ├── CONTRIBUTING.md   # Contribution guidelines and coding standards
