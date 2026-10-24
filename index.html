@@ -24,7 +24,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css?v=5.0.0">
+  <link rel="stylesheet" href="styles.css?v=5.1.0">
 </head>
 <body>
   <!-- App Container -->
@@ -105,6 +105,21 @@
 
     <!-- Main Content Area with View Panels -->
     <main class="main-content">
+
+      <!-- Real-Time Member Joined In-App Alert Banner (For Admin & Flatmates) -->
+      <div id="adminJoinNoticeBanner" class="admin-join-banner" style="display:none;">
+        <div class="admin-join-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </div>
+        <div class="admin-join-text">
+          <strong id="adminJoinNoticeTitle">New Flatmate Joined! 🍱</strong>
+          <span id="adminJoinNoticeDesc">A member joined your flat ledger.</span>
+        </div>
+        <div class="admin-join-actions">
+          <button id="adminJoinViewMembersBtn" class="pill-btn-solid btn-xs" type="button">View Room</button>
+          <button id="adminJoinDismissBtn" class="pill-btn-ghost btn-xs text-muted" type="button" title="Dismiss notice">✕</button>
+        </div>
+      </div>
 
       <!-- ========================================== -->
       <!-- TAB 1: DAILY MEAL LOGGER (Mobile-First)     -->
@@ -845,6 +860,10 @@
                 <h4 class="settings-pane-title">Meal Pricing Rates</h4>
                 <p class="settings-pane-desc">Configure per-meal costs and Amul milk packet prices for this ledger.</p>
               </div>
+              <div id="pricingAdminLockNotice" class="pricing-lock-notice" style="display:none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span>Only Flat Admin (<strong id="pricingAdminNameDisplay">Admin</strong>) can change pricing rates.</span>
+              </div>
               <div class="settings-grid">
                 <div class="form-group">
                   <label for="rateHalfInput" class="input-label">Half Meal Rate (₹):</label>
@@ -1335,8 +1354,8 @@
   </div>
 
   <!-- QR Generator Script -->
-  <script src="qr.js?v=5.0.0"></script>
+  <script src="qr.js?v=5.1.0"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=5.0.0"></script>
+  <script src="app.js?v=5.1.0"></script>
 </body>
 </html>

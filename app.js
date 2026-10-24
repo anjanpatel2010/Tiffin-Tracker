@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.0.0';
+  const APP_VERSION = '5.1.0';
 
   function checkAndMigrateAppVersion() {
     try {
@@ -658,18 +658,26 @@
     processedMessageIds: new Set(),
 
     init() {
-      // 1. Room code from URL or storage
+      // 1. Room code from URL parameter, hash or storage
+      const urlParams = new URLSearchParams(window.location.search);
+      const queryRoom = urlParams.get('room') || urlParams.get('join');
       const hashMatch = window.location.hash.match(/#room=([a-zA-Z0-9_-]+)/);
-      if (hashMatch && hashMatch[1]) {
-        this.roomCode = hashMatch[1];
+      const urlRoom = queryRoom || (hashMatch ? hashMatch[1] : null);
+
+      if (urlRoom) {
+        this.roomCode = urlRoom.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
         localStorage.setItem('tiffin_sync_room', this.roomCode);
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
       } else {
-        this.roomCode = localStorage.getItem('tiffin_sync_room') || CONFIG.defaultRoom;
+        const activeRoom = RoomManager.session?.roomCode || RoomManager.activeRoom?.code;
+        if (activeRoom) {
+          this.roomCode = activeRoom.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+        } else {
+          this.roomCode = localStorage.getItem('tiffin_sync_room') || CONFIG.defaultRoom;
+        }
       }
 
       // 2. Roommate Identity
-      this.identity = localStorage.getItem('tiffin_my_identity') || 'Anjan';
+      this.identity = localStorage.getItem('tiffin_my_identity') || RoomManager.session?.name || 'Anjan';
       updateIdentityUI(this.identity);
 
       // 3. Connect EventSource
@@ -678,7 +686,15 @@
       // 4. Catch up poll
       this.catchUp();
 
-      // 5. Setup 5-minute Poll Reminder Check
+      // 5. Periodic resilience catch-up (every 30s) to keep all devices synced even through mobile sleep
+      if (this.resilienceTimer) clearInterval(this.resilienceTimer);
+      this.resilienceTimer = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          this.catchUp();
+        }
+      }, 30000);
+
+      // 6. Setup 5-minute Poll Reminder Check
       if (appState && appState.activePoll && appState.activePoll.status === 'active') {
         PollReminderManager.start(appState.activePoll);
       }
@@ -1172,12 +1188,23 @@
         }
       } else if (action.type === 'member_joined') {
         const targetRoom = (action.roomCode || '').toString().toUpperCase().trim();
-        const myRoom = (RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
-        if ((targetRoom === myRoom || !targetRoom || !myRoom) && action.member && RoomManager.activeRoom) {
+        const myRoom = (RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
+        if ((targetRoom === myRoom || !targetRoom || !myRoom) && action.member) {
+          if (!RoomManager.activeRoom) {
+            RoomManager.activeRoom = {
+              code: targetRoom || myRoom,
+              name: 'My Flat',
+              adminName: 'Admin',
+              members: [],
+              pendingRequests: []
+            };
+          }
+
           const exists = (RoomManager.activeRoom.members || []).some(m =>
             m.id === action.member.id ||
             m.name.toLowerCase() === action.member.name.toLowerCase()
           );
+
           if (!exists) {
             RoomManager.activeRoom.members.push(action.member);
             RoomManager.saveActiveRoom();
@@ -1197,11 +1224,24 @@
             }
 
             RoomManager.renderSettingsMembersTab();
+            populateHeaderIdentityDropdown();
             renderAll();
-            playJoinAlertChime();
-            showToast(`🎉 ${action.member.name} joined the flat!`);
+          }
 
-            // Reply with full room metadata & ledger state so the new member gets everything
+          // Trigger audio chime, toast & in-app banner for Admin & flatmates
+          playJoinAlertChime();
+          showToast(`🎉 ${action.member.name} joined the flat!`);
+          RoomManager.showInAppJoinBanner(action.member.name, targetRoom || myRoom);
+
+          NotificationManager.send('Flatmate Joined! 🍱', {
+            body: `${action.member.name} joined #${targetRoom || myRoom}!`,
+            tag: `joined_${action.member.id}_${Date.now()}`
+          });
+
+          logActivity(action.member.name, 'Member Joined', `${action.member.name} joined room #${targetRoom || myRoom}`);
+
+          // Reply with full room metadata & ledger state so the new member gets everything
+          if (RoomManager.session?.status === 'approved' || RoomManager.isAdmin()) {
             SyncEngine.broadcast({
               type: 'room_meta_sync',
               roomCode: targetRoom || myRoom,
@@ -1212,22 +1252,26 @@
         }
       } else if (action.type === 'member_added') {
         const targetRoom = (action.roomCode || '').toString().toUpperCase().trim();
-        const myRoom = (RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
+        const myRoom = (RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
         if (targetRoom === myRoom || !targetRoom || !myRoom) {
-          if (RoomManager.activeRoom && action.member) {
-            const exists = RoomManager.activeRoom.members.some(m => m.id === action.member.id);
+          if (!RoomManager.activeRoom) {
+            RoomManager.activeRoom = { code: targetRoom || myRoom, name: 'My Flat', adminName: 'Admin', members: [] };
+          }
+          if (action.member) {
+            const exists = (RoomManager.activeRoom.members || []).some(m => m.id === action.member.id || m.name.toLowerCase() === action.member.name.toLowerCase());
             if (!exists) {
               RoomManager.activeRoom.members.push(action.member);
               RoomManager.saveActiveRoom();
               ROOMMATES = RoomManager.activeRoom.members;
               RoomManager.renderSettingsMembersTab();
+              populateHeaderIdentityDropdown();
               modified = true;
             }
           }
         }
       } else if (action.type === 'member_kicked') {
         const targetRoom = (action.roomCode || '').toString().toUpperCase().trim();
-        const myRoom = (RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
+        const myRoom = (RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
         if (targetRoom === myRoom) {
           const myId = RoomManager.sanitizeId(RoomManager.session?.name || '');
           const isMe = action.memberId === myId ||
@@ -1242,6 +1286,7 @@
             RoomManager.saveActiveRoom();
             ROOMMATES = RoomManager.activeRoom.members;
             RoomManager.renderSettingsMembersTab();
+            populateHeaderIdentityDropdown();
             modified = true;
             showToast(`${action.memberName || 'A member'} was removed from the flat.`);
           }
@@ -1249,7 +1294,7 @@
       } else if (action.type === 'request_room_sync') {
         const myRoomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode;
         if (myRoomCode && myRoomCode.toUpperCase() === (action.roomCode || '').toUpperCase()) {
-          if (RoomManager.session?.status === 'approved' && RoomManager.activeRoom) {
+          if ((RoomManager.session?.status === 'approved' || RoomManager.isAdmin()) && RoomManager.activeRoom) {
             SyncEngine.broadcast({
               type: 'room_meta_sync',
               roomCode: myRoomCode,
@@ -1259,25 +1304,92 @@
           }
         }
       } else if (action.type === 'room_meta_sync') {
-        const myRoomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode;
-        if (myRoomCode && myRoomCode.toUpperCase() === (action.roomCode || '').toUpperCase()) {
+        const myRoomCode = (RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
+        const actionCode = (action.roomCode || '').toString().toUpperCase().trim();
+        if (actionCode === myRoomCode || !myRoomCode || !actionCode) {
           if (action.roomData) {
             const current = RoomManager.activeRoom || {};
-            RoomManager.activeRoom = { ...current, ...action.roomData };
-            RoomManager.saveActiveRoom();
-            if (action.roomData.members && action.roomData.members.length > 0) {
-              ROOMMATES = action.roomData.members;
+            // Merge members cleanly so nobody is ever dropped
+            const memberMap = new Map();
+            (current.members || []).forEach(m => memberMap.set(m.id, m));
+            (action.roomData.members || []).forEach(m => {
+              if (!memberMap.has(m.id)) {
+                memberMap.set(m.id, m);
+              } else {
+                const existing = memberMap.get(m.id);
+                memberMap.set(m.id, {
+                  ...existing,
+                  ...m,
+                  role: (existing.role === 'admin' || m.role === 'admin') ? 'admin' : (m.role || existing.role || 'member')
+                });
+              }
+            });
+
+            if (RoomManager.session && RoomManager.session.name) {
+              const myId = RoomManager.sanitizeId(RoomManager.session.name);
+              if (!memberMap.has(myId)) {
+                memberMap.set(myId, {
+                  id: myId,
+                  name: RoomManager.session.name,
+                  phone: RoomManager.session.phone || '',
+                  role: RoomManager.session.role || 'member',
+                  avatarColor: '#00d26a'
+                });
+              }
             }
+
+            const mergedMembers = Array.from(memberMap.values());
+            RoomManager.activeRoom = {
+              ...current,
+              ...action.roomData,
+              members: mergedMembers
+            };
+            RoomManager.saveActiveRoom();
+            ROOMMATES = mergedMembers;
+
             if (action.roomData.adminPin) {
               CONFIG.adminPassword = action.roomData.adminPin;
             }
             RoomManager.updateHeaderRoomUI();
             RoomManager.renderSettingsMembersTab();
+            populateHeaderIdentityDropdown();
           }
+
+          // Ensure meal slots exist in appState for all roommates
+          if (appState && appState.days) {
+            for (let d = 1; d <= CONFIG.daysInMonth; d++) {
+              if (appState.days[d]) {
+                if (!appState.days[d].meals) appState.days[d].meals = {};
+                ROOMMATES.forEach(r => {
+                  if (!appState.days[d].meals[r.id]) {
+                    appState.days[d].meals[r.id] = { lunch: '', dinner: '' };
+                  }
+                });
+              }
+            }
+          }
+
           if (action.state && action.state.days) {
-            appState = action.state;
-            modified = true;
+            // Merge days data so any local updates aren't lost
+            for (let d = 1; d <= CONFIG.daysInMonth; d++) {
+              if (action.state.days[d] && appState.days[d]) {
+                if (action.state.days[d].sabzi && !appState.days[d].sabzi) {
+                  appState.days[d].sabzi = action.state.days[d].sabzi;
+                }
+                const incomingMeals = action.state.days[d].meals || {};
+                Object.keys(incomingMeals).forEach(pId => {
+                  if (!appState.days[d].meals[pId] || (!appState.days[d].meals[pId].lunch && !appState.days[d].meals[pId].dinner)) {
+                    appState.days[d].meals[pId] = incomingMeals[pId];
+                  }
+                });
+              }
+            }
+            if (action.state.rates) {
+              appState.rates = { ...appState.rates, ...action.state.rates };
+            }
           }
+          saveStateToStorage(appState);
+          renderAll();
         }
       }
 
@@ -3660,11 +3772,16 @@
       });
     });
 
-    // Save Pricing Rates
+    // Save Pricing Rates (Only Admin can change)
     const saveRatesBtn = document.getElementById('saveRatesBtn');
     if (saveRatesBtn) {
       saveRatesBtn.addEventListener('click', () => {
         triggerHaptic();
+        if (!RoomManager.isAdmin()) {
+          showToast('Permission denied: Only Flat Admin can change meal rates.');
+          return;
+        }
+
         const half = Number(document.getElementById('rateHalfInput')?.value) || 80;
         const full = Number(document.getElementById('rateFullInput')?.value) || 110;
         const special = Number(document.getElementById('rateSpecialInput')?.value) || 90;
@@ -3770,11 +3887,33 @@
     const rFull = document.getElementById('rateFullInput');
     const rSpec = document.getElementById('rateSpecialInput');
     const rAmul = document.getElementById('rateAmulInput');
+    const saveRatesBtn = document.getElementById('saveRatesBtn');
+    const lockNotice = document.getElementById('pricingAdminLockNotice');
+    const adminNameSpan = document.getElementById('pricingAdminNameDisplay');
 
     if (rHalf) rHalf.value = rates.half;
     if (rFull) rFull.value = rates.full;
     if (rSpec) rSpec.value = rates.special;
     if (rAmul) rAmul.value = rates.amulPacket;
+
+    // Admin permissions check: only admin can modify meal rates
+    const isAdmin = RoomManager.isAdmin();
+    const adminName = RoomManager.activeRoom?.adminName || 'Admin';
+
+    [rHalf, rFull, rSpec, rAmul].forEach(inp => {
+      if (inp) {
+        inp.disabled = !isAdmin;
+        inp.classList.toggle('rate-input-locked', !isAdmin);
+      }
+    });
+
+    if (lockNotice) {
+      lockNotice.style.display = isAdmin ? 'none' : 'flex';
+      if (adminNameSpan) adminNameSpan.textContent = adminName;
+    }
+    if (saveRatesBtn) {
+      saveRatesBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+    }
 
     const pName = document.getElementById('providerNameInput');
     const pUpi = document.getElementById('providerUpiInput');
@@ -3851,6 +3990,46 @@
     session: null,
     activeRoom: null,
 
+    isAdmin() {
+      if (this.session?.role === 'admin') return true;
+      if (this.activeRoom) {
+        if (this.session && this.activeRoom.adminPhone && this.session.phone && this.activeRoom.adminPhone === this.session.phone) return true;
+        if (this.session && this.activeRoom.adminName && this.session.name && this.activeRoom.adminName.toLowerCase() === this.session.name.toLowerCase()) return true;
+        if (!this.session) return true; // Single-device flat creator
+      }
+      return false;
+    },
+
+    showInAppJoinBanner(memberName, roomCode) {
+      const banner = document.getElementById('adminJoinNoticeBanner');
+      const title = document.getElementById('adminJoinNoticeTitle');
+      const desc = document.getElementById('adminJoinNoticeDesc');
+      const viewBtn = document.getElementById('adminJoinViewMembersBtn');
+      const dismissBtn = document.getElementById('adminJoinDismissBtn');
+
+      if (!banner) return;
+      if (title) title.textContent = `${memberName} Joined Flat! 🍱`;
+      if (desc) desc.textContent = `${memberName} has joined #${roomCode || 'flat'} and is now active on the ledger.`;
+      banner.style.display = 'flex';
+
+      if (viewBtn) {
+        viewBtn.onclick = () => {
+          triggerHaptic();
+          banner.style.display = 'none';
+          const settingsBtn = document.getElementById('headerSettingsBtn');
+          if (settingsBtn) settingsBtn.click();
+          const tab = document.querySelector('.sub-tab[data-subtab="members"]');
+          if (tab) tab.click();
+        };
+      }
+      if (dismissBtn) {
+        dismissBtn.onclick = () => {
+          triggerHaptic();
+          banner.style.display = 'none';
+        };
+      }
+    },
+
     init() {
       // 1. Check existing session
       try {
@@ -3880,6 +4059,14 @@
 
       if (urlRoom) {
         const cleanCode = urlRoom.toUpperCase().trim();
+        // If user already had a session for a DIFFERENT room, reset so they join this new flat
+        if (this.session && this.session.roomCode && this.session.roomCode.toUpperCase() !== cleanCode) {
+          this.session = null;
+          localStorage.removeItem('tiffin_user_session');
+          this.activeRoom = null;
+          ROOMMATES = [];
+        }
+
         const codeInput = document.getElementById('gateRoomCode');
         if (codeInput) codeInput.value = cleanCode;
 
@@ -3889,6 +4076,9 @@
           codeSpan.textContent = cleanCode;
           banner.style.display = 'flex';
         }
+
+        // Connect SyncEngine immediately to this room code
+        SyncEngine.setRoomCode(cleanCode);
       }
 
       // 3. Load active room data or show Gate
@@ -3946,6 +4136,23 @@
         this.saveActiveRoom();
       }
 
+      // Reload ledger state for this room
+      appState = loadStateForMonth(currentYear, currentMonth);
+
+      // Ensure all members have meal slots in appState
+      if (appState && appState.days) {
+        for (let d = 1; d <= CONFIG.daysInMonth; d++) {
+          if (appState.days[d]) {
+            if (!appState.days[d].meals) appState.days[d].meals = {};
+            ROOMMATES.forEach(r => {
+              if (!appState.days[d].meals[r.id]) {
+                appState.days[d].meals[r.id] = { lunch: '', dinner: '' };
+              }
+            });
+          }
+        }
+      }
+
       if (roomData.adminPin) {
         CONFIG.adminPassword = roomData.adminPin;
       }
@@ -3957,6 +4164,7 @@
       this.updateHeaderRoomUI();
       this.updatePendingBadges();
       this.renderSettingsMembersTab();
+      populateHeaderIdentityDropdown();
     },
 
     saveActiveRoom() {
@@ -4015,11 +4223,20 @@
       this.updateHeaderRoomUI();
       this.updatePendingBadges();
       this.renderSettingsMembersTab();
+      populateHeaderIdentityDropdown();
 
       // Refresh default month data
       appState = getDefaultDataForMonth(currentYear, currentMonth);
       saveStateToStorage(appState);
       renderAll();
+
+      // Immediately broadcast full room metadata so new members can sync instantly
+      SyncEngine.broadcast({
+        type: 'room_meta_sync',
+        roomCode: roomCode,
+        roomData: this.activeRoom,
+        state: appState
+      });
 
       showToast(`Group "${cleanGroup}" created! Room Code: ${roomCode}`);
       setTimeout(() => showStartupWelcomePrompt(), 500);
@@ -4169,7 +4386,10 @@
         };
       } else {
         if (!targetRoom.members) targetRoom.members = [];
-        targetRoom.members.push(newMember);
+        const exists = targetRoom.members.some(m => m.id === newMember.id || m.name.toLowerCase() === newMember.name.toLowerCase());
+        if (!exists) {
+          targetRoom.members.push(newMember);
+        }
       }
 
       this.activeRoom = targetRoom;
@@ -4192,9 +4412,11 @@
         for (let d = 1; d <= CONFIG.daysInMonth; d++) {
           if (appState.days[d]) {
             if (!appState.days[d].meals) appState.days[d].meals = {};
-            if (!appState.days[d].meals[memberId]) {
-              appState.days[d].meals[memberId] = { lunch: '', dinner: '' };
-            }
+            ROOMMATES.forEach(r => {
+              if (!appState.days[d].meals[r.id]) {
+                appState.days[d].meals[r.id] = { lunch: '', dinner: '' };
+              }
+            });
           }
         }
         saveStateToStorage(appState);
@@ -4219,6 +4441,7 @@
       this.hideGateModal();
       this.updateHeaderRoomUI();
       this.renderSettingsMembersTab();
+      populateHeaderIdentityDropdown();
       renderAll();
 
       showToast(`🎉 Joined flat #${cleanCode}! Welcome, ${cleanName}.`);
@@ -4364,12 +4587,7 @@
     },
 
     removeMember(memberId) {
-      const isAdmin = this.session?.role === 'admin' ||
-                      (this.activeRoom && (
-                        (this.session && this.activeRoom.adminPhone === this.session.phone) ||
-                        (this.session && this.activeRoom.adminName === this.session.name) ||
-                        (!this.session && this.activeRoom)
-                      ));
+      const isAdmin = this.isAdmin();
       if (!this.activeRoom || !isAdmin) {
         showToast('Only Admin can kick members.');
         return;
@@ -4396,6 +4614,7 @@
       });
 
       this.renderSettingsMembersTab();
+      populateHeaderIdentityDropdown();
       renderAll();
       showToast(`Kicked ${target.name} from flat.`);
     },
@@ -4417,12 +4636,7 @@
 
     updatePendingBadges() {
       const pendingCount = (this.activeRoom?.pendingRequests || []).length;
-      const isAdmin = this.session?.role === 'admin' ||
-                      (this.activeRoom && (
-                        (this.session && this.activeRoom.adminPhone === this.session.phone) ||
-                        (this.session && this.activeRoom.adminName === this.session.name) ||
-                        (!this.session && this.activeRoom)
-                      ));
+      const isAdmin = this.isAdmin();
 
       const headerPendingBtn = document.getElementById('headerPendingBtn');
       const headerPendingText = document.getElementById('headerPendingCountText');
@@ -4512,7 +4726,7 @@
           const card = document.createElement('div');
           card.className = 'member-mgmt-card';
           const isUserAdmin = r.role === 'admin';
-          const canDelete = (this.session?.role === 'admin' && !isUserAdmin);
+          const canDelete = (this.isAdmin() && !isUserAdmin);
 
           card.innerHTML = `
             <div class="member-mgmt-info">
@@ -4857,6 +5071,28 @@
             showToast('Admin security PIN updated!');
           }
         });
+      });
+    }
+
+    const adminJoinViewBtn = document.getElementById('adminJoinViewMembersBtn');
+    const adminJoinDismissBtn = document.getElementById('adminJoinDismissBtn');
+    const adminJoinBanner = document.getElementById('adminJoinNoticeBanner');
+
+    if (adminJoinViewBtn) {
+      adminJoinViewBtn.addEventListener('click', () => {
+        triggerHaptic();
+        if (adminJoinBanner) adminJoinBanner.style.display = 'none';
+        const settingsBtn = document.getElementById('headerSettingsBtn');
+        if (settingsBtn) settingsBtn.click();
+        const tab = document.querySelector('.sub-tab[data-subtab="members"]');
+        if (tab) tab.click();
+      });
+    }
+
+    if (adminJoinDismissBtn) {
+      adminJoinDismissBtn.addEventListener('click', () => {
+        triggerHaptic();
+        if (adminJoinBanner) adminJoinBanner.style.display = 'none';
       });
     }
   }
@@ -5337,10 +5573,20 @@
       PollReminderManager.start(appState.activePoll);
     }
 
-    // Check reminders when user returns to app
+    // Check reminders & catch up sync when user returns to app
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && appState && appState.activePoll && appState.activePoll.status === 'active') {
-        PollReminderManager.checkAndRemind();
+      if (document.visibilityState === 'visible') {
+        SyncEngine.catchUp();
+        if (RoomManager.activeRoom?.code) {
+          SyncEngine.broadcast({
+            type: 'request_room_sync',
+            roomCode: RoomManager.activeRoom.code,
+            requesterName: RoomManager.session?.name || 'Peer'
+          });
+        }
+        if (appState && appState.activePoll && appState.activePoll.status === 'active') {
+          PollReminderManager.checkAndRemind();
+        }
       }
     });
 
