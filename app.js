@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.2.0';
+  const APP_VERSION = '5.2.1';
 
   function checkAndMigrateAppVersion() {
     try {
@@ -378,10 +378,25 @@
     fillSelect(pollDaySelect);
   }
 
+  // Convert base64 VAPID public key to Uint8Array for PushManager
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
   // ==========================================================================
-  // NATIVE PHONE NOTIFICATION BAR SYSTEM (PWA / Chrome Mobile)
+  // NATIVE PHONE NOTIFICATION BAR SYSTEM (PWA / Web Push / Android / iOS)
   // ==========================================================================
   const NotificationManager = {
+    VAPID_PUBLIC: 'BKdzxa4We0gIQMuW9gJedEKnTecB-PxOIS24zjIK4EFpScY5hXUsZu6n7rfKBnP_V-TMYO9NjxJlh8VnjWyoITM',
+    currentSubscription: null,
+
     isSupported() {
       return ('Notification' in window);
     },
@@ -390,21 +405,124 @@
       return this.isSupported() ? Notification.permission : 'unsupported';
     },
 
+    async getVapidPublicKey() {
+      try {
+        const res = await fetch('/api/vapid-public-key');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.publicKey) return data.publicKey;
+        }
+      } catch (e) {}
+      return this.VAPID_PUBLIC;
+    },
+
+    async subscribeWebPush() {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+      if (Notification.permission !== 'granted') return null;
+
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        if (!reg || !reg.pushManager) return null;
+
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          const publicKey = await this.getVapidPublicKey();
+          const convertedKey = urlBase64ToUint8Array(publicKey);
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: convertedKey
+          });
+        }
+
+        if (sub) {
+          this.currentSubscription = sub;
+          localStorage.setItem('tiffin_push_sub', JSON.stringify(sub));
+
+          const activeRoom = (typeof SyncEngine !== 'undefined' && SyncEngine.roomCode) || 'default';
+          const memberId = (typeof SyncEngine !== 'undefined' && SyncEngine.identity ? SyncEngine.identity : 'Anjan').toLowerCase();
+          const memberName = (typeof SyncEngine !== 'undefined' && SyncEngine.identity) || 'Flatmate';
+
+          fetch('/api/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              roomCode: activeRoom,
+              subscription: sub,
+              memberId: memberId,
+              memberName: memberName
+            })
+          }).catch(err => console.warn('[WebPush] Registration sync failed:', err));
+
+          // Also exchange push subscription with room peers via sync broadcast
+          if (typeof SyncEngine !== 'undefined' && typeof SyncEngine.broadcast === 'function') {
+            SyncEngine.broadcast({
+              type: 'push_sub_registered',
+              roomCode: activeRoom,
+              subscription: sub,
+              memberId: memberId,
+              memberName: memberName
+            }).catch(() => {});
+          }
+
+          return sub;
+        }
+      } catch (err) {
+        console.warn('[WebPush] Registration error:', err);
+      }
+      return null;
+    },
+
+    async sendWebPush(payload = {}) {
+      const activeRoom = (typeof SyncEngine !== 'undefined' && SyncEngine.roomCode) || 'default';
+      let mySub = this.currentSubscription;
+      if (!mySub) {
+        try {
+          mySub = JSON.parse(localStorage.getItem('tiffin_push_sub') || 'null');
+        } catch (e) {}
+      }
+
+      // Read peer subscriptions cached in localStorage
+      let cachedSubs = [];
+      try {
+        const stored = JSON.parse(localStorage.getItem('tiffin_room_push_subs') || '{}');
+        cachedSubs = Object.values(stored);
+      } catch (e) {}
+
+      const body = {
+        roomCode: activeRoom,
+        title: payload.title || 'Tiffin Tracker 🍲',
+        body: payload.body || 'New meal update from flatmates!',
+        tag: payload.tag || 'tiffin-alert',
+        url: payload.url || './#view-poll',
+        senderEndpoint: mySub ? mySub.endpoint : null,
+        additionalSubscriptions: cachedSubs
+      };
+
+      try {
+        await fetch('/api/send-push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+      } catch (e) {
+        console.warn('[WebPush] send-push request failed:', e);
+      }
+    },
+
     updateUI() {
       const btn = document.getElementById('pollNotificationBtn');
-      const text = document.getElementById('pollNotificationBtnText');
       const settingsBtn = document.getElementById('settingsNotificationBtn');
       const perm = this.getPermission();
 
-      if (btn && text) {
+      if (btn) {
         if (perm === 'granted') {
           btn.className = 'notification-status-chip';
           btn.title = 'Phone Notifications are enabled';
-          btn.innerHTML = `<span class="pulse-dot"></span><span>Alerts Active</span>`;
+          btn.innerHTML = `<span class="pulse-dot"></span><span id="pollNotificationBtnText">Alerts Active</span>`;
         } else {
           btn.className = 'notification-chip-btn';
           btn.title = 'Tap to enable Phone Notification Bar Alerts';
-          btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Enable Alerts</span>`;
+          btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span id="pollNotificationBtnText">Enable Alerts</span>`;
         }
       }
 
@@ -428,6 +546,8 @@
             body: 'You will receive phone alerts when a poll starts.',
             tag: 'tiffin-welcome'
           });
+          // Register native Web Push subscription on Vercel backend
+          await this.subscribeWebPush();
           if (appState && appState.activePoll && appState.activePoll.status === 'active') {
             PollReminderManager.start(appState.activePoll);
           }
@@ -454,17 +574,28 @@
         ...options
       };
 
-      try {
-        if ('serviceWorker' in navigator) {
-          const reg = await navigator.serviceWorker.ready;
-          if (reg && reg.showNotification) {
+      // 1. Service Worker Notification (Primary for mobile Chrome / PWA / Android)
+      // Wrapped in Promise.race with 1200ms timeout so it never hangs if SW is unready
+      if ('serviceWorker' in navigator) {
+        try {
+          const reg = await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('SW ready timeout')), 1200))
+          ]);
+          if (reg && typeof reg.showNotification === 'function') {
             await reg.showNotification(title, defaultOpts);
             return;
           }
+        } catch (swErr) {
+          // SW timed out or not available, fallback to Desktop Notification constructor
         }
+      }
+
+      // 2. Desktop Browser Notification Fallback
+      try {
         new Notification(title, defaultOpts);
       } catch (err) {
-        console.warn('Notification post failed:', err);
+        console.warn('Desktop Notification constructor failed (expected on some mobile browsers):', err);
       }
     }
   };
@@ -588,9 +719,17 @@
 
     hasUserVoted(poll) {
       if (!poll || !poll.votes) return false;
-      const myId = (typeof SyncEngine !== 'undefined' && SyncEngine.identity ? SyncEngine.identity : '').trim().toLowerCase();
-      if (!myId) return false;
-      return !!poll.votes[myId];
+      const myRaw = (typeof SyncEngine !== 'undefined' && SyncEngine.identity ? SyncEngine.identity : '').trim().toLowerCase();
+      if (!myRaw) return false;
+      if (poll.votes[myRaw]) return true;
+      if (poll.votes[myRaw.replace(/\s+/g, '_')]) return true;
+      if (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES)) {
+        const found = ROOMMATES.find(r => (r.name && r.name.toLowerCase() === myRaw) || (r.id && r.id.toLowerCase() === myRaw));
+        if (found) {
+          if (poll.votes[found.id] || (found.name && poll.votes[found.name.toLowerCase()])) return true;
+        }
+      }
+      return false;
     },
 
     start(poll) {
@@ -602,6 +741,7 @@
       // If user has already voted, do not remind
       if (this.hasUserVoted(poll)) {
         this.stop();
+        hidePollAlertBanner();
         return;
       }
 
@@ -640,7 +780,8 @@
       }
 
       if (this.hasUserVoted(poll)) {
-        this.stop();
+        this.stop(poll.id);
+        hidePollAlertBanner();
         return;
       }
 
@@ -651,12 +792,15 @@
       if (now - lastReminded >= this.REMINDER_INTERVAL_MS) {
         localStorage.setItem(pollKey, now.toString());
         const meal = poll.mealSlot || 'Dinner';
-        NotificationManager.send(`Poll Reminder`, {
-          body: `Please cast your vote for ${meal}.`,
+        NotificationManager.send(`Poll Reminder: ${meal}`, {
+          body: `Please cast your vote for ${meal}. Options: ${(poll.options || []).join(' vs ')}`,
           tag: 'poll-reminder-' + poll.id,
           renotify: true,
           vibrate: [300, 150, 300]
         });
+        playJoinAlertChime();
+        showPollAlertBanner(poll);
+        showToast(`⏰ Reminder: Please vote in the ${meal} Poll!`);
       }
     },
 
@@ -680,6 +824,80 @@
       } catch (e) {}
     }
   };
+
+  // Real-time floating in-app banner when a meal poll is active and user hasn't voted
+  function showPollAlertBanner(poll) {
+    if (!poll || poll.status !== 'active') return;
+    if (PollReminderManager.hasUserVoted(poll)) {
+      hidePollAlertBanner();
+      return;
+    }
+
+    let banner = document.getElementById('pollAlertBanner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'pollAlertBanner';
+      banner.className = 'poll-alert-banner';
+      document.body.appendChild(banner);
+    }
+
+    const meal = poll.mealSlot || 'Dinner';
+    const author = poll.author || 'Flatmate';
+    const optionsText = (poll.options || []).join(' vs ');
+
+    banner.innerHTML = `
+      <div class="poll-banner-left">
+        <span class="poll-banner-icon">🍲</span>
+        <div class="poll-banner-text-group">
+          <div class="poll-banner-title"><strong>New ${escapeHtml(meal)} Poll</strong> • By ${escapeHtml(author)}</div>
+          <div class="poll-banner-sub">${escapeHtml(optionsText)}</div>
+        </div>
+      </div>
+      <div class="poll-banner-actions">
+        <button class="poll-banner-vote-btn" id="bannerVoteNowBtn">
+          <span>Vote Now</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </button>
+        <button class="poll-banner-close-btn" id="bannerPollCloseBtn" title="Dismiss">✕</button>
+      </div>
+    `;
+
+    banner.classList.add('active');
+
+    const voteBtn = banner.querySelector('#bannerVoteNowBtn');
+    if (voteBtn) {
+      voteBtn.addEventListener('click', () => {
+        triggerHaptic();
+        banner.classList.remove('active');
+        // Switch to Poll view tab
+        document.querySelectorAll('.nav-tab, .m-nav-tab').forEach(t => {
+          t.classList.toggle('active', t.getAttribute('data-tab') === 'poll');
+        });
+        document.querySelectorAll('.view-panel').forEach(panel => {
+          panel.classList.toggle('active', panel.id === 'view-poll');
+        });
+        renderPollView();
+        const voteBox = document.getElementById('myVoteBox');
+        if (voteBox) {
+          voteBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
+    }
+
+    const closeBtn = banner.querySelector('#bannerPollCloseBtn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        banner.classList.remove('active');
+      });
+    }
+  }
+
+  function hidePollAlertBanner() {
+    const banner = document.getElementById('pollAlertBanner');
+    if (banner) {
+      banner.classList.remove('active');
+    }
+  }
 
   // Create lean, reliable sync snapshot (< 2KB) preventing NTFY attachment conversion
   function getCompactSyncState(state) {
@@ -764,9 +982,20 @@
         }
       }, 30000);
 
-      // 6. Setup 5-minute Poll Reminder Check
+      // 6. Setup 5-minute Poll Reminder Check & In-App Banner
       if (appState && appState.activePoll && appState.activePoll.status === 'active') {
-        PollReminderManager.start(appState.activePoll);
+        if (!PollReminderManager.hasUserVoted(appState.activePoll)) {
+          showPollAlertBanner(appState.activePoll);
+          PollReminderManager.start(appState.activePoll);
+        } else {
+          hidePollAlertBanner();
+          PollReminderManager.stop(appState.activePoll.id);
+        }
+      }
+
+      // 7. Auto-ensure native Web Push subscription with Vercel backend
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        NotificationManager.subscribeWebPush();
       }
     },
 
@@ -785,6 +1014,7 @@
 
       this.connect();
       this.catchUp();
+      NotificationManager.subscribeWebPush();
       showToast(`Switched to room #${this.roomCode}`);
     },
 
@@ -796,7 +1026,9 @@
       if (appState && appState.activePoll && appState.activePoll.status === 'active') {
         if (PollReminderManager.hasUserVoted(appState.activePoll)) {
           PollReminderManager.stop(appState.activePoll.id);
+          hidePollAlertBanner();
         } else {
+          showPollAlertBanner(appState.activePoll);
           PollReminderManager.start(appState.activePoll);
         }
       }
@@ -927,12 +1159,69 @@
           headers['Title'] = 'Flatmate Knocking! 🔔';
           headers['Priority'] = 'high';
           headers['Tags'] = 'bell,door';
+        } else if (action.type === 'poll_created') {
+          const meal = action.poll?.mealSlot || 'Dinner';
+          headers['Title'] = `🍲 New ${meal} Poll!`;
+          headers['Priority'] = 'high';
+          headers['Tags'] = 'ballot_box,curry';
+          headers['Click'] = window.location.href.split('#')[0] + '#view-poll';
+          headers['Actions'] = `view, Vote Now, ${window.location.href.split('#')[0]}#view-poll`;
+        } else if (action.type === 'poll_voted') {
+          headers['Title'] = `🗳️ Vote Cast: ${action.author || 'Flatmate'}`;
+          headers['Priority'] = 'default';
+          headers['Tags'] = 'white_check_mark';
+          headers['Click'] = window.location.href.split('#')[0] + '#view-poll';
+        } else if (action.type === 'poll_finalized') {
+          headers['Title'] = `🏆 Menu Decided: ${action.winner}`;
+          headers['Priority'] = 'high';
+          headers['Tags'] = 'trophy,curry';
+          headers['Click'] = window.location.href.split('#')[0] + '#view-poll';
         }
         await fetch(`https://ntfy.sh/${encodeURIComponent(targetRoom)}`, {
           method: 'POST',
           headers: headers,
           body: JSON.stringify(action)
         });
+
+        // Trigger Native Web Push directly via Vercel serverless function to alert closed phones
+        if (action.type === 'poll_created') {
+          const meal = action.poll?.mealSlot || 'Dinner';
+          NotificationManager.sendWebPush({
+            title: `🍲 New ${meal} Poll!`,
+            body: `${action.author || 'Flatmate'} created a poll! Tap to cast your vote.`,
+            tag: 'poll-created-' + (action.poll?.id || Date.now()),
+            url: window.location.href.split('#')[0] + '#view-poll'
+          });
+        } else if (action.type === 'poll_voted') {
+          NotificationManager.sendWebPush({
+            title: `🗳️ Vote Cast: ${action.author || 'Flatmate'}`,
+            body: `${action.author || 'A flatmate'} just voted in the meal poll.`,
+            tag: 'poll-vote',
+            url: window.location.href.split('#')[0] + '#view-poll'
+          });
+        } else if (action.type === 'poll_finalized') {
+          NotificationManager.sendWebPush({
+            title: `🏆 Menu Decided: ${action.winner || 'Meal finalized'}`,
+            body: `Decision locked in for ${action.mealSlot || 'today'}: ${action.winner}!`,
+            tag: 'poll-final',
+            url: window.location.href.split('#')[0] + '#view-poll'
+          });
+        } else if (action.type === 'poll_cancelled') {
+          NotificationManager.sendWebPush({
+            title: `🚫 Poll Cancelled`,
+            body: `${action.author || 'Flatmate'} cancelled the active poll.`,
+            tag: 'poll-cancel',
+            url: window.location.href.split('#')[0] + '#view-poll'
+          });
+        } else if (action.type === 'join_request') {
+          NotificationManager.sendWebPush({
+            title: `Flatmate Knocking! 🔔`,
+            body: `${action.author || 'Someone'} requested to join room #${targetRoom}`,
+            tag: 'room-join',
+            url: window.location.href.split('#')[0]
+          });
+        }
+
         setTimeout(() => {
           if (this.status === 'syncing') this.updateStatusUI('connected', 'Connected');
         }, 300);
@@ -967,8 +1256,15 @@
         return;
       }
 
-      // If action belongs to a different month, persist silently in background
-      if (action.year && action.month && (action.year !== currentYear || action.month !== currentMonth)) {
+      // If action belongs to a different month, persist silently in background (only for month-scoped data)
+      const isGlobalAction = action.type && (
+        action.type.startsWith('poll_') ||
+        action.type.startsWith('room_') ||
+        action.type.startsWith('member_') ||
+        action.type.startsWith('join_') ||
+        action.type.startsWith('push_')
+      );
+      if (!isGlobalAction && action.year && action.month && (action.year !== currentYear || action.month !== currentMonth)) {
         try {
           const otherState = loadStateForMonth(action.year, action.month);
           const msgTime = Number(action.timestamp || 0);
@@ -1101,17 +1397,31 @@
         appState.activePoll = action.poll;
         logActivity(action.author, 'Created Poll', `${action.poll.mealSlot} Poll for Day ${action.poll.day}: ${action.poll.options.join(', ')}`);
         modified = true;
-        if (!isCatchUp) {
-          showToast(`New ${action.poll.mealSlot} Poll from ${action.author}! Tap to vote.`);
-          triggerHaptic();
-          NotificationManager.send(`New ${action.poll.mealSlot || 'Meal'} Poll`, {
-            body: 'Tap to cast your vote.',
-            tag: 'poll-' + action.poll.id,
-            renotify: true
-          });
+
+        const hasVoted = PollReminderManager.hasUserVoted(action.poll);
+        const pollAlertKey = 'tiffin_notified_poll_' + action.poll.id;
+        const alreadyNotified = sessionStorage.getItem(pollAlertKey);
+
+        if (!hasVoted) {
+          // Alert user if not already alerted during this session, or if live incoming
+          if (!alreadyNotified || !isCatchUp) {
+            sessionStorage.setItem(pollAlertKey, 'true');
+            showToast(`🍲 New ${action.poll.mealSlot} Poll from ${action.author}! Tap to vote.`);
+            playJoinAlertChime();
+            if (navigator.vibrate) navigator.vibrate([250, 100, 250, 100, 350]);
+            NotificationManager.send(`🍲 New ${action.poll.mealSlot || 'Meal'} Poll!`, {
+              body: `Launched by ${action.author || 'Flatmate'}. Tap to choose your sabzi!`,
+              tag: 'poll-' + action.poll.id,
+              renotify: true
+            });
+            showPollAlertBanner(action.poll);
+          }
+          localStorage.setItem('tiffin_poll_remind_' + action.poll.id, Date.now().toString());
+          PollReminderManager.start(action.poll);
+        } else {
+          hidePollAlertBanner();
+          PollReminderManager.stop(action.poll.id);
         }
-        localStorage.setItem('tiffin_poll_remind_' + action.poll.id, Date.now().toString());
-        PollReminderManager.start(action.poll);
       } else if (action.type === 'poll_voted') {
         if (appState.activePoll && appState.activePoll.id === action.pollId) {
           if (!appState.activePoll.votes) appState.activePoll.votes = {};
@@ -1124,20 +1434,30 @@
           modified = true;
 
           const myId = (SyncEngine.identity || '').toLowerCase();
-          if (action.roommateId === myId) {
+          const hasMyVote = PollReminderManager.hasUserVoted(appState.activePoll);
+
+          if (action.roommateId === myId || (action.author && action.author.toLowerCase() === myId)) {
             PollReminderManager.stop(action.pollId);
+            hidePollAlertBanner();
           }
 
           if (!isCatchUp) {
-            const hasMyVote = !!(appState.activePoll.votes && appState.activePoll.votes[myId]);
             if (hasMyVote) {
               showToast(`${action.author} voted for ${action.option}`);
             } else {
-              showToast(`${action.author} cast their vote!`);
+              showToast(`🗳️ ${action.author} cast their vote in ${appState.activePoll.mealSlot} Poll! Tap to vote.`);
+              playJoinAlertChime();
+              if (navigator.vibrate) navigator.vibrate([150, 80, 150]);
+              NotificationManager.send(`${appState.activePoll.mealSlot || 'Meal'} Poll Update`, {
+                body: `${action.author} voted! Don't forget to cast your choice.`,
+                tag: 'poll-vote-' + action.pollId
+              });
+              showPollAlertBanner(appState.activePoll);
             }
           }
         }
       } else if (action.type === 'poll_finalized') {
+        hidePollAlertBanner();
         if (appState.activePoll) {
           PollReminderManager.stop(appState.activePoll.id);
           appState.activePoll.status = 'finalized';
@@ -1166,22 +1486,37 @@
         logActivity(action.author, 'Finalized Poll', `Winner dish: ${action.winner}`);
         modified = true;
         if (!isCatchUp) {
-          showToast(`Poll Finalized: ${action.winner}`);
-          NotificationManager.send(`Poll Finalized`, {
+          playJoinAlertChime();
+          showToast(`🏆 Poll Finalized: ${action.winner}`);
+          NotificationManager.send(`Poll Finalized: ${action.winner}`, {
             body: `${action.mealSlot || 'Meal'} decided. Tap to view.`,
             tag: 'poll-winner-' + action.day,
             renotify: true
           });
         }
       } else if (action.type === 'poll_cancelled') {
+        hidePollAlertBanner();
         if (appState.activePoll) {
           PollReminderManager.stop(appState.activePoll.id);
+          const targetDay = action.day || appState.activePoll.day;
+          const targetWinner = action.winner || appState.activePoll.winner;
+          if (targetDay && appState.days[targetDay] && targetWinner && appState.days[targetDay].sabzi === targetWinner) {
+            appState.days[targetDay].sabzi = '';
+            appState.days[targetDay].sabziUpdatedAt = Date.now();
+          }
           appState.activePoll = null;
           modified = true;
           if (!isCatchUp) showToast('Active poll was cancelled.');
         }
       } else if (action.type === 'poll_history_delete') {
         if (appState.pollHistory && action.pollId) {
+          const toDelete = appState.pollHistory.find(p => p.id === action.pollId);
+          const targetDay = action.day || (toDelete ? toDelete.day : null);
+          const targetWinner = action.winner || (toDelete ? toDelete.winner : null);
+          if (targetDay && appState.days[targetDay] && targetWinner && appState.days[targetDay].sabzi === targetWinner) {
+            appState.days[targetDay].sabzi = '';
+            appState.days[targetDay].sabziUpdatedAt = Date.now();
+          }
           appState.pollHistory = appState.pollHistory.filter(p => p.id !== action.pollId);
           modified = true;
         }
@@ -1572,6 +1907,20 @@
           }
           saveStateToStorage(appState);
           renderAll();
+        }
+      } else if (action.type === 'push_sub_registered') {
+        if (action.subscription && action.subscription.endpoint) {
+          try {
+            const subs = JSON.parse(localStorage.getItem('tiffin_room_push_subs') || '{}');
+            subs[action.subscription.endpoint] = {
+              subscription: action.subscription,
+              endpoint: action.subscription.endpoint,
+              memberId: action.memberId || 'member',
+              memberName: action.memberName || 'Flatmate',
+              updatedAt: Date.now()
+            };
+            localStorage.setItem('tiffin_room_push_subs', JSON.stringify(subs));
+          } catch (e) {}
         }
       }
 
@@ -2156,9 +2505,25 @@
       if (questionText) questionText.textContent = `What should we cook for ${poll.mealSlot || 'Dinner'}?`;
       if (metaText) metaText.textContent = `Launched by ${poll.author || 'Flatmate'} • Live across all phones`;
 
-      const myId = (SyncEngine.identity || 'anjan').toLowerCase();
-      const myVote = (poll.votes && poll.votes[myId]) ? poll.votes[myId] : null;
+      const myRaw = (SyncEngine.identity || 'anjan').trim().toLowerCase();
+      let myVote = null;
+      if (poll.votes) {
+        if (poll.votes[myRaw]) myVote = poll.votes[myRaw];
+        else if (poll.votes[myRaw.replace(/\s+/g, '_')]) myVote = poll.votes[myRaw.replace(/\s+/g, '_')];
+        else if (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES)) {
+          const found = ROOMMATES.find(r => (r.name && r.name.toLowerCase() === myRaw) || (r.id && r.id.toLowerCase() === myRaw));
+          if (found) {
+            myVote = poll.votes[found.id] || (found.name && poll.votes[found.name.toLowerCase()]);
+          }
+        }
+      }
       const hasVoted = !!myVote;
+
+      if (hasVoted) {
+        hidePollAlertBanner();
+      } else {
+        showPollAlertBanner(poll);
+      }
 
       const blindNotice = document.getElementById('pollBlindNotice');
       const myVoteBox = document.getElementById('myVoteBox');
@@ -2265,7 +2630,7 @@
         if (votersCountLabel) votersCountLabel.textContent = `${count} / ${ROOMMATES.length} Voted`;
 
         ROOMMATES.forEach(r => {
-          const v = votes[r.id];
+          const v = votes[r.id] || (r.name && votes[r.name.toLowerCase()]) || votes[(r.id || '').replace(/_/g, ' ')];
           const chip = document.createElement('div');
           chip.className = 'voter-chip';
           if (v) {
@@ -2389,10 +2754,24 @@
         card.querySelector('.delete-single-poll-btn')?.addEventListener('click', (e) => {
           e.stopPropagation();
           const pid = pastPoll.id;
+          const pollToDelete = (appState.pollHistory || []).find(p => p.id === pid);
+          if (pollToDelete && pollToDelete.day && appState.days[pollToDelete.day]) {
+            if (pollToDelete.winner && appState.days[pollToDelete.day].sabzi === pollToDelete.winner) {
+              appState.days[pollToDelete.day].sabzi = '';
+              appState.days[pollToDelete.day].sabziUpdatedAt = Date.now();
+            }
+          }
           appState.pollHistory = (appState.pollHistory || []).filter(p => p.id !== pid);
-          persistAndBroadcast({ type: 'poll_history_delete', pollId: pid });
-          showToast('Poll deleted.');
+          persistAndBroadcast({
+            type: 'poll_history_delete',
+            pollId: pid,
+            day: pollToDelete ? pollToDelete.day : null,
+            winner: pollToDelete ? pollToDelete.winner : null
+          });
+          showToast('Poll deleted & sabji removed from Logger tab.');
           renderPollView();
+          renderDailyLogger();
+          renderMasterSheet();
         });
 
         prevListContainer.appendChild(card);
@@ -3442,11 +3821,8 @@
           poll: newPoll
         });
         showToast('Poll launched to flatmates!');
-        NotificationManager.send(`New ${slot} Poll`, {
-          body: 'Tap to cast your vote.',
-          tag: 'poll-' + newPoll.id,
-          renotify: true
-        });
+        sessionStorage.setItem('tiffin_notified_poll_' + newPoll.id, 'true');
+        hidePollAlertBanner();
         localStorage.setItem('tiffin_poll_remind_' + newPoll.id, Date.now().toString());
         PollReminderManager.start(newPoll);
         renderPollView();
@@ -3473,21 +3849,31 @@
     if (resetActivePollBtn) {
       resetActivePollBtn.addEventListener('click', () => {
         if (!appState.activePoll) return;
-        if (confirm('Menu shifted? This will cancel the current poll so you can launch a new one.')) {
+        if (confirm('Menu shifted? This will cancel the current poll and clear its sabji so you can launch a new one.')) {
           triggerHaptic();
           const oldPoll = appState.activePoll;
           PollReminderManager.stop(oldPoll.id);
           oldPoll.status = 'cancelled';
+          if (oldPoll.day && appState.days[oldPoll.day]) {
+            if (oldPoll.winner && appState.days[oldPoll.day].sabzi === oldPoll.winner) {
+              appState.days[oldPoll.day].sabzi = '';
+              appState.days[oldPoll.day].sabziUpdatedAt = Date.now();
+            }
+          }
           appState.pollHistory = appState.pollHistory || [];
           appState.pollHistory.unshift({ ...oldPoll });
           appState.activePoll = null;
 
           persistAndBroadcast({
             type: 'poll_cancelled',
-            pollId: oldPoll.id
+            pollId: oldPoll.id,
+            day: oldPoll.day,
+            winner: oldPoll.winner
           });
-          showToast('Active poll cancelled. You can create a new poll.');
+          showToast('Active poll cancelled & sabji reset.');
           renderPollView();
+          renderDailyLogger();
+          renderMasterSheet();
         }
       });
     }
@@ -3521,24 +3907,35 @@
         }
 
         const dishChoice = selectedRadio ? selectedRadio.value : 'No Tiffin';
-        const myId = (SyncEngine.identity || 'Anjan').toLowerCase();
+        const myName = SyncEngine.identity || 'Anjan';
+        const myId = myName.trim().toLowerCase();
+        const foundMember = (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES))
+          ? ROOMMATES.find(r => (r.name && r.name.toLowerCase() === myId) || (r.id && r.id.toLowerCase() === myId))
+          : null;
+        const resolvedId = foundMember ? foundMember.id : myId;
 
         if (!appState.activePoll.votes) appState.activePoll.votes = {};
-        appState.activePoll.votes[myId] = {
+        const voteObj = {
           option: dishChoice,
           portion: portionChoice,
-          time: Date.now()
+          time: Date.now(),
+          voterName: myName
         };
+        appState.activePoll.votes[resolvedId] = voteObj;
+        if (resolvedId !== myId) {
+          appState.activePoll.votes[myId] = voteObj;
+        }
 
         logActivity(SyncEngine.identity, 'Voted', `Voted "${dishChoice}" (${portionChoice === 'No' ? 'No Tiffin' : portionChoice}) in ${appState.activePoll.mealSlot} Poll`);
         persistAndBroadcast({
           type: 'poll_voted',
           pollId: appState.activePoll.id,
-          roommateId: myId,
+          roommateId: resolvedId,
           option: dishChoice,
           portion: portionChoice
         });
         PollReminderManager.stop(appState.activePoll.id);
+        hidePollAlertBanner();
         showToast(`Vote submitted! 5-min poll reminders stopped.`);
         renderPollView();
       });

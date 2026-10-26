@@ -1,10 +1,10 @@
-const CACHE_NAME = 'tiffin-tracker-v5.2.0';
+const CACHE_NAME = 'tiffin-tracker-v5.2.1';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=5.2.0',
-  './app.js?v=5.2.0',
-  './qr.js?v=5.2.0',
+  './styles.css?v=5.2.1',
+  './app.js?v=5.2.1',
+  './qr.js?v=5.2.1',
   './manifest.json',
   './icon.svg'
 ];
@@ -58,6 +58,33 @@ self.addEventListener('message', (event) => {
       swReminderInterval = null;
     }
   }
+});
+
+// Native Web Push Notification Event (Handles incoming alerts even when app/browser is closed)
+self.addEventListener('push', (event) => {
+  let payload = { title: 'Tiffin Tracker 🍲', body: 'New meal update from flatmates!' };
+  if (event.data) {
+    try {
+      payload = event.data.json();
+    } catch (e) {
+      payload.body = event.data.text();
+    }
+  }
+
+  const title = payload.title || 'Tiffin Tracker 🍲';
+  const options = {
+    body: payload.body || payload.message || 'Tap to cast your vote or view meal updates.',
+    icon: './icon.svg',
+    badge: './icon.svg',
+    tag: payload.tag || 'tiffin-alert',
+    renotify: true,
+    vibrate: [300, 150, 300],
+    data: { url: payload.click || payload.url || './#view-poll' }
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
 });
 
 // Native Notification Click Handler (Brings PWA / browser window to foreground)

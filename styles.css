@@ -2820,6 +2820,117 @@ body {
   }
 }
 
+/* Real-time In-App Menu Poll Alert Banner */
+.poll-alert-banner {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-140%);
+  width: calc(100% - 24px);
+  max-width: 520px;
+  background: rgba(11, 20, 32, 0.96);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid rgba(0, 245, 160, 0.55);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.85), 0 0 24px rgba(0, 245, 160, 0.28);
+  border-radius: 14px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  z-index: 10000000;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+.poll-alert-banner.active {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+.poll-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.poll-banner-icon {
+  font-size: 1.45rem;
+  animation: pendingPulse 1.5s infinite;
+  flex-shrink: 0;
+}
+.poll-banner-text-group {
+  min-width: 0;
+}
+.poll-banner-title {
+  font-size: 0.88rem;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.poll-banner-title strong {
+  color: var(--emerald);
+}
+.poll-banner-sub {
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
+}
+.poll-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.poll-banner-vote-btn {
+  background: linear-gradient(135deg, #00f5a0 0%, #00d9f5 100%);
+  color: #03130c;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 4px 14px rgba(0, 245, 160, 0.35);
+}
+.poll-banner-vote-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 245, 160, 0.5);
+}
+.poll-banner-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px;
+  transition: color 0.15s ease;
+}
+.poll-banner-close-btn:hover {
+  color: #fff;
+}
+@media (max-width: 480px) {
+  .poll-alert-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .poll-banner-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
 .settings-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
