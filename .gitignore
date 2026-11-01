@@ -37,3 +37,13 @@ scratch/
 screenshots/
 .tempmediaStorage/
 
+# Temporary screenshots & testing captures
+emulator_*.png
+current_screen*.png
+
+# Android Gradle cache & build artifacts
+.gradle/
+android/.gradle/
+android/app/build/
+android/build/
+

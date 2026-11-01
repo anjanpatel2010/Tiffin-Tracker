@@ -1,0 +1,16 @@
+{
+  "version": "5.2.1",
+  "versionCode": 50201,
+  "minRequiredVersion": "5.0.0",
+  "title": "Tiffin Tracker Update",
+  "releaseDate": "2026-10-27",
+  "message": "A new version of Tiffin Tracker is available with latest performance upgrades and fixes!",
+  "apkUrl": "https://apkpure.net/p/com.tiffin.tracker",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases/latest",
+  "releaseNotes": [
+    "Native standalone Android APK support",
+    "Real-time instant room synchronization across flatmates",
+    "Automatic in-app update notification popup",
+    "High-performance offline local ledger caching"
+  ]
+}
