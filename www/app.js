@@ -1687,19 +1687,18 @@
               RoomManager.updatePendingBadges();
               RoomManager.renderSettingsMembersTab();
 
-              // Trigger pleasant alert chime
-              playJoinAlertChime();
-
-              // Native push notification
-              NotificationManager.send('Flatmate Knocking! 🔔', {
-                body: `${reqName} ${reqPhone ? `(${reqPhone})` : ''} requested to join room #${RoomManager.activeRoom.code}. Tap to admit.`,
-                tag: 'join-req-' + (req.id || Date.now()),
-                renotify: true
-              });
-
-              // 1-Tap in-app top banner for instant admin action
-              showJoinRequestBanner(req);
-              showToast(`🔔 New join request from ${reqName}!`);
+              // Trigger alert for Admin ONLY ONCE per request, then forget it
+              const reqKey = 'tiffin_notified_req_' + (req.id || reqPhone || reqName).toString().toLowerCase();
+              if (!isCatchUp && !localStorage.getItem(reqKey)) {
+                localStorage.setItem(reqKey, 'true');
+                playJoinAlertChime();
+                NotificationManager.send('Flatmate Knocking! 🔔', {
+                  body: `${reqName} ${reqPhone ? `(${reqPhone})` : ''} requested to join room #${RoomManager.activeRoom.code}. Tap to admit.`,
+                  tag: 'join-req-' + (req.id || reqPhone || reqName)
+                });
+                showJoinRequestBanner(req);
+                showToast(`🔔 New join request from ${reqName}!`);
+              }
             }
           }
         }
@@ -1783,19 +1782,25 @@
             RoomManager.renderSettingsMembersTab();
             populateHeaderIdentityDropdown();
             renderAll();
+
+            // Notify Admin ONLY ONCE when a new member joins, then forget it
+            const joinNotifKey = 'tiffin_notified_join_' + (targetRoom || myRoom).toLowerCase() + '_' + (action.member.id || action.member.name).toLowerCase();
+            const alreadyReminded = localStorage.getItem(joinNotifKey);
+            const isAdmin = RoomManager.isAdmin() || RoomManager.session?.role === 'admin';
+
+            if (!isCatchUp && !alreadyReminded && isAdmin) {
+              localStorage.setItem(joinNotifKey, 'true');
+              playJoinAlertChime();
+              showToast(`🎉 ${action.member.name} joined the flat!`);
+              RoomManager.showInAppJoinBanner(action.member.name, targetRoom || myRoom);
+
+              NotificationManager.send('Flatmate Joined! 🍱', {
+                body: `${action.member.name} joined #${targetRoom || myRoom}!`,
+                tag: `joined_${action.member.id}`
+              });
+              logActivity(action.member.name, 'Member Joined', `${action.member.name} joined room #${targetRoom || myRoom}`);
+            }
           }
-
-          // Trigger audio chime, toast & in-app banner for Admin & flatmates
-          playJoinAlertChime();
-          showToast(`🎉 ${action.member.name} joined the flat!`);
-          RoomManager.showInAppJoinBanner(action.member.name, targetRoom || myRoom);
-
-          NotificationManager.send('Flatmate Joined! 🍱', {
-            body: `${action.member.name} joined #${targetRoom || myRoom}!`,
-            tag: `joined_${action.member.id}_${Date.now()}`
-          });
-
-          logActivity(action.member.name, 'Member Joined', `${action.member.name} joined room #${targetRoom || myRoom}`);
 
           // Reply with full room metadata & ledger state so the new member gets everything
           if (RoomManager.session?.status === 'approved' || RoomManager.isAdmin()) {

@@ -229,16 +229,14 @@
         
         <!-- Active Poll Card / Results -->
         <div class="card" id="activePollCard">
-          <div class="card-header-compact">
-            <div class="card-title-wrap">
-              <h2 class="card-title" id="pollCardTitle">Menu Voting Poll</h2>
-            </div>
+          <div class="poll-card-header">
+            <h2 class="card-title" id="pollCardTitle">Menu Voting Poll</h2>
             <div class="poll-header-actions">
+              <span id="pollStatusBadge" class="badge-pill today-pill">No Active Poll</span>
               <button id="pollNotificationBtn" class="notification-chip-btn" title="Tap to enable Phone Notification Bar Alerts">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                 <span id="pollNotificationBtnText">Enable Alerts</span>
               </button>
-              <span id="pollStatusBadge" class="badge-pill today-pill">No Active Poll</span>
             </div>
           </div>
 
