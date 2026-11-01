@@ -20,7 +20,8 @@ const filesToCopy = [
   'icon.png',
   'icon-192.png',
   'manifest.json',
-  'version.json'
+  'version.json',
+  'sw.js'
 ];
 
 filesToCopy.forEach(file => {

@@ -2218,6 +2218,31 @@ body {
   text-align: center;
 }
 
+.upi-selector-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.upi-selector-group .input-label {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.upi-roommate-dropdown {
+  min-width: 170px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 7px 34px 7px 18px;
+  border-radius: var(--radius-full);
+  text-align: center;
+}
+
 .upi-amount-hero {
   display: flex;
   align-items: center;

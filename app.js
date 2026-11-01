@@ -753,14 +753,33 @@
     intervalId: null,
     REMINDER_INTERVAL_MS: 5 * 60 * 1000, // 5 minutes
 
+    isUserCreator(poll) {
+      if (!poll) return false;
+      const pollId = poll.id;
+      if (sessionStorage.getItem('tiffin_poll_creator_' + pollId) === 'true') return true;
+      const myRaw = (typeof SyncEngine !== 'undefined' && SyncEngine.identity ? SyncEngine.identity : '').trim().toLowerCase();
+      const sessionName = (typeof RoomManager !== 'undefined' && RoomManager.session?.name ? RoomManager.session.name : '').trim().toLowerCase();
+      const myId = (typeof RoomManager !== 'undefined' && RoomManager.sanitizeId ? RoomManager.sanitizeId(sessionName || myRaw) : myRaw).toLowerCase();
+
+      if (poll.authorId && poll.authorId.toLowerCase() === myId) return true;
+      if (poll.author && (poll.author.trim().toLowerCase() === myRaw || poll.author.trim().toLowerCase() === sessionName)) return true;
+      return false;
+    },
+
     hasUserVoted(poll) {
       if (!poll || !poll.votes) return false;
       const myRaw = (typeof SyncEngine !== 'undefined' && SyncEngine.identity ? SyncEngine.identity : '').trim().toLowerCase();
-      if (!myRaw) return false;
-      if (poll.votes[myRaw]) return true;
-      if (poll.votes[myRaw.replace(/\s+/g, '_')]) return true;
+      const sessionName = (typeof RoomManager !== 'undefined' && RoomManager.session?.name ? RoomManager.session.name : '').trim().toLowerCase();
+      const myId = (typeof RoomManager !== 'undefined' && RoomManager.sanitizeId ? RoomManager.sanitizeId(sessionName || myRaw) : myRaw).toLowerCase();
+
+      if (poll.votes[myId] || poll.votes[myRaw] || (sessionName && poll.votes[sessionName])) return true;
+      if (poll.votes[myId.replace(/_/g, ' ')]) return true;
+
       if (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES)) {
-        const found = ROOMMATES.find(r => (r.name && r.name.toLowerCase() === myRaw) || (r.id && r.id.toLowerCase() === myRaw));
+        const found = ROOMMATES.find(r => 
+          (r.name && (r.name.toLowerCase() === myRaw || r.name.toLowerCase() === sessionName)) || 
+          (r.id && (r.id.toLowerCase() === myId || r.id.toLowerCase() === myRaw))
+        );
         if (found) {
           if (poll.votes[found.id] || (found.name && poll.votes[found.name.toLowerCase()])) return true;
         }
@@ -774,9 +793,16 @@
         return;
       }
 
+      // Creator must NEVER receive reminders
+      if (this.isUserCreator(poll)) {
+        this.stop(poll.id);
+        hidePollAlertBanner();
+        return;
+      }
+
       // If user has already voted, do not remind
       if (this.hasUserVoted(poll)) {
-        this.stop();
+        this.stop(poll.id);
         hidePollAlertBanner();
         return;
       }
@@ -787,24 +813,11 @@
         localStorage.setItem(pollKey, Date.now().toString());
       }
 
-      // Keep Service Worker informed for background notification dispatch
-      try {
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({
-            type: 'START_POLL_REMINDER',
-            pollId: poll.id,
-            mealSlot: poll.mealSlot,
-            options: (poll.options || []).join(' vs '),
-            day: poll.day
-          });
-        }
-      } catch (e) {}
-
-      // Keep client-side check running every 30 seconds
+      // Keep client-side check running every 20 seconds
       if (!this.intervalId) {
         this.intervalId = setInterval(() => {
           this.checkAndRemind();
-        }, 30000);
+        }, 20000);
       }
     },
 
@@ -815,7 +828,8 @@
         return;
       }
 
-      if (this.hasUserVoted(poll)) {
+      // If user is creator or has already voted, stop immediately
+      if (this.isUserCreator(poll) || this.hasUserVoted(poll)) {
         this.stop(poll.id);
         hidePollAlertBanner();
         return;
@@ -828,11 +842,10 @@
       if (now - lastReminded >= this.REMINDER_INTERVAL_MS) {
         localStorage.setItem(pollKey, now.toString());
         const meal = poll.mealSlot || 'Dinner';
-        NotificationManager.send(`Poll Reminder: ${meal}`, {
-          body: `Please cast your vote for ${meal}. Options: ${(poll.options || []).join(' vs ')}`,
+        NotificationManager.send(`⏰ Poll Reminder: ${meal}`, {
+          body: `Please cast your vote for ${meal}! Options: ${(poll.options || []).join(' vs ')}`,
           tag: 'poll-reminder-' + poll.id,
-          renotify: true,
-          vibrate: [300, 150, 300]
+          renotify: true
         });
         playJoinAlertChime();
         showPollAlertBanner(poll);
@@ -850,21 +863,13 @@
       } else if (appState && appState.activePoll) {
         localStorage.removeItem('tiffin_poll_remind_' + appState.activePoll.id);
       }
-
-      try {
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({
-            type: 'STOP_POLL_REMINDER'
-          });
-        }
-      } catch (e) {}
     }
   };
 
   // Real-time floating in-app banner when a meal poll is active and user hasn't voted
   function showPollAlertBanner(poll) {
     if (!poll || poll.status !== 'active') return;
-    if (PollReminderManager.hasUserVoted(poll)) {
+    if (PollReminderManager.isUserCreator(poll) || PollReminderManager.hasUserVoted(poll)) {
       hidePollAlertBanner();
       return;
     }
@@ -1016,17 +1021,17 @@
       // 4. Catch up poll
       this.catchUp();
 
-      // 5. Periodic resilience catch-up (every 30s) to keep all devices synced even through mobile sleep
+      // 5. Fast resilience polling (every 8s) to ensure instant synchronization across all room devices
       if (this.resilienceTimer) clearInterval(this.resilienceTimer);
       this.resilienceTimer = setInterval(() => {
         if (document.visibilityState === 'visible') {
           this.catchUp();
         }
-      }, 30000);
+      }, 8000);
 
       // 6. Setup 5-minute Poll Reminder Check & In-App Banner
       if (appState && appState.activePoll && appState.activePoll.status === 'active') {
-        if (!PollReminderManager.hasUserVoted(appState.activePoll)) {
+        if (!PollReminderManager.isUserCreator(appState.activePoll) && !PollReminderManager.hasUserVoted(appState.activePoll)) {
           showPollAlertBanner(appState.activePoll);
           PollReminderManager.start(appState.activePoll);
         } else {
@@ -1066,12 +1071,12 @@
       updateIdentityUI(name);
 
       if (appState && appState.activePoll && appState.activePoll.status === 'active') {
-        if (PollReminderManager.hasUserVoted(appState.activePoll)) {
-          PollReminderManager.stop(appState.activePoll.id);
-          hidePollAlertBanner();
-        } else {
+        if (!PollReminderManager.isUserCreator(appState.activePoll) && !PollReminderManager.hasUserVoted(appState.activePoll)) {
           showPollAlertBanner(appState.activePoll);
           PollReminderManager.start(appState.activePoll);
+        } else {
+          hidePollAlertBanner();
+          PollReminderManager.stop(appState.activePoll.id);
         }
       }
     },
@@ -1445,26 +1450,32 @@
           }
         }
       } else if (action.type === 'poll_created') {
+        const targetRoom = (action.roomCode || '').toString().trim().toUpperCase();
+        const myRoom = getActiveRoomCode().toString().trim().toUpperCase();
+        if (targetRoom && myRoom && targetRoom !== myRoom) return;
+
         if (appState.activePoll && appState.activePoll.id !== action.poll.id) {
           appState.pollHistory = appState.pollHistory || [];
           const exists = appState.pollHistory.some(p => p.id === appState.activePoll.id);
           if (!exists) appState.pollHistory.unshift(appState.activePoll);
         }
         appState.activePoll = action.poll;
+        const roomKey = (targetRoom || myRoom).toLowerCase();
+        localStorage.setItem('tiffin_active_poll_' + roomKey, JSON.stringify(action.poll));
         logActivity(action.author, 'Created Poll', `${action.poll.mealSlot} Poll for Day ${action.poll.day}: ${action.poll.options.join(', ')}`);
         modified = true;
 
+        const isCreator = PollReminderManager.isUserCreator(action.poll);
         const hasVoted = PollReminderManager.hasUserVoted(action.poll);
         const pollAlertKey = 'tiffin_notified_poll_' + action.poll.id;
         const alreadyNotified = sessionStorage.getItem(pollAlertKey);
 
-        if (!hasVoted) {
+        if (!isCreator && !hasVoted) {
           // Alert user if not already alerted during this session, or if live incoming
           if (!alreadyNotified || !isCatchUp) {
             sessionStorage.setItem(pollAlertKey, 'true');
             showToast(`🍲 New ${action.poll.mealSlot} Poll from ${action.author}! Tap to vote.`);
             playJoinAlertChime();
-            if (navigator.vibrate) navigator.vibrate([250, 100, 250, 100, 350]);
             NotificationManager.send(`🍲 New ${action.poll.mealSlot || 'Meal'} Poll!`, {
               body: `Launched by ${action.author || 'Flatmate'}. Tap to choose your sabzi!`,
               tag: 'poll-' + action.poll.id,
@@ -1479,33 +1490,37 @@
           PollReminderManager.stop(action.poll.id);
         }
       } else if (action.type === 'poll_voted') {
+        const targetRoom = (action.roomCode || '').toString().trim().toUpperCase();
+        const myRoom = getActiveRoomCode().toString().trim().toUpperCase();
+        if (targetRoom && myRoom && targetRoom !== myRoom) return;
+
         if (appState.activePoll && appState.activePoll.id === action.pollId) {
           if (!appState.activePoll.votes) appState.activePoll.votes = {};
           appState.activePoll.votes[action.roommateId] = {
             option: action.option,
             portion: action.portion,
-            time: action.timestamp
+            time: action.timestamp,
+            voterName: action.voterName || action.author
           };
+          const roomKey = (targetRoom || myRoom).toLowerCase();
+          localStorage.setItem('tiffin_active_poll_' + roomKey, JSON.stringify(appState.activePoll));
           logActivity(action.author, 'Cast Vote', `Voted "${action.option}" (${action.portion})`);
           modified = true;
 
-          const myId = (SyncEngine.identity || '').toLowerCase();
           const hasMyVote = PollReminderManager.hasUserVoted(appState.activePoll);
-
-          if (action.roommateId === myId || (action.author && action.author.toLowerCase() === myId)) {
+          if (hasMyVote) {
             PollReminderManager.stop(action.pollId);
             hidePollAlertBanner();
           }
 
           if (!isCatchUp) {
             if (hasMyVote) {
-              showToast(`${action.author} voted for ${action.option}`);
+              showToast(`${action.voterName || action.author} voted for ${action.option}`);
             } else {
-              showToast(`🗳️ ${action.author} cast their vote in ${appState.activePoll.mealSlot} Poll! Tap to vote.`);
+              showToast(`🗳️ ${action.voterName || action.author} voted in ${appState.activePoll.mealSlot} Poll! Tap to vote.`);
               playJoinAlertChime();
-              if (navigator.vibrate) navigator.vibrate([150, 80, 150]);
               NotificationManager.send(`${appState.activePoll.mealSlot || 'Meal'} Poll Update`, {
-                body: `${action.author} voted! Don't forget to cast your choice.`,
+                body: `${action.voterName || action.author} voted! Don't forget to cast your choice.`,
                 tag: 'poll-vote-' + action.pollId
               });
               showPollAlertBanner(appState.activePoll);
@@ -1513,7 +1528,14 @@
           }
         }
       } else if (action.type === 'poll_finalized') {
+        const targetRoom = (action.roomCode || '').toString().trim().toUpperCase();
+        const myRoom = getActiveRoomCode().toString().trim().toUpperCase();
+        if (targetRoom && myRoom && targetRoom !== myRoom) return;
+
         hidePollAlertBanner();
+        const roomKey = (targetRoom || myRoom).toLowerCase();
+        localStorage.removeItem('tiffin_active_poll_' + roomKey);
+
         if (appState.activePoll) {
           PollReminderManager.stop(appState.activePoll.id);
           appState.activePoll.status = 'finalized';
@@ -1530,6 +1552,7 @@
         // Apply winner sabzi to ledger
         if (action.day && appState.days[action.day]) {
           appState.days[action.day].sabzi = action.winner;
+          appState.days[action.day].sabziUpdatedAt = Date.now();
           if (action.mealsApplied) {
             Object.entries(action.mealsApplied).forEach(([rId, portion]) => {
               const slot = (action.mealSlot || 'Dinner').toLowerCase();
@@ -1551,7 +1574,14 @@
           });
         }
       } else if (action.type === 'poll_cancelled') {
+        const targetRoom = (action.roomCode || '').toString().trim().toUpperCase();
+        const myRoom = getActiveRoomCode().toString().trim().toUpperCase();
+        if (targetRoom && myRoom && targetRoom !== myRoom) return;
+
         hidePollAlertBanner();
+        const roomKey = (targetRoom || myRoom).toLowerCase();
+        localStorage.removeItem('tiffin_active_poll_' + roomKey);
+
         if (appState.activePoll) {
           PollReminderManager.stop(appState.activePoll.id);
           const targetDay = action.day || appState.activePoll.day;
@@ -1657,9 +1687,8 @@
               RoomManager.updatePendingBadges();
               RoomManager.renderSettingsMembersTab();
 
-              // Trigger pleasant alert chime and vibration
+              // Trigger pleasant alert chime
               playJoinAlertChime();
-              if (navigator.vibrate) navigator.vibrate([250, 100, 250, 100, 350]);
 
               // Native push notification
               NotificationManager.send('Flatmate Knocking! 🔔', {
@@ -2552,13 +2581,19 @@
       if (questionText) questionText.textContent = `What should we cook for ${poll.mealSlot || 'Dinner'}?`;
       if (metaText) metaText.textContent = `Launched by ${poll.author || 'Flatmate'} • Live across all phones`;
 
-      const myRaw = (SyncEngine.identity || 'anjan').trim().toLowerCase();
+      const isCreator = PollReminderManager.isUserCreator(poll);
+      const myRaw = (typeof SyncEngine !== 'undefined' && SyncEngine.identity ? SyncEngine.identity : '').trim().toLowerCase();
+      const sessionName = (typeof RoomManager !== 'undefined' && RoomManager.session?.name ? RoomManager.session.name : '').trim().toLowerCase();
+      const myId = (typeof RoomManager !== 'undefined' && RoomManager.sanitizeId ? RoomManager.sanitizeId(sessionName || myRaw) : myRaw).toLowerCase();
+
       let myVote = null;
       if (poll.votes) {
-        if (poll.votes[myRaw]) myVote = poll.votes[myRaw];
-        else if (poll.votes[myRaw.replace(/\s+/g, '_')]) myVote = poll.votes[myRaw.replace(/\s+/g, '_')];
-        else if (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES)) {
-          const found = ROOMMATES.find(r => (r.name && r.name.toLowerCase() === myRaw) || (r.id && r.id.toLowerCase() === myRaw));
+        myVote = poll.votes[myId] || poll.votes[myRaw] || (sessionName && poll.votes[sessionName]);
+        if (!myVote && typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES)) {
+          const found = ROOMMATES.find(r => 
+            (r.name && (r.name.toLowerCase() === myRaw || r.name.toLowerCase() === sessionName)) || 
+            (r.id && (r.id.toLowerCase() === myId || r.id.toLowerCase() === myRaw))
+          );
           if (found) {
             myVote = poll.votes[found.id] || (found.name && poll.votes[found.name.toLowerCase()]);
           }
@@ -2566,7 +2601,7 @@
       }
       const hasVoted = !!myVote;
 
-      if (hasVoted) {
+      if (hasVoted || isCreator) {
         hidePollAlertBanner();
       } else {
         showPollAlertBanner(poll);
@@ -2581,16 +2616,42 @@
       const votersBreakdownCard = document.getElementById('votersBreakdownCard');
       const finalizeActions = document.getElementById('pollFinalizeActions');
 
-      if (myVoteIdentityLabel) myVoteIdentityLabel.textContent = SyncEngine.identity || 'You';
+      if (myVoteIdentityLabel) myVoteIdentityLabel.textContent = SyncEngine.identity || RoomManager.session?.name || 'You';
 
-      // Blind Voting Enforcement
+      // Clean & Smart Voting UX
       if (!hasVoted) {
-        if (blindNotice) blindNotice.style.display = 'flex';
         if (myVoteBox) myVoteBox.style.display = 'block';
         if (myVotedSummary) myVotedSummary.style.display = 'none';
-        if (pollResultsTray) pollResultsTray.style.display = 'none';
-        if (votersBreakdownCard) votersBreakdownCard.style.display = 'none';
-        if (finalizeActions) finalizeActions.style.display = 'none';
+
+        if (isCreator) {
+          if (blindNotice) {
+            blindNotice.style.display = 'flex';
+            blindNotice.innerHTML = `
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="color:var(--emerald); flex-shrink:0;"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+              <div class="blind-notice-content">
+                <strong>Poll Host Notice</strong>
+                <p>Choose your sabzi and portion below to cast the opening vote.</p>
+              </div>
+            `;
+          }
+          if (pollResultsTray) pollResultsTray.style.display = 'none';
+          if (votersBreakdownCard) votersBreakdownCard.style.display = 'none';
+          if (finalizeActions) finalizeActions.style.display = 'none';
+        } else {
+          if (blindNotice) {
+            blindNotice.style.display = 'flex';
+            blindNotice.innerHTML = `
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="color:var(--amber); flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <div class="blind-notice-content">
+                <strong>Blind Voting Active</strong>
+                <p>Results and flatmate choices are hidden until you cast your vote.</p>
+              </div>
+            `;
+          }
+          if (pollResultsTray) pollResultsTray.style.display = 'none';
+          if (votersBreakdownCard) votersBreakdownCard.style.display = 'none';
+          if (finalizeActions) finalizeActions.style.display = 'none';
+        }
       } else {
         if (blindNotice) blindNotice.style.display = 'none';
         if (myVoteBox) myVoteBox.style.display = 'none';
@@ -3160,14 +3221,19 @@
     const roommateSelect = document.getElementById('upiRoommateSelect');
     if (!roommateSelect) return;
 
-    if (roommateSelect.options.length === 0) {
+    if (!selectedUpiRoommate && ROOMMATES.length > 0) {
+      selectedUpiRoommate = ROOMMATES[0].id;
+    }
+
+    if (roommateSelect.options.length === 0 || roommateSelect.options.length !== ROOMMATES.length) {
+      roommateSelect.innerHTML = '';
       ROOMMATES.forEach(r => {
         const opt = document.createElement('option');
         opt.value = r.id;
         opt.textContent = r.role === 'admin' ? `👑 ${getFirstName(r.name)}` : getFirstName(r.name);
         roommateSelect.appendChild(opt);
       });
-      roommateSelect.value = selectedUpiRoommate;
+      roommateSelect.value = selectedUpiRoommate || (ROOMMATES[0] ? ROOMMATES[0].id : '');
     }
 
     const provider = appState.provider || CONFIG.defaultProvider;
@@ -3181,6 +3247,11 @@
     if (phoneDisplay) phoneDisplay.textContent = provider.phone ? `Mobile: ${provider.phone}` : 'Tiffin & Mess Provider';
 
     const roommateObj = ROOMMATES.find(r => r.id === selectedUpiRoommate) || ROOMMATES[0];
+    if (!roommateObj) {
+      const displayAmount = document.getElementById('upiDisplayAmount');
+      if (displayAmount) displayAmount.textContent = '0';
+      return;
+    }
     const stats = getRoommateMonthlyStats(roommateObj.id);
     const amountToPay = (customUpiAmount !== null) ? customUpiAmount : stats.tiffinTotal;
 
@@ -3842,19 +3913,25 @@
         const options = [];
         inputs.forEach(inp => {
           const val = inp.value.trim();
-          if (val) options.push(val);
+          if (val && !options.includes(val)) options.push(val);
         });
 
         if (options.length < 2) {
-          alert('Please enter at least 2 sabzi options for the poll.');
+          alert('Please enter at least 2 distinct sabzi options for the poll.');
           return;
         }
 
+        const roomCodeKey = getActiveRoomCode().toUpperCase().trim();
+        const myName = (RoomManager.session?.name || SyncEngine.identity || 'Admin').trim();
+        const myId = RoomManager.sanitizeId(myName);
+
         const newPoll = {
           id: 'poll_' + Date.now(),
+          roomCode: roomCodeKey,
           day: day,
           mealSlot: slot,
-          author: SyncEngine.identity,
+          author: myName,
+          authorId: myId,
           createdTime: Date.now(),
           status: 'active',
           options: options,
@@ -3869,17 +3946,42 @@
         }
 
         appState.activePoll = newPoll;
-        logActivity(SyncEngine.identity, 'Created Poll', `${slot} poll for Day ${day}: ${options.join(', ')}`);
+        localStorage.setItem('tiffin_active_poll_' + roomCodeKey.toLowerCase(), JSON.stringify(newPoll));
+        logActivity(myName, 'Created Poll', `${slot} poll for Day ${day}: ${options.join(', ')}`);
+
         persistAndBroadcast({
           type: 'poll_created',
+          roomCode: roomCodeKey,
           poll: newPoll
         });
-        showToast('Poll launched to flatmates!');
+
+        // The creator will NEVER receive notifications or recurring 5-min reminders
+        sessionStorage.setItem('tiffin_poll_creator_' + newPoll.id, 'true');
         sessionStorage.setItem('tiffin_notified_poll_' + newPoll.id, 'true');
         hidePollAlertBanner();
-        localStorage.setItem('tiffin_poll_remind_' + newPoll.id, Date.now().toString());
-        PollReminderManager.start(newPoll);
+        PollReminderManager.stop(newPoll.id);
+
+        showToast('🚀 Poll launched to flatmates! Select your option below to vote.');
+
+        // Directly redirect creator to choose their option
         renderPollView();
+
+        const activePollContainer = document.getElementById('activePollContainer');
+        const createPollContainer = document.getElementById('createPollContainer');
+        if (activePollContainer) activePollContainer.style.display = 'block';
+        if (createPollContainer) createPollContainer.style.display = 'none';
+
+        const myVoteBox = document.getElementById('myVoteBox');
+        if (myVoteBox) {
+          myVoteBox.style.display = 'block';
+          myVoteBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const firstRadio = myVoteBox.querySelector('input[type="radio"]');
+          if (firstRadio) {
+            firstRadio.checked = true;
+            const parentLabel = firstRadio.closest('.poll-radio-label');
+            if (parentLabel) parentLabel.classList.add('selected');
+          }
+        }
       });
     }
 
@@ -3906,6 +4008,7 @@
         if (confirm('Menu shifted? This will cancel the current poll and clear its sabji so you can launch a new one.')) {
           triggerHaptic();
           const oldPoll = appState.activePoll;
+          const roomCodeKey = getActiveRoomCode().toUpperCase().trim();
           PollReminderManager.stop(oldPoll.id);
           oldPoll.status = 'cancelled';
           if (oldPoll.day && appState.days[oldPoll.day]) {
@@ -3917,9 +4020,11 @@
           appState.pollHistory = appState.pollHistory || [];
           appState.pollHistory.unshift({ ...oldPoll });
           appState.activePoll = null;
+          localStorage.removeItem('tiffin_active_poll_' + roomCodeKey.toLowerCase());
 
           persistAndBroadcast({
             type: 'poll_cancelled',
+            roomCode: roomCodeKey,
             pollId: oldPoll.id,
             day: oldPoll.day,
             winner: oldPoll.winner
@@ -3961,36 +4066,44 @@
         }
 
         const dishChoice = selectedRadio ? selectedRadio.value : 'No Tiffin';
-        const myName = SyncEngine.identity || 'Anjan';
-        const myId = myName.trim().toLowerCase();
+        const myName = (RoomManager.session?.name || SyncEngine.identity || 'Admin').trim();
+        const myId = RoomManager.sanitizeId(myName);
+        const roomCodeKey = getActiveRoomCode().toUpperCase().trim();
+
         const foundMember = (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES))
-          ? ROOMMATES.find(r => (r.name && r.name.toLowerCase() === myId) || (r.id && r.id.toLowerCase() === myId))
+          ? ROOMMATES.find(r => (r.name && r.name.toLowerCase() === myName.toLowerCase()) || (r.id && r.id.toLowerCase() === myId.toLowerCase()))
           : null;
         const resolvedId = foundMember ? foundMember.id : myId;
+        const resolvedName = foundMember ? foundMember.name : myName;
 
         if (!appState.activePoll.votes) appState.activePoll.votes = {};
         const voteObj = {
           option: dishChoice,
           portion: portionChoice,
           time: Date.now(),
-          voterName: myName
+          voterName: resolvedName
         };
         appState.activePoll.votes[resolvedId] = voteObj;
         if (resolvedId !== myId) {
           appState.activePoll.votes[myId] = voteObj;
         }
 
-        logActivity(SyncEngine.identity, 'Voted', `Voted "${dishChoice}" (${portionChoice === 'No' ? 'No Tiffin' : portionChoice}) in ${appState.activePoll.mealSlot} Poll`);
+        localStorage.setItem('tiffin_active_poll_' + roomCodeKey.toLowerCase(), JSON.stringify(appState.activePoll));
+        logActivity(resolvedName, 'Cast Vote', `Voted "${dishChoice}" (${portionChoice === 'No' ? 'No Tiffin' : portionChoice}) in ${appState.activePoll.mealSlot} Poll`);
+
         persistAndBroadcast({
           type: 'poll_voted',
+          roomCode: roomCodeKey,
           pollId: appState.activePoll.id,
           roommateId: resolvedId,
+          voterName: resolvedName,
           option: dishChoice,
           portion: portionChoice
         });
+
         PollReminderManager.stop(appState.activePoll.id);
         hidePollAlertBanner();
-        showToast(`Vote submitted! 5-min poll reminders stopped.`);
+        showToast('✓ Vote submitted! 5-min reminders stopped.');
         renderPollView();
       });
     }
@@ -4006,6 +4119,8 @@
           alert('No votes have been cast in this poll yet.');
           return;
         }
+
+        const roomCodeKey = getActiveRoomCode().toUpperCase().trim();
 
         // Count votes and find winner
         const tally = {};
@@ -4026,17 +4141,22 @@
         });
 
         // Apply winning sabzi to selected day
-        appState.days[poll.day].sabzi = winningDish;
+        if (appState.days && appState.days[poll.day]) {
+          appState.days[poll.day].sabzi = winningDish;
+          appState.days[poll.day].sabziUpdatedAt = Date.now();
+        }
 
         // Apply each roommate's chosen portion
         const slotKey = (poll.mealSlot || 'Dinner').toLowerCase();
         const mealsApplied = {};
 
         ROOMMATES.forEach(r => {
-          const voterData = votes[r.id];
+          const voterData = votes[r.id] || (r.name && votes[r.name.toLowerCase()]) || votes[(r.id || '').replace(/_/g, ' ')];
           const portion = voterData ? voterData.portion : 'Off';
           mealsApplied[r.id] = (portion === 'No') ? 'Off' : portion;
-          appState.days[poll.day].meals[r.id][slotKey] = (portion === 'Off' || portion === 'No') ? '' : portion;
+          if (appState.days && appState.days[poll.day] && appState.days[poll.day].meals && appState.days[poll.day].meals[r.id]) {
+            appState.days[poll.day].meals[r.id][slotKey] = (portion === 'Off' || portion === 'No') ? '' : portion;
+          }
         });
 
         poll.status = 'finalized';
@@ -4050,10 +4170,14 @@
           appState.pollHistory.unshift({ ...poll });
         }
 
+        localStorage.removeItem('tiffin_active_poll_' + roomCodeKey.toLowerCase());
         PollReminderManager.stop(poll.id);
+        hidePollAlertBanner();
+
         logActivity(SyncEngine.identity, 'Finalized Poll', `Winner: ${winningDish} (${maxVotes > 0 ? maxVotes : 0} votes)`);
         persistAndBroadcast({
           type: 'poll_finalized',
+          roomCode: roomCodeKey,
           day: poll.day,
           mealSlot: poll.mealSlot,
           winner: winningDish,
@@ -4061,7 +4185,7 @@
         });
 
         NotificationManager.send(`Poll Finalized`, {
-          body: `${poll.mealSlot || 'Meal'} menu decided. Tap to view.`,
+          body: `${poll.mealSlot || 'Meal'} menu decided: ${winningDish}. Tap to view.`,
           tag: 'poll-winner-' + poll.day,
           renotify: true
         });
@@ -4800,6 +4924,107 @@
       }
     },
 
+    seedMockShowcase() {
+      const mockRoom = {
+        code: 'TF-FLAT',
+        name: 'Flat 402 - Mess Ledger',
+        adminName: 'Alex',
+        adminPhone: '+91 98765 43210',
+        adminPin: 'Flower',
+        createdAt: new Date().toISOString(),
+        members: [
+          { id: 'alex', name: 'Alex', phone: '+91 98765 43210', role: 'admin', avatarColor: '#00d26a' },
+          { id: 'david', name: 'David', phone: '+91 98765 43211', role: 'member', avatarColor: '#00d4ff' },
+          { id: 'rahul', name: 'Rahul', phone: '+91 98765 43212', role: 'member', avatarColor: '#ffb800' },
+          { id: 'priya', name: 'Priya', phone: '+91 98765 43213', role: 'member', avatarColor: '#ff3b5c' }
+        ],
+        pendingRequests: []
+      };
+
+      const mockSession = {
+        name: 'Alex',
+        phone: '+91 98765 43210',
+        role: 'admin',
+        roomCode: 'TF-FLAT',
+        groupName: 'Flat 402 - Mess Ledger',
+        status: 'approved'
+      };
+
+      const roomsObj = { 'tf-flat': mockRoom };
+      localStorage.setItem('tiffin_rooms', JSON.stringify(roomsObj));
+      localStorage.setItem('tiffin_user_session', JSON.stringify(mockSession));
+      localStorage.setItem('tiffin_sync_room', 'TF-FLAT');
+
+      ROOMMATES = mockRoom.members;
+      this.session = mockSession;
+      this.activeRoom = mockRoom;
+
+      // Create state for current month
+      const state = getDefaultDataForMonth(currentYear, currentMonth);
+      state.provider = {
+        name: 'Ramesh Cook Services',
+        upi: 'ramesh.cook@okhdfcbank',
+        phone: '+91 98111 22333'
+      };
+      state.rates = {
+        half: 80,
+        full: 110,
+        special: 90,
+        amulPacket: 35
+      };
+      state.amulMembers = ['alex', 'david', 'rahul', 'priya'];
+
+      // Sample dishes & meals
+      const sampleData = [
+        { d: 1, sabzi: 'Paneer Butter Masala', meals: { alex: ['Full', 'Half'], david: ['Half', 'Full'], rahul: ['Full', 'Full'], priya: ['Off', 'Half'] }, amul: { alex: 1, david: 0.5, rahul: 1, priya: 0.5 } },
+        { d: 2, sabzi: 'Dal Tadka & Jeera Rice', meals: { alex: ['Half', 'Half'], david: ['Full', 'Off'], rahul: ['Half', 'Full'], priya: ['Half', 'Half'] }, amul: { alex: 1, david: 1, rahul: 1, priya: 1 } },
+        { d: 3, sabzi: 'Aloo Gobi Matar', meals: { alex: ['Full', 'Full'], david: ['Half', 'Half'], rahul: ['Off', 'Full'], priya: ['Full', 'Half'] }, amul: { alex: 0.5, david: 1, rahul: 0.5, priya: 0.5 } },
+        { d: 4, sabzi: 'Chole Bhature Special', meals: { alex: ['Full', 'Half'], david: ['Full', 'Full'], rahul: ['Full', 'Half'], priya: ['Off', 'Full'] }, amul: { alex: 1, david: 2, rahul: 1, priya: 1 } },
+        { d: 5, sabzi: 'Rajma Chawal Delight', meals: { alex: ['Half', 'Full'], david: ['Half', 'Half'], rahul: ['Full', 'Full'], priya: ['Half', 'Half'] }, amul: { alex: 1, david: 0.5, rahul: 1, priya: 0.5 } }
+      ];
+
+      sampleData.forEach(item => {
+        if (state.days[item.d]) {
+          state.days[item.d].sabzi = item.sabzi;
+          state.days[item.d].sabziUpdatedAt = Date.now();
+          state.days[item.d].amul = item.amul;
+          Object.entries(item.meals).forEach(([pId, [l, d]]) => {
+            if (!state.days[item.d].meals[pId]) state.days[item.d].meals[pId] = {};
+            state.days[item.d].meals[pId].lunch = l === 'Off' ? '' : l;
+            state.days[item.d].meals[pId].dinner = d === 'Off' ? '' : d;
+          });
+        }
+      });
+
+      state.activePoll = {
+        id: 'poll_mock_' + Date.now(),
+        day: 1,
+        mealSlot: 'Dinner',
+        options: ['Paneer Butter Masala', 'Dal Makhani', 'Mix Veg Korma'],
+        status: 'active',
+        author: 'Alex',
+        createdAt: Date.now() - 3600000,
+        expiresAt: Date.now() + 7200000,
+        votes: {
+          alex: { option: 'Paneer Butter Masala', portion: 'Half' },
+          david: { option: 'Dal Makhani', portion: 'Full' },
+          rahul: { option: 'Paneer Butter Masala', portion: 'Full' }
+        }
+      };
+
+      saveStateForMonth(currentYear, currentMonth, state);
+      appState = state;
+
+      SyncEngine.setIdentity('Alex');
+      SyncEngine.setRoomCode('TF-FLAT');
+      this.saveActiveRoom();
+      this.updateHeaderRoomUI();
+      this.updatePendingBadges();
+      populateHeaderIdentityDropdown();
+      renderAll();
+      showToast('🍱 Showcase Mock Flat Loaded!', 'success');
+    },
+
     init() {
       // 1. Check existing session
       try {
@@ -4811,6 +5036,10 @@
 
       // 2. Check room code and credentials in URL query or hash
       const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('mock') === '1' || localStorage.getItem('tiffin_showcase_mock') === '1') {
+        this.seedMockShowcase();
+        return;
+      }
       const urlRoom = urlParams.get('room') || urlParams.get('join') || (window.location.hash.startsWith('#room=') ? window.location.hash.slice(6) : null);
       const urlPin = urlParams.get('pin');
       const urlPhone = urlParams.get('phone');
@@ -4859,8 +5088,12 @@
           setTimeout(() => showStartupWelcomePrompt(), 600);
         }
       } else {
-        // Default to Join Flat tab for both new visitors and invite link recipients
-        this.showGateModal('join');
+        if (urlParams.get('mock') === '1' || localStorage.getItem('tiffin_showcase_mock') === '1') {
+          this.seedMockShowcase();
+          return;
+        }
+        // Show normal Gate Modal for new installs to create or join flat
+        this.showGateModal();
       }
 
       this.updateHeaderRoomUI();
@@ -4910,6 +5143,17 @@
 
       // Reload ledger state for this room
       appState = loadStateForMonth(currentYear, currentMonth);
+
+      // Restore active room poll if present
+      const savedPoll = localStorage.getItem('tiffin_active_poll_' + codeKey.toLowerCase());
+      if (savedPoll) {
+        try {
+          const parsedPoll = JSON.parse(savedPoll);
+          if (parsedPoll && parsedPoll.status === 'active') {
+            appState.activePoll = parsedPoll;
+          }
+        } catch (e) {}
+      }
 
       // Ensure all members have meal slots in appState
       if (appState && appState.days) {
@@ -6291,9 +6535,7 @@
   }
 
   function triggerHaptic() {
-    if (navigator.vibrate) {
-      try { navigator.vibrate(25); } catch (e) {}
-    }
+    // Haptics disabled per user request
   }
 
   function capitalize(str) {
@@ -6424,6 +6666,24 @@
         }, 360);
       }, 520);
     }
+    // Triple-tap header title to trigger mock showcase data
+    let titleTapCount = 0;
+    let titleTapTimer = null;
+    const headerTitleEl = document.querySelector('.header-title');
+    if (headerTitleEl) {
+      headerTitleEl.addEventListener('click', () => {
+        titleTapCount++;
+        if (titleTapTimer) clearTimeout(titleTapTimer);
+        if (titleTapCount >= 3) {
+          titleTapCount = 0;
+          RoomManager.seedMockShowcase();
+        } else {
+          titleTapTimer = setTimeout(() => { titleTapCount = 0; }, 800);
+        }
+      });
+    }
+
+    window.seedMockShowcase = () => RoomManager.seedMockShowcase();
   });
 
 })();

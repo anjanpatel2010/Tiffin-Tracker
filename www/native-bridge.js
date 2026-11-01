@@ -82,7 +82,6 @@
               topModal.classList.remove('active');
               topModal.style.display = 'none';
             }
-            NativeBridge.haptic('selection');
             return;
           }
 
@@ -95,7 +94,6 @@
             if (typeof window.showToast === 'function') {
               window.showToast('Tap back again to exit Tiffin Tracker', 2000);
             }
-            NativeBridge.haptic('light');
           }
         });
       }
@@ -113,32 +111,11 @@
           console.warn('[NativeBridge] Notification permission check warning:', e);
         }
       }
-
-      // 5. Wire native tactile haptics to interactive elements
-      this.attachHapticsToDOM();
     },
 
-    // Native Haptic Engine
+    // Native Haptic Engine (Disabled per user request)
     async haptic(style = 'light') {
-      if (!isNative()) return;
-      const { Haptics } = getPlugins();
-      if (!Haptics) return;
-
-      try {
-        if (style === 'selection') {
-          await Haptics.selectionChanged();
-        } else if (style === 'medium') {
-          await Haptics.impact({ style: 'MEDIUM' });
-        } else if (style === 'heavy') {
-          await Haptics.impact({ style: 'HEAVY' });
-        } else if (style === 'success') {
-          await Haptics.notification({ type: 'SUCCESS' });
-        } else if (style === 'warning') {
-          await Haptics.notification({ type: 'WARNING' });
-        } else {
-          await Haptics.impact({ style: 'LIGHT' });
-        }
-      } catch (e) {}
+      return;
     },
 
     // Request Android System Notification Permission
@@ -216,16 +193,6 @@
         } catch (e) {}
       }
       return false;
-    },
-
-    // Attach haptic feedback on taps across UI
-    attachHapticsToDOM() {
-      document.addEventListener('click', (e) => {
-        const target = e.target.closest('button, .meal-toggle-btn, .pill-btn, .sub-tab, .amul-step-btn, .room-chip');
-        if (target) {
-          NativeBridge.haptic('light');
-        }
-      }, { passive: true });
     }
   };
 
