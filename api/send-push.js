@@ -2,14 +2,18 @@ const webpush = require('web-push');
 const fs = require('fs');
 const path = require('path');
 
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BKdzxa4We0gIQMuW9gJedEKnTecB-PxOIS24zjIK4EFpScY5hXUsZu6n7rfKBnP_V-TMYO9NjxJlh8VnjWyoITM';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'DdfUDUbFdDaV3qIug5jeHknjuVA21Epi8pMmoo7G_sk';
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
 const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:admin@tiffin-tracker.app';
 
-try {
-  webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-} catch (e) {
-  console.warn('VAPID setup warning:', e.message);
+let vapidConfigured = false;
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  try {
+    webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    vapidConfigured = true;
+  } catch (e) {
+    console.warn('VAPID setup warning:', e.message);
+  }
 }
 
 const globalSubs = global.__tiffin_subs || new Map();
@@ -87,6 +91,14 @@ module.exports = async (req, res) => {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (!vapidConfigured) {
+    return res.status(200).json({
+      success: true,
+      sent: 0,
+      message: 'VAPID keys not configured in environment variables. Web Push skipped.'
+    });
   }
 
   try {

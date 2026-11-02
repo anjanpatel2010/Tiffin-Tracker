@@ -6,6 +6,6 @@ module.exports = (req, res) => {
     return res.status(200).end();
   }
 
-  const publicKey = process.env.VAPID_PUBLIC_KEY || 'BKdzxa4We0gIQMuW9gJedEKnTecB-PxOIS24zjIK4EFpScY5hXUsZu6n7rfKBnP_V-TMYO9NjxJlh8VnjWyoITM';
+  const publicKey = process.env.VAPID_PUBLIC_KEY || '';
   res.status(200).json({ publicKey });
 };

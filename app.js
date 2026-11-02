@@ -434,6 +434,7 @@
         let sub = await reg.pushManager.getSubscription();
         if (!sub) {
           const publicKey = await this.getVapidPublicKey();
+          if (!publicKey) return null;
           const convertedKey = urlBase64ToUint8Array(publicKey);
           sub = await reg.pushManager.subscribe({
             userVisibleOnly: true,
