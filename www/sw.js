@@ -48,7 +48,6 @@ self.addEventListener('message', (event) => {
         badge: './icon.svg',
         tag: 'poll-reminder-' + pollId,
         renotify: true,
-        vibrate: [300, 150, 300],
         data: { url: './#view-poll' }
       });
     }, 5 * 60 * 1000);
@@ -78,7 +77,6 @@ self.addEventListener('push', (event) => {
     badge: './icon.svg',
     tag: payload.tag || 'tiffin-alert',
     renotify: true,
-    vibrate: [300, 150, 300],
     data: { url: payload.click || payload.url || './#view-poll' }
   };
 

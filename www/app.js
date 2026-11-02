@@ -604,7 +604,6 @@
       const defaultOpts = {
         icon: './icon.svg',
         badge: './icon.svg',
-        vibrate: [250, 100, 250],
         tag: 'tiffin-alert',
         renotify: true,
         data: { url: window.location.href.split('#')[0] + '#view-poll' },
@@ -1162,7 +1161,7 @@
 
     async catchUp() {
       try {
-        const res = await fetch(`https://ntfy.sh/${this.getTopic(this.roomCode)}/json?poll=1&since=all`);
+        const res = await fetch(`https://ntfy.sh/${this.getTopic(this.roomCode)}/json?poll=1&since=12h`);
         if (!res.ok) return;
         const text = await res.text();
         const lines = text.trim().split('\n');
@@ -1211,25 +1210,28 @@
 
       this.updateStatusUI('syncing', 'Syncing...');
       try {
+        const toAscii = (s) => (s || '').toString().replace(/[^\x20-\x7E]/g, '').trim();
         const headers = { 'Content-Type': 'application/json' };
         if (action.type === 'join_request') {
-          headers['Title'] = 'Flatmate Knocking! 🔔';
+          headers['Title'] = 'Flatmate Knocking!';
           headers['Priority'] = 'high';
           headers['Tags'] = 'bell,door';
         } else if (action.type === 'poll_created') {
-          const meal = action.poll?.mealSlot || 'Dinner';
-          headers['Title'] = `🍲 New ${meal} Poll!`;
+          const meal = toAscii(action.poll?.mealSlot || 'Dinner');
+          headers['Title'] = `New ${meal} Poll!`;
           headers['Priority'] = 'high';
           headers['Tags'] = 'ballot_box,curry';
           headers['Click'] = window.location.href.split('#')[0] + '#view-poll';
           headers['Actions'] = `view, Vote Now, ${window.location.href.split('#')[0]}#view-poll`;
         } else if (action.type === 'poll_voted') {
-          headers['Title'] = `🗳️ Vote Cast: ${action.author || 'Flatmate'}`;
+          const author = toAscii(action.author || action.voterName || 'Flatmate');
+          headers['Title'] = `Vote Cast: ${author}`;
           headers['Priority'] = 'default';
           headers['Tags'] = 'white_check_mark';
           headers['Click'] = window.location.href.split('#')[0] + '#view-poll';
         } else if (action.type === 'poll_finalized') {
-          headers['Title'] = `🏆 Menu Decided: ${action.winner}`;
+          const win = toAscii(action.winner || 'Meal');
+          headers['Title'] = `Menu Decided: ${win}`;
           headers['Priority'] = 'high';
           headers['Tags'] = 'trophy,curry';
           headers['Click'] = window.location.href.split('#')[0] + '#view-poll';
@@ -1757,13 +1759,11 @@
             };
           }
 
-          const exists = (RoomManager.activeRoom.members || []).some(m =>
-            m.id === action.member.id ||
-            m.name.toLowerCase() === action.member.name.toLowerCase()
-          );
+          const existingMatch = RoomManager.findMatchingMember(RoomManager.activeRoom.members, action.member);
 
-          if (!exists) {
+          if (!existingMatch) {
             RoomManager.activeRoom.members.push(action.member);
+            RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
             RoomManager.saveActiveRoom();
             ROOMMATES = RoomManager.activeRoom.members;
 
@@ -1801,6 +1801,12 @@
               });
               logActivity(action.member.name, 'Member Joined', `${action.member.name} joined room #${targetRoom || myRoom}`);
             }
+          } else {
+            // Already present: update missing phone or details without duplicating
+            if (!existingMatch.phone && action.member.phone) {
+              existingMatch.phone = action.member.phone;
+              RoomManager.saveActiveRoom();
+            }
           }
 
           // Reply with full room metadata & ledger state so the new member gets everything
@@ -1821,9 +1827,10 @@
             RoomManager.activeRoom = { code: targetRoom || myRoom, name: 'My Flat', adminName: 'Admin', members: [] };
           }
           if (action.member) {
-            const exists = (RoomManager.activeRoom.members || []).some(m => m.id === action.member.id || m.name.toLowerCase() === action.member.name.toLowerCase());
+            const exists = RoomManager.findMatchingMember(RoomManager.activeRoom.members, action.member);
             if (!exists) {
               RoomManager.activeRoom.members.push(action.member);
+              RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
               RoomManager.saveActiveRoom();
               ROOMMATES = RoomManager.activeRoom.members;
               RoomManager.renderSettingsMembersTab();
@@ -1872,40 +1879,29 @@
         if (actionCode === myRoomCode || !myRoomCode || !actionCode) {
           if (action.roomData) {
             const current = RoomManager.activeRoom || {};
-            // Merge members cleanly so nobody is ever dropped
-            const memberMap = new Map();
-            (current.members || []).forEach(m => memberMap.set(m.id, m));
-            (action.roomData.members || []).forEach(m => {
-              if (!memberMap.has(m.id)) {
-                memberMap.set(m.id, m);
-              } else {
-                const existing = memberMap.get(m.id);
-                memberMap.set(m.id, {
-                  ...existing,
-                  ...m,
-                  role: (existing.role === 'admin' || m.role === 'admin') ? 'admin' : (m.role || existing.role || 'member')
-                });
-              }
-            });
+            const combined = [...(current.members || []), ...(action.roomData.members || [])];
+            const deduplicated = RoomManager.deduplicateMembers(combined, action.roomData.adminName || current.adminName);
 
+            // Synchronize user session role/details with canonical members list
             if (RoomManager.session && RoomManager.session.name) {
-              const myId = RoomManager.sanitizeId(RoomManager.session.name);
-              if (!memberMap.has(myId)) {
-                memberMap.set(myId, {
-                  id: myId,
-                  name: RoomManager.session.name,
-                  phone: RoomManager.session.phone || '',
-                  role: RoomManager.session.role || 'member',
-                  avatarColor: '#00d26a'
-                });
+              const matchedSessionMember = RoomManager.findMatchingMember(deduplicated, {
+                name: RoomManager.session.name,
+                phone: RoomManager.session.phone
+              });
+              if (matchedSessionMember) {
+                RoomManager.session.role = matchedSessionMember.role || RoomManager.session.role || 'member';
+                RoomManager.session.name = matchedSessionMember.name;
+                if (matchedSessionMember.phone && !RoomManager.session.phone) {
+                  RoomManager.session.phone = matchedSessionMember.phone;
+                }
+                localStorage.setItem('tiffin_user_session', JSON.stringify(RoomManager.session));
               }
             }
 
-            const mergedMembers = Array.from(memberMap.values());
             RoomManager.activeRoom = {
               ...current,
               ...action.roomData,
-              members: mergedMembers
+              members: deduplicated
             };
             RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
             RoomManager.saveActiveRoom();
@@ -1917,6 +1913,28 @@
             RoomManager.updateHeaderRoomUI();
             RoomManager.renderSettingsMembersTab();
             populateHeaderIdentityDropdown();
+          }
+
+          // Hydrate active poll from room state if present
+          if (action.state && action.state.activePoll) {
+            const incPoll = action.state.activePoll;
+            if (incPoll && incPoll.status === 'active') {
+              const curTime = appState.activePoll ? Number(appState.activePoll.createdTime || 0) : 0;
+              const incTime = Number(incPoll.createdTime || 0);
+              if (!appState.activePoll || appState.activePoll.id !== incPoll.id || incTime >= curTime) {
+                appState.activePoll = incPoll;
+                const rKey = (actionCode || myRoomCode).toLowerCase();
+                localStorage.setItem('tiffin_active_poll_' + rKey, JSON.stringify(incPoll));
+                modified = true;
+                if (!PollReminderManager.isUserCreator(incPoll) && !PollReminderManager.hasUserVoted(incPoll)) {
+                  showPollAlertBanner(incPoll);
+                  PollReminderManager.start(incPoll);
+                } else {
+                  hidePollAlertBanner();
+                  PollReminderManager.stop(incPoll.id);
+                }
+              }
+            }
           }
 
           // Ensure meal slots exist in appState for all roommates
@@ -4825,6 +4843,95 @@
       return false;
     },
 
+    normalizePhone(p) {
+      return (p || '').toString().replace(/\D/g, '').slice(-10);
+    },
+
+    findMatchingMember(members, candidate) {
+      if (!Array.isArray(members) || !candidate) return null;
+      const cPhone = this.normalizePhone(candidate.phone);
+      const cName = (candidate.name || '').trim().toLowerCase();
+      const cFirst = getFirstName(cName).toLowerCase();
+      const cId = (candidate.id || '').toLowerCase();
+      const cSanitized = this.sanitizeId(cName).toLowerCase();
+
+      return members.find(m => {
+        if (!m) return false;
+        const mId = (m.id || '').toLowerCase();
+        if (cId && mId && cId === mId) return true;
+
+        const mPhone = this.normalizePhone(m.phone);
+        if (cPhone && mPhone && cPhone.length >= 10 && cPhone === mPhone) return true;
+
+        const mName = (m.name || '').trim().toLowerCase();
+        if (cName && mName && cName === mName) return true;
+
+        const mFirst = getFirstName(mName).toLowerCase();
+        if (cFirst && mFirst && cFirst.length >= 3 && cFirst === mFirst) return true;
+
+        const mSanitized = this.sanitizeId(mName).toLowerCase();
+        if (cSanitized && mSanitized && cSanitized === mSanitized) return true;
+
+        return false;
+      }) || null;
+    },
+
+    deduplicateMembers(membersList, adminName) {
+      if (!Array.isArray(membersList)) return [];
+
+      const cleanAdminFirst = getFirstName(adminName || '').toLowerCase();
+      const unique = [];
+      const idMap = new Map(); // oldId -> canonicalId
+
+      membersList.forEach(m => {
+        if (!m || (!m.name && !m.id)) return;
+        const n = (m.name || '').trim().toLowerCase();
+        const id = (m.id || '').trim().toLowerCase();
+        if ((n === 'admin' || id === 'admin') && membersList.length > 1) {
+          return; // Purge dummy admin
+        }
+
+        const matchIdx = unique.findIndex(u => this.findMatchingMember([u], m));
+        if (matchIdx >= 0) {
+          const existing = unique[matchIdx];
+          idMap.set(m.id, existing.id);
+          existing.role = (existing.role === 'admin' || m.role === 'admin') ? 'admin' : (existing.role || m.role || 'member');
+          if (!existing.phone && m.phone) existing.phone = m.phone;
+          if (m.name && m.name.length > existing.name.length) existing.name = m.name;
+        } else {
+          unique.push({ ...m });
+        }
+      });
+
+      // Migrate meal data and votes for any merged IDs so data is never lost
+      if (idMap.size > 0 && typeof appState !== 'undefined' && appState && appState.days) {
+        idMap.forEach((canonicalId, oldId) => {
+          if (!canonicalId || !oldId || canonicalId === oldId) return;
+          for (let d = 1; d <= (CONFIG.daysInMonth || 31); d++) {
+            const day = appState.days[d];
+            if (day && day.meals && day.meals[oldId]) {
+              if (!day.meals[canonicalId]) day.meals[canonicalId] = { lunch: '', dinner: '' };
+              if (!day.meals[canonicalId].lunch && day.meals[oldId].lunch) day.meals[canonicalId].lunch = day.meals[oldId].lunch;
+              if (!day.meals[canonicalId].dinner && day.meals[oldId].dinner) day.meals[canonicalId].dinner = day.meals[oldId].dinner;
+              delete day.meals[oldId];
+            }
+            if (day && day.amul && day.amul[oldId] !== undefined) {
+              if (!day.amul[canonicalId] && day.amul[oldId]) day.amul[canonicalId] = day.amul[oldId];
+              delete day.amul[oldId];
+            }
+          }
+          if (appState.activePoll && appState.activePoll.votes && appState.activePoll.votes[oldId]) {
+            if (!appState.activePoll.votes[canonicalId]) {
+              appState.activePoll.votes[canonicalId] = appState.activePoll.votes[oldId];
+            }
+            delete appState.activePoll.votes[oldId];
+          }
+        });
+      }
+
+      return unique;
+    },
+
     cleanupAdminDuplicates(roomData) {
       if (!roomData || !Array.isArray(roomData.members)) return;
       const adminName = (this.session?.role === 'admin' && this.session.name ? this.session.name : (roomData.adminName || '')).trim();
@@ -4845,7 +4952,6 @@
           return n !== 'admin' && id !== 'admin';
         });
       } else if (roomData.members.length === 1 && adminName && adminName.toLowerCase() !== 'admin') {
-        // If the single existing member is dummy "Admin", rename it to the actual admin
         const m = roomData.members[0];
         if (m.name.toLowerCase() === 'admin' || m.id === 'admin') {
           m.name = adminName;
@@ -4878,20 +4984,8 @@
         }
       }
 
-      // 3. Deduplicate by unique id and name
-      const seenIds = new Set();
-      const seenNames = new Set();
-      const uniqueMembers = [];
-      roomData.members.forEach(m => {
-        const idKey = (m.id || '').toLowerCase();
-        const nameKey = (m.name || '').trim().toLowerCase();
-        if (!seenIds.has(idKey) && !seenNames.has(nameKey)) {
-          seenIds.add(idKey);
-          seenNames.add(nameKey);
-          uniqueMembers.push(m);
-        }
-      });
-      roomData.members = uniqueMembers;
+      // 3. Robust deduplication by phone, name, first name, and id
+      roomData.members = this.deduplicateMembers(roomData.members, adminName);
 
       // 4. Update roomData.adminName if it was 'Admin' and a real admin member exists
       const adminMember = roomData.members.find(m => m.role === 'admin');
@@ -5343,10 +5437,7 @@
 
       // Case 2: Roommate entering with mobile / name
       if (targetRoom && targetRoom.members && targetRoom.members.length > 0) {
-        const matchedMember = targetRoom.members.find(m =>
-          (cleanPhone && m.phone === cleanPhone) ||
-          (cleanName && m.name.toLowerCase() === cleanName.toLowerCase())
-        );
+        const matchedMember = this.findMatchingMember(targetRoom.members, { name: cleanName, phone: cleanPhone });
 
         if (matchedMember) {
           this.session = {
@@ -5368,7 +5459,7 @@
             requesterPhone: matchedMember.phone
           });
 
-          showToast(`Welcome back, ${matchedMember.name}!`);
+          showToast(`Welcome back, ${getFirstName(matchedMember.name)}!`);
           renderAll();
           setTimeout(() => showStartupWelcomePrompt(), 500);
           return true;
@@ -5385,12 +5476,6 @@
       let memberIndex = targetRoom?.members?.length || 0;
       let baseId = this.sanitizeId(cleanName);
       let memberId = baseId;
-      let counter = 2;
-      if (targetRoom && targetRoom.members) {
-        while (targetRoom.members.some(m => m.id === memberId)) {
-          memberId = `${baseId}_${counter++}`;
-        }
-      }
 
       const newMember = {
         id: memberId,
@@ -5414,7 +5499,7 @@
         };
       } else {
         if (!targetRoom.members) targetRoom.members = [];
-        const exists = targetRoom.members.some(m => m.id === newMember.id || m.name.toLowerCase() === newMember.name.toLowerCase());
+        const exists = this.findMatchingMember(targetRoom.members, newMember);
         if (!exists) {
           targetRoom.members.push(newMember);
         }
