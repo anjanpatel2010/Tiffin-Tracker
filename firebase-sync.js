@@ -148,6 +148,14 @@
               const isFirstArrival = !appState.activePoll || appState.activePoll.id !== incPoll.id;
               appState.activePoll = incPoll;
               const rKey = cleanCode.toLowerCase();
+              if (incPoll.votes && typeof getCanonicalPollVotes === 'function') {
+                const canonicalMap = getCanonicalPollVotes(incPoll);
+                const cleanedVotes = {};
+                canonicalMap.forEach((v, k) => {
+                  cleanedVotes[k] = v;
+                });
+                incPoll.votes = cleanedVotes;
+              }
               localStorage.setItem('tiffin_active_poll_' + rKey, JSON.stringify(incPoll));
               modified = true;
 
@@ -158,9 +166,6 @@
               if (!isCreator && !hasVoted) {
                 if (isFirstArrival && !sessionStorage.getItem(notifKey)) {
                   sessionStorage.setItem(notifKey, 'true');
-                  if (typeof showToast === 'function') {
-                    showToast(`🍲 New ${incPoll.mealSlot || 'Meal'} Poll from ${incPoll.author || 'Flatmate'}! Tap to vote.`);
-                  }
                   if (typeof playJoinAlertChime === 'function') {
                     playJoinAlertChime();
                   }
@@ -171,15 +176,9 @@
                       renotify: true
                     });
                   }
-                  if (typeof showPollAlertBanner === 'function') {
-                    showPollAlertBanner(incPoll);
-                  }
                 }
                 PollReminderManager.start(incPoll);
               } else {
-                if (typeof hidePollAlertBanner === 'function') {
-                  hidePollAlertBanner();
-                }
                 PollReminderManager.stop(incPoll.id);
               }
             }

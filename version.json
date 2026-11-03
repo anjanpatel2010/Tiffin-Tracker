@@ -1,17 +1,17 @@
 {
-  "version": "5.3.0",
-  "versionCode": 50300,
+  "version": "5.3.1",
+  "versionCode": 50301,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-03",
-  "message": "Major update with Firebase Cloud Firestore real-time sync and native background poll notifications!",
-  "apkFilename": "Tiffin-Tracker-v5.3.0-release.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.3.0-release.apk",
+  "message": "Update with single-vote deduplication, clean UI, and native background notifications!",
+  "apkFilename": "Tiffin-Tracker-v5.3.1-release.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.3.1-release.apk",
   "releaseNotes": [
+    "Strict single-vote deduplication across devices (app vs web)",
+    "Clean, clutter-free in-app UX without intrusive popup banners",
     "Firebase Cloud Firestore real-time database integration",
-    "Native background notifications for meal polls (even when app is killed)",
-    "Automatic 5-minute reminder alarms until votes are cast",
-    "Creator exemption: Poll creator is redirected without reminder alerts",
-    "Clean deduplication for multi-device login (app vs web)"
+    "Native background notifications for meal polls (runs even when app is killed)",
+    "Automatic 5-minute reminder alarms until votes are cast"
   ]
 }

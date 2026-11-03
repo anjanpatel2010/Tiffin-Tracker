@@ -2923,35 +2923,9 @@ body {
   }
 }
 
-/* Real-time In-App Menu Poll Alert Banner */
+/* Real-time In-App Menu Poll Alert Banner (Disabled per user request) */
 .poll-alert-banner {
-  position: fixed;
-  top: calc(var(--safe-area-top, 0px) + 54px);
-  left: 50%;
-  transform: translateX(-50%) translateY(-140%);
-  width: calc(100% - 32px);
-  max-width: 440px;
-  box-sizing: border-box;
-  background: rgba(11, 20, 32, 0.96);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1px solid rgba(0, 245, 160, 0.55);
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.85), 0 0 24px rgba(0, 245, 160, 0.28);
-  border-radius: 14px;
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  z-index: 10000000;
-  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;
-  opacity: 0;
-  pointer-events: none;
-}
-.poll-alert-banner.active {
-  transform: translateX(-50%) translateY(0);
-  opacity: 1;
-  pointer-events: auto;
+  display: none !important;
 }
 .poll-banner-left {
   display: flex;

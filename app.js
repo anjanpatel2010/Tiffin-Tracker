@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.3.0';
+  const APP_VERSION = '5.3.1';
 
   function checkAndMigrateAppVersion() {
     try {
@@ -775,6 +775,62 @@
   }
 
   // ==========================================================================
+  // POLL CANONICAL VOTE RESOLVER & DEDUPLICATOR
+  // ==========================================================================
+  /**
+   * Deduplicate and resolve poll votes to strictly 1 vote per unique flatmate.
+   * Prevents double-counting when a user votes or logs in from multiple devices (app vs web).
+   */
+  function getCanonicalPollVotes(poll) {
+    if (!poll || !poll.votes || typeof poll.votes !== 'object') {
+      return new Map();
+    }
+
+    const uniqueMap = new Map(); // canonicalId -> voteObj
+
+    Object.entries(poll.votes).forEach(([rawKey, voteObj]) => {
+      if (!voteObj || !voteObj.option) return;
+
+      const cleanKey = (rawKey || '').toLowerCase().trim();
+      const voterName = (voteObj.voterName || '').trim();
+
+      // Find the matched roommate in ROOMMATES
+      let canonicalId = cleanKey;
+      let canonicalName = voterName || cleanKey;
+
+      if (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES)) {
+        const found = ROOMMATES.find(r => {
+          const rId = (r.id || '').toLowerCase().trim();
+          const rName = (r.name || '').toLowerCase().trim();
+          const rSanitized = (typeof RoomManager !== 'undefined' && RoomManager.sanitizeId) ? RoomManager.sanitizeId(r.name).toLowerCase().trim() : rId;
+          return rId === cleanKey ||
+                 rName === cleanKey ||
+                 (voterName && rName === voterName.toLowerCase()) ||
+                 rSanitized === cleanKey;
+        });
+
+        if (found) {
+          canonicalId = (found.id || found.name).toLowerCase().trim();
+          canonicalName = found.name;
+        }
+      }
+
+      // If user voted multiple times from web and app, keep the latest vote by timestamp
+      const existing = uniqueMap.get(canonicalId);
+      const voteTime = Number(voteObj.time || 0);
+      if (!existing || voteTime >= Number(existing.time || 0)) {
+        uniqueMap.set(canonicalId, {
+          ...voteObj,
+          voterName: canonicalName,
+          roommateId: canonicalId
+        });
+      }
+    });
+
+    return uniqueMap;
+  }
+
+  // ==========================================================================
   // POLL 5-MINUTE RECURRING REMINDER MANAGER
   // ==========================================================================
   const PollReminderManager = {
@@ -796,23 +852,24 @@
 
     hasUserVoted(poll) {
       if (!poll || !poll.votes) return false;
+      const canonicalMap = getCanonicalPollVotes(poll);
       const myRaw = (typeof SyncEngine !== 'undefined' && SyncEngine.identity ? SyncEngine.identity : '').trim().toLowerCase();
       const sessionName = (typeof RoomManager !== 'undefined' && RoomManager.session?.name ? RoomManager.session.name : '').trim().toLowerCase();
       const myId = (typeof RoomManager !== 'undefined' && RoomManager.sanitizeId ? RoomManager.sanitizeId(sessionName || myRaw) : myRaw).toLowerCase();
 
-      if (poll.votes[myId] || poll.votes[myRaw] || (sessionName && poll.votes[sessionName])) return true;
-      if (poll.votes[myId.replace(/_/g, ' ')]) return true;
-
+      let foundCanonical = null;
       if (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES)) {
         const found = ROOMMATES.find(r => 
           (r.name && (r.name.toLowerCase() === myRaw || r.name.toLowerCase() === sessionName)) || 
           (r.id && (r.id.toLowerCase() === myId || r.id.toLowerCase() === myRaw))
         );
-        if (found) {
-          if (poll.votes[found.id] || (found.name && poll.votes[found.name.toLowerCase()])) return true;
-        }
+        if (found) foundCanonical = (found.id || found.name).toLowerCase().trim();
       }
-      return false;
+
+      return canonicalMap.has(myId) ||
+             canonicalMap.has(myRaw) ||
+             (sessionName && canonicalMap.has(sessionName)) ||
+             (foundCanonical && canonicalMap.has(foundCanonical));
     },
 
     start(poll) {
@@ -881,8 +938,6 @@
           renotify: true
         });
         playJoinAlertChime();
-        showPollAlertBanner(poll);
-        showToast(`⏰ Reminder: Please vote in the ${meal} Poll!`);
       }
     },
 
@@ -904,83 +959,15 @@
     }
   };
 
-  // Real-time floating in-app banner when a meal poll is active and user hasn't voted
+  // Real-time floating in-app banner disabled per user request (keeps in-app experience sleek & clean)
   function showPollAlertBanner(poll) {
-    if (!poll || poll.status !== 'active') return;
-    if (PollReminderManager.isUserCreator(poll) || PollReminderManager.hasUserVoted(poll)) {
-      hidePollAlertBanner();
-      return;
-    }
-    // If the user is currently on the poll tab, don't obstruct the poll UI
-    const isPollTab = document.getElementById('view-poll')?.classList.contains('active');
-    if (isPollTab) {
-      hidePollAlertBanner();
-      return;
-    }
-
-    let banner = document.getElementById('pollAlertBanner');
-    if (!banner) {
-      banner = document.createElement('div');
-      banner.id = 'pollAlertBanner';
-      banner.className = 'poll-alert-banner';
-      document.body.appendChild(banner);
-    }
-
-    const meal = poll.mealSlot || 'Dinner';
-    const author = poll.author || 'Flatmate';
-    const optionsText = (poll.options || []).join(' vs ');
-
-    banner.innerHTML = `
-      <div class="poll-banner-left">
-        <span class="poll-banner-icon">🍲</span>
-        <div class="poll-banner-text-group">
-          <div class="poll-banner-title"><strong>New ${escapeHtml(meal)} Poll</strong> • By ${escapeHtml(author)}</div>
-          <div class="poll-banner-sub">${escapeHtml(optionsText)}</div>
-        </div>
-      </div>
-      <div class="poll-banner-actions">
-        <button class="poll-banner-vote-btn" id="bannerVoteNowBtn">
-          <span>Vote Now</span>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-        </button>
-        <button class="poll-banner-close-btn" id="bannerPollCloseBtn" title="Dismiss">✕</button>
-      </div>
-    `;
-
-    banner.classList.add('active');
-
-    const voteBtn = banner.querySelector('#bannerVoteNowBtn');
-    if (voteBtn) {
-      voteBtn.addEventListener('click', () => {
-        triggerHaptic();
-        banner.classList.remove('active');
-        // Switch to Poll view tab
-        document.querySelectorAll('.nav-tab, .m-nav-tab').forEach(t => {
-          t.classList.toggle('active', t.getAttribute('data-tab') === 'poll');
-        });
-        document.querySelectorAll('.view-panel').forEach(panel => {
-          panel.classList.toggle('active', panel.id === 'view-poll');
-        });
-        renderPollView();
-        const voteBox = document.getElementById('myVoteBox');
-        if (voteBox) {
-          voteBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      });
-    }
-
-    const closeBtn = banner.querySelector('#bannerPollCloseBtn');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', () => {
-        banner.classList.remove('active');
-      });
-    }
+    hidePollAlertBanner();
   }
 
   function hidePollAlertBanner() {
     const banner = document.getElementById('pollAlertBanner');
     if (banner) {
-      banner.classList.remove('active');
+      try { banner.remove(); } catch (e) {}
     }
   }
 
@@ -1515,17 +1502,15 @@
         const alreadyNotified = sessionStorage.getItem(pollAlertKey);
 
         if (!isCreator && !hasVoted) {
-          // Alert user if not already alerted during this session, or if live incoming
+          // Alert user via system notification if not already alerted
           if (!alreadyNotified || !isCatchUp) {
             sessionStorage.setItem(pollAlertKey, 'true');
-            showToast(`🍲 New ${action.poll.mealSlot} Poll from ${action.author}! Tap to vote.`);
             playJoinAlertChime();
             NotificationManager.send(`🍲 New ${action.poll.mealSlot || 'Meal'} Poll!`, {
               body: `Launched by ${action.author || 'Flatmate'}. Tap to choose your sabzi!`,
               tag: 'poll-' + action.poll.id,
               renotify: true
             });
-            showPollAlertBanner(action.poll);
           }
           localStorage.setItem('tiffin_poll_remind_' + action.poll.id, Date.now().toString());
           PollReminderManager.start(action.poll);
@@ -1540,7 +1525,20 @@
 
         if (appState.activePoll && appState.activePoll.id === action.pollId) {
           if (!appState.activePoll.votes) appState.activePoll.votes = {};
-          appState.activePoll.votes[action.roommateId] = {
+
+          // Resolve canonical roommate ID to prevent duplicate keys
+          let canonicalId = (action.roommateId || '').toLowerCase().trim();
+          if (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES)) {
+            const matched = ROOMMATES.find(r => 
+              (r.id && r.id.toLowerCase() === canonicalId) ||
+              (action.voterName && r.name && r.name.toLowerCase() === action.voterName.toLowerCase())
+            );
+            if (matched) {
+              canonicalId = matched.id.toLowerCase();
+            }
+          }
+
+          appState.activePoll.votes[canonicalId] = {
             option: action.option,
             portion: action.portion,
             time: action.timestamp,
@@ -1557,18 +1555,11 @@
             hidePollAlertBanner();
           }
 
-          if (!isCatchUp) {
-            if (hasMyVote) {
-              showToast(`${action.voterName || action.author} voted for ${action.option}`);
-            } else {
-              showToast(`🗳️ ${action.voterName || action.author} voted in ${appState.activePoll.mealSlot} Poll! Tap to vote.`);
-              playJoinAlertChime();
-              NotificationManager.send(`${appState.activePoll.mealSlot || 'Meal'} Poll Update`, {
-                body: `${action.voterName || action.author} voted! Don't forget to cast your choice.`,
-                tag: 'poll-vote-' + action.pollId
-              });
-              showPollAlertBanner(appState.activePoll);
-            }
+          if (!isCatchUp && !hasMyVote) {
+            NotificationManager.send(`${appState.activePoll.mealSlot || 'Meal'} Poll Update`, {
+              body: `${action.voterName || action.author} voted! Don't forget to cast your choice.`,
+              tag: 'poll-vote-' + action.pollId
+            });
           }
         }
       } else if (action.type === 'poll_finalized') {
@@ -2651,19 +2642,20 @@
       const sessionName = (typeof RoomManager !== 'undefined' && RoomManager.session?.name ? RoomManager.session.name : '').trim().toLowerCase();
       const myId = (typeof RoomManager !== 'undefined' && RoomManager.sanitizeId ? RoomManager.sanitizeId(sessionName || myRaw) : myRaw).toLowerCase();
 
-      let myVote = null;
-      if (poll.votes) {
-        myVote = poll.votes[myId] || poll.votes[myRaw] || (sessionName && poll.votes[sessionName]);
-        if (!myVote && typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES)) {
-          const found = ROOMMATES.find(r => 
-            (r.name && (r.name.toLowerCase() === myRaw || r.name.toLowerCase() === sessionName)) || 
-            (r.id && (r.id.toLowerCase() === myId || r.id.toLowerCase() === myRaw))
-          );
-          if (found) {
-            myVote = poll.votes[found.id] || (found.name && poll.votes[found.name.toLowerCase()]);
-          }
-        }
+      const canonicalVotes = getCanonicalPollVotes(poll);
+      let foundCanonical = null;
+      if (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES)) {
+        const found = ROOMMATES.find(r => 
+          (r.name && (r.name.toLowerCase() === myRaw || r.name.toLowerCase() === sessionName)) || 
+          (r.id && (r.id.toLowerCase() === myId || r.id.toLowerCase() === myRaw))
+        );
+        if (found) foundCanonical = (found.id || found.name).toLowerCase().trim();
       }
+
+      const myVote = canonicalVotes.get(myId) ||
+                     canonicalVotes.get(myRaw) ||
+                     (sessionName && canonicalVotes.get(sessionName)) ||
+                     (foundCanonical && canonicalVotes.get(foundCanonical));
       const hasVoted = !!myVote;
 
       if (hasVoted || isCreator) {
@@ -2761,16 +2753,15 @@
         btn.classList.toggle('active', btn.getAttribute('data-portion') === currentPortion);
       });
 
-      // Live Tally Progress Bars
+      // Live Tally Progress Bars (Strictly 1 vote per flatmate)
       const resultsContainer = document.getElementById('pollResultsBars');
       if (resultsContainer) {
         resultsContainer.innerHTML = '';
-        const votes = poll.votes || {};
-        const totalVotesCast = Object.keys(votes).length;
+        const totalVotesCast = canonicalVotes.size;
 
         const tally = {};
         poll.options.forEach(opt => tally[opt] = 0);
-        Object.values(votes).forEach(v => {
+        canonicalVotes.forEach(v => {
           if (tally[v.option] !== undefined) tally[v.option]++;
         });
 
@@ -2796,14 +2787,15 @@
       // Who Voted for What Breakdown
       const chipsWrap = document.getElementById('votersChipsWrap');
       const votersCountLabel = document.getElementById('votersCountLabel');
-      if (chipsWrap && poll.votes) {
+      if (chipsWrap) {
         chipsWrap.innerHTML = '';
-        const votes = poll.votes || {};
-        const count = Object.keys(votes).length;
+        const count = canonicalVotes.size;
         if (votersCountLabel) votersCountLabel.textContent = `${count} / ${ROOMMATES.length} Voted`;
 
         ROOMMATES.forEach(r => {
-          const v = votes[r.id] || (r.name && votes[r.name.toLowerCase()]) || votes[(r.id || '').replace(/_/g, ' ')];
+          const rKey = (r.id || r.name).toLowerCase().trim();
+          const rNameKey = (r.name || '').toLowerCase().trim();
+          const v = canonicalVotes.get(rKey) || canonicalVotes.get(rNameKey);
           const chip = document.createElement('div');
           chip.className = 'voter-chip';
           if (v) {
@@ -4148,10 +4140,24 @@
           time: Date.now(),
           voterName: resolvedName
         };
+
+        // Purge any alias keys for this user so they NEVER have duplicate entries
+        const allMyAliases = [
+          resolvedId,
+          myId,
+          myName.toLowerCase(),
+          resolvedName.toLowerCase(),
+          (resolvedId || '').replace(/_/g, ' '),
+          (myId || '').replace(/_/g, ' ')
+        ];
+        allMyAliases.forEach(k => {
+          if (k && appState.activePoll.votes[k]) {
+            delete appState.activePoll.votes[k];
+          }
+        });
+
+        // Set strictly on canonical resolvedId (never duplicate)
         appState.activePoll.votes[resolvedId] = voteObj;
-        if (resolvedId !== myId) {
-          appState.activePoll.votes[myId] = voteObj;
-        }
 
         localStorage.setItem('tiffin_active_poll_' + roomCodeKey.toLowerCase(), JSON.stringify(appState.activePoll));
         logActivity(resolvedName, 'Cast Vote', `Voted "${dishChoice}" (${portionChoice === 'No' ? 'No Tiffin' : portionChoice}) in ${appState.activePoll.mealSlot} Poll`);
@@ -4168,7 +4174,7 @@
 
         PollReminderManager.stop(appState.activePoll.id);
         hidePollAlertBanner();
-        showToast('✓ Vote submitted! 5-min reminders stopped.');
+        showToast('✓ Vote submitted');
         renderPollView();
       });
     }
@@ -4179,18 +4185,18 @@
         const poll = appState.activePoll;
         if (!poll) return;
 
-        const votes = poll.votes || {};
-        if (Object.keys(votes).length === 0) {
+        const canonicalVotes = getCanonicalPollVotes(poll);
+        if (canonicalVotes.size === 0) {
           alert('No votes have been cast in this poll yet.');
           return;
         }
 
         const roomCodeKey = getActiveRoomCode().toUpperCase().trim();
 
-        // Count votes and find winner
+        // Count votes and find winner (strictly 1 vote per flatmate)
         const tally = {};
         poll.options.forEach(opt => tally[opt] = 0);
-        Object.values(votes).forEach(v => {
+        canonicalVotes.forEach(v => {
           if (v.portion !== 'No' && tally[v.option] !== undefined) {
             tally[v.option]++;
           }
@@ -4216,7 +4222,9 @@
         const mealsApplied = {};
 
         ROOMMATES.forEach(r => {
-          const voterData = votes[r.id] || (r.name && votes[r.name.toLowerCase()]) || votes[(r.id || '').replace(/_/g, ' ')];
+          const rKey = (r.id || r.name).toLowerCase().trim();
+          const rNameKey = (r.name || '').toLowerCase().trim();
+          const voterData = canonicalVotes.get(rKey) || canonicalVotes.get(rNameKey);
           const portion = voterData ? voterData.portion : 'Off';
           mealsApplied[r.id] = (portion === 'No') ? 'Off' : portion;
           if (appState.days && appState.days[poll.day] && appState.days[poll.day].meals && appState.days[poll.day].meals[r.id]) {
@@ -5036,33 +5044,9 @@
     },
 
     showInAppJoinBanner(memberName, roomCode) {
+      // Disabled per user request (keeps UI clean and un-cluttered)
       const banner = document.getElementById('adminJoinNoticeBanner');
-      const title = document.getElementById('adminJoinNoticeTitle');
-      const desc = document.getElementById('adminJoinNoticeDesc');
-      const viewBtn = document.getElementById('adminJoinViewMembersBtn');
-      const dismissBtn = document.getElementById('adminJoinDismissBtn');
-
-      if (!banner) return;
-      if (title) title.textContent = `${memberName} Joined Flat! 🍱`;
-      if (desc) desc.textContent = `${memberName} has joined #${roomCode || 'flat'} and is now active on the ledger.`;
-      banner.style.display = 'flex';
-
-      if (viewBtn) {
-        viewBtn.onclick = () => {
-          triggerHaptic();
-          banner.style.display = 'none';
-          const settingsBtn = document.getElementById('headerSettingsBtn');
-          if (settingsBtn) settingsBtn.click();
-          const tab = document.querySelector('.sub-tab[data-subtab="members"]');
-          if (tab) tab.click();
-        };
-      }
-      if (dismissBtn) {
-        dismissBtn.onclick = () => {
-          triggerHaptic();
-          banner.style.display = 'none';
-        };
-      }
+      if (banner) banner.style.display = 'none';
     },
 
     seedMockShowcase() {
