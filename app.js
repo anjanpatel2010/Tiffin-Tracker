@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.3.1';
+  const APP_VERSION = '5.3.2';
 
   function checkAndMigrateAppVersion() {
     try {
@@ -108,8 +108,8 @@
     month: currentMonth,
     daysInMonth: getDaysInMonth(currentYear, currentMonth),
     todayDay: getDynamicTodayForMonth(currentYear, currentMonth),
-    adminPassword: 'Flower',
-    defaultRoom: 'flat-tiffin-group',
+    adminPassword: '',
+    defaultRoom: '',
     defaultRates: {
       half: 80,
       full: 110,
@@ -313,7 +313,8 @@
 
     // 1. Firebase Cloud Realtime Engine (Primary)
     if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
-      const roomKey = (actionPayload?.roomCode || getActiveRoomCode() || 'TF-FLAT').toString().toUpperCase();
+      const roomKey = (actionPayload?.roomCode || getActiveRoomCode() || '').toString().toUpperCase();
+      if (!roomKey) return;
       if (actionPayload) {
         if (actionPayload.type === 'poll_created') {
           FirebaseSync.saveActivePoll(roomKey, actionPayload.poll);
@@ -5049,122 +5050,28 @@
       if (banner) banner.style.display = 'none';
     },
 
-    seedMockShowcase() {
-      const mockRoom = {
-        code: 'TF-FLAT',
-        name: 'Flat 402 - Mess Ledger',
-        adminName: 'Alex',
-        adminPhone: '+91 98765 43210',
-        adminPin: 'Flower',
-        createdAt: new Date().toISOString(),
-        members: [
-          { id: 'alex', name: 'Alex', phone: '+91 98765 43210', role: 'admin', avatarColor: '#00d26a' },
-          { id: 'david', name: 'David', phone: '+91 98765 43211', role: 'member', avatarColor: '#00d4ff' },
-          { id: 'rahul', name: 'Rahul', phone: '+91 98765 43212', role: 'member', avatarColor: '#ffb800' },
-          { id: 'priya', name: 'Priya', phone: '+91 98765 43213', role: 'member', avatarColor: '#ff3b5c' }
-        ],
-        pendingRequests: []
-      };
-
-      const mockSession = {
-        name: 'Alex',
-        phone: '+91 98765 43210',
-        role: 'admin',
-        roomCode: 'TF-FLAT',
-        groupName: 'Flat 402 - Mess Ledger',
-        status: 'approved'
-      };
-
-      const roomsObj = { 'tf-flat': mockRoom };
-      localStorage.setItem('tiffin_rooms', JSON.stringify(roomsObj));
-      localStorage.setItem('tiffin_user_session', JSON.stringify(mockSession));
-      localStorage.setItem('tiffin_sync_room', 'TF-FLAT');
-
-      ROOMMATES = mockRoom.members;
-      this.session = mockSession;
-      this.activeRoom = mockRoom;
-
-      // Create state for current month
-      const state = getDefaultDataForMonth(currentYear, currentMonth);
-      state.provider = {
-        name: 'Ramesh Cook Services',
-        upi: 'ramesh.cook@okhdfcbank',
-        phone: '+91 98111 22333'
-      };
-      state.rates = {
-        half: 80,
-        full: 110,
-        special: 90,
-        amulPacket: 35
-      };
-      state.amulMembers = ['alex', 'david', 'rahul', 'priya'];
-
-      // Sample dishes & meals
-      const sampleData = [
-        { d: 1, sabzi: 'Paneer Butter Masala', meals: { alex: ['Full', 'Half'], david: ['Half', 'Full'], rahul: ['Full', 'Full'], priya: ['Off', 'Half'] }, amul: { alex: 1, david: 0.5, rahul: 1, priya: 0.5 } },
-        { d: 2, sabzi: 'Dal Tadka & Jeera Rice', meals: { alex: ['Half', 'Half'], david: ['Full', 'Off'], rahul: ['Half', 'Full'], priya: ['Half', 'Half'] }, amul: { alex: 1, david: 1, rahul: 1, priya: 1 } },
-        { d: 3, sabzi: 'Aloo Gobi Matar', meals: { alex: ['Full', 'Full'], david: ['Half', 'Half'], rahul: ['Off', 'Full'], priya: ['Full', 'Half'] }, amul: { alex: 0.5, david: 1, rahul: 0.5, priya: 0.5 } },
-        { d: 4, sabzi: 'Chole Bhature Special', meals: { alex: ['Full', 'Half'], david: ['Full', 'Full'], rahul: ['Full', 'Half'], priya: ['Off', 'Full'] }, amul: { alex: 1, david: 2, rahul: 1, priya: 1 } },
-        { d: 5, sabzi: 'Rajma Chawal Delight', meals: { alex: ['Half', 'Full'], david: ['Half', 'Half'], rahul: ['Full', 'Full'], priya: ['Half', 'Half'] }, amul: { alex: 1, david: 0.5, rahul: 1, priya: 0.5 } }
-      ];
-
-      sampleData.forEach(item => {
-        if (state.days[item.d]) {
-          state.days[item.d].sabzi = item.sabzi;
-          state.days[item.d].sabziUpdatedAt = Date.now();
-          state.days[item.d].amul = item.amul;
-          Object.entries(item.meals).forEach(([pId, [l, d]]) => {
-            if (!state.days[item.d].meals[pId]) state.days[item.d].meals[pId] = {};
-            state.days[item.d].meals[pId].lunch = l === 'Off' ? '' : l;
-            state.days[item.d].meals[pId].dinner = d === 'Off' ? '' : d;
-          });
-        }
-      });
-
-      state.activePoll = {
-        id: 'poll_mock_' + Date.now(),
-        day: 1,
-        mealSlot: 'Dinner',
-        options: ['Paneer Butter Masala', 'Dal Makhani', 'Mix Veg Korma'],
-        status: 'active',
-        author: 'Alex',
-        createdAt: Date.now() - 3600000,
-        expiresAt: Date.now() + 7200000,
-        votes: {
-          alex: { option: 'Paneer Butter Masala', portion: 'Half' },
-          david: { option: 'Dal Makhani', portion: 'Full' },
-          rahul: { option: 'Paneer Butter Masala', portion: 'Full' }
-        }
-      };
-
-      saveStateForMonth(currentYear, currentMonth, state);
-      appState = state;
-
-      SyncEngine.setIdentity('Alex');
-      SyncEngine.setRoomCode('TF-FLAT');
-      this.saveActiveRoom();
-      this.updateHeaderRoomUI();
-      this.updatePendingBadges();
-      populateHeaderIdentityDropdown();
-      renderAll();
-      showToast('🍱 Showcase Mock Flat Loaded!', 'success');
-    },
-
     init() {
-      // 1. Check existing session
+      // 1. Purge legacy mock data / Alex session if present
+      localStorage.removeItem('tiffin_showcase_mock');
       try {
         const rawSession = localStorage.getItem('tiffin_user_session');
         if (rawSession) {
-          this.session = JSON.parse(rawSession);
+          const parsed = JSON.parse(rawSession);
+          if (parsed && (parsed.name === 'Alex' || parsed.roomCode === 'TF-FLAT')) {
+            localStorage.removeItem('tiffin_user_session');
+            localStorage.removeItem('tiffin_sync_room');
+            localStorage.removeItem('tiffin_room_TF-FLAT');
+            this.session = null;
+          } else {
+            this.session = parsed;
+          }
         }
-      } catch (e) {}
+      } catch (e) {
+        this.session = null;
+      }
 
       // 2. Check room code and credentials in URL query or hash
       const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('mock') === '1' || localStorage.getItem('tiffin_showcase_mock') === '1') {
-        this.seedMockShowcase();
-        return;
-      }
       const urlRoom = urlParams.get('room') || urlParams.get('join') || (window.location.hash.startsWith('#room=') ? window.location.hash.slice(6) : null);
       const urlPin = urlParams.get('pin');
       const urlPhone = urlParams.get('phone');
@@ -5206,17 +5113,13 @@
       }
 
       // 3. Load active room data or show Gate
-      if (this.session && this.session.roomCode) {
+      if (this.session && this.session.roomCode && this.session.name) {
+        this.session.status = 'approved';
+        localStorage.setItem('tiffin_user_session', JSON.stringify(this.session));
         this.loadRoom(this.session.roomCode);
-        if (this.session.status === 'approved') {
-          this.hideGateModal();
-          setTimeout(() => showStartupWelcomePrompt(), 600);
-        }
+        this.hideGateModal();
+        setTimeout(() => showStartupWelcomePrompt(), 600);
       } else {
-        if (urlParams.get('mock') === '1' || localStorage.getItem('tiffin_showcase_mock') === '1') {
-          this.seedMockShowcase();
-          return;
-        }
         // Show normal Gate Modal for new installs to create or join flat
         this.showGateModal();
       }
@@ -5238,7 +5141,7 @@
           name: this.session?.groupName || 'My Flat',
           adminName: this.session?.role === 'admin' ? this.session.name : 'Admin',
           adminPhone: this.session?.role === 'admin' ? this.session.phone : '',
-          adminPin: CONFIG.adminPassword || 'Flower',
+          adminPin: CONFIG.adminPassword || '',
           createdAt: new Date().toISOString(),
           members: [],
           pendingRequests: []
@@ -5249,6 +5152,9 @@
       this.cleanupAdminDuplicates(this.activeRoom);
       this.saveActiveRoom();
       SyncEngine.setRoomCode(codeKey);
+      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
+        FirebaseSync.subscribeRoom(codeKey);
+      }
 
       // Synchronize ROOMMATES
       if (this.activeRoom.members && this.activeRoom.members.length > 0) {
@@ -5321,7 +5227,7 @@
       const cleanName = adminName.trim();
       const cleanPhone = adminPhone.trim();
       const cleanGroup = groupName.trim() || 'My Flat';
-      const cleanPin = adminPin.trim() || 'Flower';
+      const cleanPin = (adminPin || '').trim();
 
       const adminMember = {
         id: this.sanitizeId(cleanName),
@@ -5450,6 +5356,10 @@
         this.saveActiveRoom();
         this.loadRoom(cleanCode);
         this.hideGateModal();
+        if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
+          FirebaseSync.subscribeRoom(cleanCode);
+          FirebaseSync.saveRoomData(cleanCode, this.activeRoom);
+        }
 
         persistAndBroadcast({
           type: 'request_room_sync',
@@ -5569,6 +5479,11 @@
       SyncEngine.setIdentity(cleanName);
 
       // Broadcast member joined and ask for current room sync
+      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
+        FirebaseSync.subscribeRoom(cleanCode);
+        FirebaseSync.saveRoomData(cleanCode, this.activeRoom);
+        FirebaseSync.saveLedgerState(cleanCode, appState);
+      }
       SyncEngine.broadcast({
         type: 'member_joined',
         roomCode: cleanCode,
@@ -5646,6 +5561,10 @@
       this.activeRoom.members.push(newMember);
       this.saveActiveRoom();
       ROOMMATES = this.activeRoom.members;
+      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
+        FirebaseSync.saveRoomData(this.activeRoom.code, this.activeRoom);
+        FirebaseSync.saveLedgerState(this.activeRoom.code, appState);
+      }
 
       if (appState && appState.days) {
         for (let d = 1; d <= CONFIG.daysInMonth; d++) {
@@ -6121,10 +6040,14 @@
         const name = document.getElementById('gateAdminName')?.value || '';
         const phone = document.getElementById('gateAdminPhone')?.value || '';
         const group = document.getElementById('gateGroupName')?.value || 'My Flat';
-        const pin = document.getElementById('gateAdminPin')?.value || 'Flower';
+        const pin = (document.getElementById('gateAdminPin')?.value || '').trim();
 
         if (!name.trim()) {
           alert('Please enter your name.');
+          return;
+        }
+        if (!pin) {
+          alert('Please enter an Admin Security PIN.');
           return;
         }
         RoomManager.createRoom(name, phone, group, pin);
@@ -6786,24 +6709,6 @@
         }, 360);
       }, 520);
     }
-    // Triple-tap header title to trigger mock showcase data
-    let titleTapCount = 0;
-    let titleTapTimer = null;
-    const headerTitleEl = document.querySelector('.header-title');
-    if (headerTitleEl) {
-      headerTitleEl.addEventListener('click', () => {
-        titleTapCount++;
-        if (titleTapTimer) clearTimeout(titleTapTimer);
-        if (titleTapCount >= 3) {
-          titleTapCount = 0;
-          RoomManager.seedMockShowcase();
-        } else {
-          titleTapTimer = setTimeout(() => { titleTapCount = 0; }, 800);
-        }
-      });
-    }
-
-    window.seedMockShowcase = () => RoomManager.seedMockShowcase();
   });
 
 })();

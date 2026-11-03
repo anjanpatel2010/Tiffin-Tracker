@@ -51,8 +51,10 @@
 
         // Auto-subscribe to active room
         const initialRoom = (typeof getActiveRoomCode === 'function' ? getActiveRoomCode() : null) ||
-                            localStorage.getItem('tiffin_sync_room') || 'TF-FLAT';
-        this.subscribeRoom(initialRoom);
+                            localStorage.getItem('tiffin_sync_room');
+        if (initialRoom) {
+          this.subscribeRoom(initialRoom);
+        }
 
         // Check if an FCM token was saved locally
         const cachedToken = localStorage.getItem('tiffin_fcm_token');
@@ -70,12 +72,14 @@
     },
 
     getCleanRoom(code) {
-      return (code || currentRoomCode || 'TF-FLAT').toString().trim().toUpperCase();
+      const c = code || currentRoomCode || (typeof RoomManager !== 'undefined' && RoomManager?.activeRoom?.code) || localStorage.getItem('tiffin_sync_room');
+      return c ? c.toString().trim().toUpperCase() : null;
     },
 
     subscribeRoom(roomCode) {
       if (!this.isAvailable || !db) return;
       const cleanCode = this.getCleanRoom(roomCode);
+      if (!cleanCode) return;
       if (activeUnsubscribe && currentRoomCode === cleanCode) return;
 
       if (activeUnsubscribe) {
@@ -104,12 +108,32 @@
             const combined = [...(current.members || []), ...(data.roomData.members || [])];
             const deduplicated = RoomManager.deduplicateMembers(combined, data.roomData.adminName || current.adminName);
 
-            // Synchronize session role
+            // Synchronize session role & guarantee local user is never stripped
             if (RoomManager.session && RoomManager.session.name) {
-              const matchedSessionMember = RoomManager.findMatchingMember(deduplicated, {
+              let matchedSessionMember = RoomManager.findMatchingMember(deduplicated, {
                 name: RoomManager.session.name,
                 phone: RoomManager.session.phone
               });
+              if (!matchedSessionMember) {
+                // Keep local user in deduplicated array so they are not kicked out
+                const localMember = {
+                  id: RoomManager.sanitizeId(RoomManager.session.name),
+                  name: RoomManager.session.name,
+                  phone: RoomManager.session.phone || '',
+                  role: RoomManager.session.role || 'member',
+                  avatarColor: '#00d4ff',
+                  joinedAt: new Date().toISOString()
+                };
+                deduplicated.push(localMember);
+                matchedSessionMember = localMember;
+                // Re-save to cloud so other flatmates also see this user
+                setTimeout(() => {
+                  if (FirebaseSync.isAvailable && cleanCode) {
+                    FirebaseSync.saveRoomData(cleanCode, RoomManager.activeRoom);
+                  }
+                }, 1000);
+              }
+              RoomManager.session.status = 'approved';
               if (matchedSessionMember) {
                 RoomManager.session.role = matchedSessionMember.role || RoomManager.session.role || 'member';
                 RoomManager.session.name = matchedSessionMember.name;
