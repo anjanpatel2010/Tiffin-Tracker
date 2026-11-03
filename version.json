@@ -5,8 +5,8 @@
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-03",
   "message": "Major update with Firebase Cloud Firestore real-time sync and native background poll notifications!",
-  "apkUrl": "https://apkpure.net/p/com.tiffin.tracker",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases/latest",
+  "apkFilename": "Tiffin-Tracker-v5.3.0-release.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.3.0-release.apk",
   "releaseNotes": [
     "Firebase Cloud Firestore real-time database integration",
     "Native background notifications for meal polls (even when app is killed)",

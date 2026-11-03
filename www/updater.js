@@ -5,8 +5,8 @@
 (function () {
   'use strict';
 
-  const CURRENT_VERSION = '5.2.1';
-  const UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/anjanpatel2010/Tiffin-Tracker/main/version.json';
+  const CURRENT_VERSION = '5.3.0';
+  const UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/anjanpatel2010/Tiffin-Tracker/master/version.json';
   const SNOOZE_KEY = 'tiffin_update_snooze_until';
 
   function parseSemver(v) {
@@ -103,7 +103,7 @@
 
       if (downloadBtn) {
         downloadBtn.onclick = () => {
-          const targetUrl = data.apkUrl || data.downloadUrl || 'https://apkpure.net/p/com.tiffin.tracker';
+          const targetUrl = data.downloadUrl || data.apkUrl || `https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/${data.apkFilename || 'Tiffin-Tracker-v5.3.0-release.apk'}`;
           window.open(targetUrl, '_system');
         };
       }
