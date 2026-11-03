@@ -310,6 +310,34 @@
   function persistAndBroadcast(actionPayload) {
     saveStateToStorage(appState);
     renderAll();
+
+    // 1. Firebase Cloud Realtime Engine (Primary)
+    if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
+      const roomKey = (actionPayload?.roomCode || getActiveRoomCode() || 'TF-FLAT').toString().toUpperCase();
+      if (actionPayload) {
+        if (actionPayload.type === 'poll_created') {
+          FirebaseSync.saveActivePoll(roomKey, actionPayload.poll);
+        } else if (actionPayload.type === 'poll_voted') {
+          FirebaseSync.castVote(roomKey, actionPayload.pollId, actionPayload.roommateId, {
+            option: actionPayload.option,
+            portion: actionPayload.portion,
+            time: Date.now(),
+            voterName: actionPayload.voterName || actionPayload.author
+          });
+        } else if (actionPayload.type === 'poll_finalized') {
+          FirebaseSync.finalizePoll(roomKey, actionPayload.pollId, actionPayload.winner, actionPayload.mealsApplied, actionPayload.day, actionPayload.mealSlot);
+        } else if (actionPayload.type === 'poll_cancelled') {
+          FirebaseSync.cancelPoll(roomKey);
+        } else if (actionPayload.type === 'room_meta_sync') {
+          FirebaseSync.saveRoomData(roomKey, actionPayload.roomData);
+          FirebaseSync.saveLedgerState(roomKey, actionPayload.state);
+        } else {
+          FirebaseSync.saveLedgerState(roomKey, appState);
+        }
+      }
+    }
+
+    // 2. Relay broadcast
     if (actionPayload && typeof SyncEngine !== 'undefined' && SyncEngine.broadcast) {
       SyncEngine.broadcast(actionPayload);
     }
@@ -813,6 +841,11 @@
         localStorage.setItem(pollKey, Date.now().toString());
       }
 
+      // Schedule native Android alarms (triggers every 5 mins even if app is closed/killed)
+      if (window.NativeBridge && typeof window.NativeBridge.schedulePollReminders === 'function') {
+        window.NativeBridge.schedulePollReminders(poll);
+      }
+
       // Keep client-side check running every 20 seconds
       if (!this.intervalId) {
         this.intervalId = setInterval(() => {
@@ -862,6 +895,11 @@
         localStorage.removeItem('tiffin_poll_remind_' + pollId);
       } else if (appState && appState.activePoll) {
         localStorage.removeItem('tiffin_poll_remind_' + appState.activePoll.id);
+      }
+
+      // Cancel native Android alarms
+      if (window.NativeBridge && typeof window.NativeBridge.cancelPollReminders === 'function') {
+        window.NativeBridge.cancelPollReminders();
       }
     }
   };
@@ -1061,6 +1099,9 @@
 
       this.connect();
       this.catchUp();
+      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.subscribeRoom) {
+        FirebaseSync.subscribeRoom(this.roomCode);
+      }
       NotificationManager.subscribeWebPush();
       showToast(`Switched to room #${this.roomCode}`);
     },
@@ -5348,7 +5389,11 @@
       saveStateToStorage(appState);
       renderAll();
 
-      // Immediately broadcast full room metadata so new members can sync instantly
+      // Immediately persist to Firebase Cloud and broadcast full room metadata so new members can sync instantly
+      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
+        FirebaseSync.saveRoomData(roomCode, this.activeRoom);
+        FirebaseSync.saveLedgerState(roomCode, appState);
+      }
       SyncEngine.broadcast({
         type: 'room_meta_sync',
         roomCode: roomCode,

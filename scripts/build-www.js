@@ -21,7 +21,10 @@ const filesToCopy = [
   'icon-192.png',
   'manifest.json',
   'version.json',
-  'sw.js'
+  'sw.js',
+  'firebase-app.js',
+  'firebase-firestore.js',
+  'firebase-sync.js'
 ];
 
 filesToCopy.forEach(file => {

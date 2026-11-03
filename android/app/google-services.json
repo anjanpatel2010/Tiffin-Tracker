@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "805212210681",
+    "project_id": "tiffin-tracker-a91db",
+    "storage_bucket": "tiffin-tracker-a91db.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:805212210681:android:1cf8d69655b9088f3d2928",
+        "android_client_info": {
+          "package_name": "com.tiffin.tracker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA1onYeMQJr2QWSq8nGXKq4A13BZuxPt30"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
