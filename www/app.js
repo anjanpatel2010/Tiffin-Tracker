@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.2.1';
+  const APP_VERSION = '5.3.0';
 
   function checkAndMigrateAppVersion() {
     try {
