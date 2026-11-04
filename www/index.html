@@ -24,7 +24,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css?v=5.3.3">
+  <link rel="stylesheet" href="styles.css?v=5.3.4">
 </head>
 <body>
   <!-- Luxury Startup Animation (Fast & Smooth Brand Reveal) -->
@@ -95,10 +95,6 @@
       <button class="nav-tab active" data-tab="logger">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
         <span>Daily Logger</span>
-      </button>
-      <button class="nav-tab" data-tab="poll">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-        <span>Menu Poll</span>
       </button>
       <button class="nav-tab" data-tab="sheet">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
@@ -204,10 +200,6 @@
 
         <!-- Fast Actions Toolbar -->
         <div class="fast-actions-bar">
-          <button id="openPollQuickBtn" class="fast-action-btn highlight-poll-action">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-            <span>Menu Poll</span>
-          </button>
           <button id="clearTodayMealsBtn" class="fast-action-btn btn-ghost" title="Reset all meals for this day">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
             <span>Reset Day</span>
@@ -217,179 +209,6 @@
         <!-- Roommates Daily Meal Cards (Immediately Visible) -->
         <div class="roommates-logger-grid" id="roommatesLoggerGrid">
           <!-- Dynamically populated Roommate Meal Cards -->
-        </div>
-
-      </section>
-
-
-      <!-- ========================================== -->
-      <!-- TAB 2: MENU VOTING POLL SYSTEM             -->
-      <!-- ========================================== -->
-      <section id="view-poll" class="view-panel">
-        
-        <!-- Active Poll Card / Results -->
-        <div class="card" id="activePollCard">
-          <div class="poll-card-header">
-            <h2 class="card-title" id="pollCardTitle">Menu Voting Poll</h2>
-            <div class="poll-header-actions">
-              <span id="pollStatusBadge" class="badge-pill today-pill">No Active Poll</span>
-              <button id="pollNotificationBtn" class="notification-chip-btn" title="Tap to enable Phone Notification Bar Alerts">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                <span id="pollNotificationBtnText">Enable Alerts</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Active Poll Live Display -->
-          <div id="activePollContainer" style="display:none;">
-            <div class="poll-question-hero">
-              <span class="poll-tag" id="pollMealTag">DINNER POLL</span>
-              <h3 class="poll-question-text" id="pollQuestionText">What should we cook for Dinner?</h3>
-              <p class="poll-meta-text" id="pollMetaText">Created by Anjan • Votes update live across all phones</p>
-            </div>
-
-            <!-- Blind Voting Notice (Shown until user votes) -->
-            <div id="pollBlindNotice" class="card-inner-box poll-blind-banner" style="display:none;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="color:var(--amber); flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              <div class="blind-notice-content">
-                <strong>Blind Voting Active</strong>
-                <p>Results are hidden until you submit your vote.</p>
-              </div>
-            </div>
-
-            <!-- Voting Form for Current User -->
-            <div class="card-inner-box my-vote-box" id="myVoteBox">
-              <h4 class="inner-box-title">Cast Your Vote (<span id="myVoteIdentityLabel">Anjan</span>):</h4>
-              <div class="form-group mt-2">
-                <span class="input-label" style="font-weight: 700; color: #fff;">1. Choose Sabzi Option:</span>
-                <div class="poll-options-radio-grid mt-1" id="pollOptionsRadioGrid">
-                  <!-- Radio options injected here -->
-                </div>
-              </div>
-
-              <div class="poll-portion-picker mt-3">
-                <span class="input-label" style="font-weight: 700; color: #fff;">2. Select Tiffin Option:</span>
-                <div class="segment-toggle segment-sm" id="pollPortionToggle">
-                  <button class="seg-btn active half" data-portion="Half">
-                    <span>Half</span>
-                    <span class="seg-price">₹80</span>
-                  </button>
-                  <button class="seg-btn full" data-portion="Full">
-                    <span>Full</span>
-                    <span class="seg-price">₹110</span>
-                  </button>
-                  <button class="seg-btn special" data-portion="Special">
-                    <span>Special</span>
-                    <span class="seg-price">₹90</span>
-                  </button>
-                  <button class="seg-btn off no-tiffin-btn" data-portion="No">
-                    <span>No Tiffin</span>
-                    <span class="seg-price">₹0 / Skip</span>
-                  </button>
-                </div>
-              </div>
-              <button id="submitVoteBtn" class="primary-btn glow-btn btn-sm w-full mt-3">
-                <span>Submit My Vote</span>
-              </button>
-            </div>
-
-            <!-- Voted Summary Card (Visible after user votes) -->
-            <div class="card-inner-box my-voted-summary-box" id="myVotedSummaryBox" style="display:none;">
-              <div class="voted-summary-header">
-                <div>
-                  <span class="voted-badge">✓ Vote Submitted</span>
-                  <h4 class="voted-title" id="myVotedChoiceText">You voted: Paneer • Half</h4>
-                </div>
-                <button id="changeVoteBtn" class="pill-btn-ghost btn-xs">Change Vote</button>
-              </div>
-            </div>
-
-            <!-- Live Voting Results / Breakdown (Hidden until user votes) -->
-            <div class="poll-results-tray mt-4" id="pollResultsTray">
-              <h4 class="inner-box-title">Live Votes Tally:</h4>
-              <div class="poll-results-bars" id="pollResultsBars">
-                <!-- Tally bars injected here -->
-              </div>
-            </div>
-
-            <!-- Who Voted for What Breakdown (Hidden until user votes) -->
-            <div class="voters-breakdown-card mt-3" id="votersBreakdownCard">
-              <div class="voters-header">
-                <span class="tray-label">Roommate Choices:</span>
-                <span class="helper-text" id="votersCountLabel">0 / 7 Voted</span>
-              </div>
-              <div class="voters-chips-wrap" id="votersChipsWrap">
-                <!-- Injected via JS -->
-              </div>
-            </div>
-
-            <!-- Finalize & Send WhatsApp Order to Cook -->
-            <div class="poll-finalize-actions mt-4" id="pollFinalizeActions">
-              <button id="finalizePollBtn" class="whatsapp-btn w-full btn-lg">
-                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
-                <span>Finalize & Forward Order to Cook (WhatsApp)</span>
-              </button>
-              <button id="resetActivePollBtn" class="secondary-btn btn-sm w-full mt-2" style="color:var(--text-muted); border-color:rgba(255,255,255,0.08);">
-                <span>Menu Shifted? Cancel / Start New Poll</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Create New Poll Form (Visible when no active poll or admin wants new poll) -->
-          <div id="createPollContainer" class="create-poll-box mt-3">
-            <h3 class="inner-box-title">Create New Sabzi Poll</h3>
-
-            <div class="create-poll-grid">
-              <div class="form-group">
-                <label for="pollDaySelect" class="input-label">Date:</label>
-                <select id="pollDaySelect" class="select-dropdown w-full">
-                  <!-- Populated by JS -->
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="pollMealSlotSelect" class="input-label">Meal Slot:</label>
-                <select id="pollMealSlotSelect" class="select-dropdown w-full">
-                  <option value="Dinner" selected>Dinner</option>
-                  <option value="Lunch">Lunch</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-group mt-3">
-              <label class="input-label">Sabzi Options from Cook:</label>
-              <div id="pollOptionInputsContainer" class="poll-inputs-container">
-                <input type="text" class="text-input poll-opt-input" placeholder="Option 1 (e.g. Paneer Bhurji)" value="Paneer">
-                <input type="text" class="text-input poll-opt-input" placeholder="Option 2 (e.g. Bhindi Masala)" value="Bhindi">
-                <input type="text" class="text-input poll-opt-input" placeholder="Option 3 (e.g. Dal Tadka)" value="Aloo Gobi">
-              </div>
-              <button id="addPollOptionBtn" class="secondary-btn btn-sm mt-2">
-                <span>+ Add Option</span>
-              </button>
-            </div>
-
-            <button id="launchPollBtn" class="primary-btn glow-btn w-full mt-4">
-              <span>Launch Poll to Flatmates</span>
-            </button>
-          </div>
-
-        </div>
-
-        <!-- Previous Polls Archive Section -->
-        <div class="card mt-3" id="previousPollsCard" style="display:none;">
-          <div class="card-header-compact">
-            <div class="card-title-wrap">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--purple)"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              <h3 class="card-title">Previous Polls</h3>
-            </div>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span id="prevPollsCountBadge" class="badge-pill">0 Saved</span>
-              <button id="clearAllPrevPollsBtn" class="pill-btn-ghost btn-xs text-muted" title="Delete all previous polls">Delete All</button>
-            </div>
-          </div>
-          <div id="previousPollsList" class="previous-polls-list">
-            <!-- Dynamically populated via JS -->
-          </div>
         </div>
 
       </section>
@@ -733,10 +552,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
         <span>Logger</span>
       </button>
-      <button class="m-nav-tab" data-tab="poll">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-        <span>Poll</span>
-      </button>
       <button class="m-nav-tab" data-tab="sheet">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
         <span>Sheet</span>
@@ -948,7 +763,7 @@
                 <div class="settings-option-item">
                   <div class="settings-option-info">
                     <strong>Notification Alerts</strong>
-                    <span class="helper-text">Receive device alerts when new meal polls open.</span>
+                    <span class="helper-text">Receive device alerts for mess ledger and update reminders.</span>
                   </div>
                   <button id="settingsNotificationBtn" class="secondary-btn btn-xs">
                     <span>Configure</span>
@@ -1202,13 +1017,6 @@
               </div>
             </div>
             <div class="walkthrough-bullet-item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="color:var(--accent-light); flex-shrink:0; margin-top:2px;"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-              <div>
-                <strong>Daily Menu Voting Poll</strong>
-                <p class="bullet-desc">Cook gives options ➜ launch a poll ➜ flatmates vote ➜ forward 1-click order on WhatsApp.</p>
-              </div>
-            </div>
-            <div class="walkthrough-bullet-item">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="color:var(--emerald); flex-shrink:0; margin-top:2px;"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
               <div>
                 <strong>UPI Settlement & Reports</strong>
@@ -1354,7 +1162,7 @@
         <div class="modal-body" style="padding-top:0;">
           <h3 class="modal-title" id="welcomeModalTitle" style="font-size:1.25rem; margin-bottom:8px; font-weight:800; color:#fff;">Welcome to Tiffin Tracker! 🎉</h3>
           <p id="welcomeModalSub" style="font-size:0.88rem; color:var(--text-secondary); line-height:1.5; margin-bottom:20px;">
-            Turn on notifications so you get alerted when flatmates schedule meal polls or update dinner menus.
+            Turn on notifications so you get alerted when flatmates update menus or mess expenses.
           </p>
           <button id="allowStartNotificationBtn" class="primary-btn glow-btn w-full" style="padding:13px; font-weight:700; font-size:0.95rem; margin-bottom:10px;">
             <span>Allow Notifications 🔔</span>
@@ -1380,7 +1188,7 @@
         <div class="morphe-version-badge">
           <span id="updateCurrentVersionTag" class="morphe-chip-current">v5.3.2</span>
           <span class="morphe-version-arrow">➔</span>
-          <span id="updateVersionTag" class="morphe-chip-latest">v5.3.3</span>
+          <span id="updateVersionTag" class="morphe-chip-latest">v5.3.4</span>
           <span class="morphe-latest-pill">LATEST</span>
         </div>
 
@@ -1444,17 +1252,17 @@
   </div>
 
   <!-- Firebase Cloud Realtime Engine -->
-  <script src="firebase-app.js?v=5.3.3"></script>
-  <script src="firebase-firestore.js?v=5.3.3"></script>
+  <script src="firebase-app.js?v=5.3.4"></script>
+  <script src="firebase-firestore.js?v=5.3.4"></script>
   <!-- Native Device Bridge (Status bar, Insets, Back Button, Local Notifications, Push Notifications) -->
-  <script src="native-bridge.js?v=5.3.3"></script>
+  <script src="native-bridge.js?v=5.3.4"></script>
   <!-- QR Generator Script -->
-  <script src="qr.js?v=5.3.3"></script>
+  <script src="qr.js?v=5.3.4"></script>
   <!-- Firebase Cloud Sync Bridge -->
-  <script src="firebase-sync.js?v=5.3.3"></script>
+  <script src="firebase-sync.js?v=5.3.4"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=5.3.3"></script>
+  <script src="app.js?v=5.3.4"></script>
   <!-- In-App Auto Update Sentinel -->
-  <script src="updater.js?v=5.3.3"></script>
+  <script src="updater.js?v=5.3.4"></script>
 </body>
 </html>

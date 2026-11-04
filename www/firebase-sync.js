@@ -1,6 +1,6 @@
 /**
  * Tiffin Tracker - Firebase Cloud Realtime Engine & Cloud Messaging
- * Unified real-time cloud sync for Room Data, Ledger, Polls, and Native FCM Push Tokens.
+ * Unified real-time cloud sync for Room Data, Ledger, and Native FCM Push Tokens.
  */
 (function () {
   'use strict';
@@ -162,64 +162,7 @@
             }
           }
 
-          // 2. Synchronize Active Poll
-          if (data.activePoll && data.activePoll.status === 'active') {
-            const incPoll = data.activePoll;
-            const curTime = (appState && appState.activePoll) ? Number(appState.activePoll.createdTime || 0) : 0;
-            const incTime = Number(incPoll.createdTime || 0);
-
-            if (!appState.activePoll || appState.activePoll.id !== incPoll.id || incTime >= curTime) {
-              const isFirstArrival = !appState.activePoll || appState.activePoll.id !== incPoll.id;
-              appState.activePoll = incPoll;
-              const rKey = cleanCode.toLowerCase();
-              if (incPoll.votes && typeof getCanonicalPollVotes === 'function') {
-                const canonicalMap = getCanonicalPollVotes(incPoll);
-                const cleanedVotes = {};
-                canonicalMap.forEach((v, k) => {
-                  cleanedVotes[k] = v;
-                });
-                incPoll.votes = cleanedVotes;
-              }
-              localStorage.setItem('tiffin_active_poll_' + rKey, JSON.stringify(incPoll));
-              modified = true;
-
-              const isCreator = PollReminderManager.isUserCreator(incPoll);
-              const hasVoted = PollReminderManager.hasUserVoted(incPoll);
-              const notifKey = 'tiffin_notified_poll_' + incPoll.id;
-
-              if (!isCreator && !hasVoted) {
-                if (isFirstArrival && !sessionStorage.getItem(notifKey)) {
-                  sessionStorage.setItem(notifKey, 'true');
-                  if (typeof playJoinAlertChime === 'function') {
-                    playJoinAlertChime();
-                  }
-                  if (typeof NotificationManager !== 'undefined') {
-                    NotificationManager.send(`🍲 New ${incPoll.mealSlot || 'Meal'} Poll!`, {
-                      body: `Launched by ${incPoll.author || 'Flatmate'}. Tap to choose your sabzi!`,
-                      tag: 'poll-' + incPoll.id,
-                      renotify: true
-                    });
-                  }
-                }
-                PollReminderManager.start(incPoll);
-              } else {
-                PollReminderManager.stop(incPoll.id);
-              }
-            }
-          } else if (data.activePoll === null && appState && appState.activePoll) {
-            // Poll was cancelled or cleared in cloud
-            appState.activePoll = null;
-            localStorage.removeItem('tiffin_active_poll_' + cleanCode.toLowerCase());
-            if (typeof hidePollAlertBanner === 'function') {
-              hidePollAlertBanner();
-            }
-            if (typeof PollReminderManager !== 'undefined') {
-              PollReminderManager.stop();
-            }
-            modified = true;
-          }
-
-          // 3. Synchronize Ledger State (Days, Meals, Sabzi, Amul)
+          // 2. Synchronize Ledger State (Days, Meals, Sabzi, Amul)
           if (data.state && data.state.days && appState && appState.days) {
             const incomingDays = data.state.days;
             for (let d = 1; d <= (CONFIG.daysInMonth || 31); d++) {
@@ -287,74 +230,6 @@
         });
       } catch (err) {
         console.warn('[FirebaseSync] Subscription failed:', err);
-      }
-    },
-
-    async saveActivePoll(roomCode, poll) {
-      if (!this.isAvailable || !db) return;
-      const cleanCode = this.getCleanRoom(roomCode);
-      try {
-        await db.collection('rooms').doc(cleanCode).set({
-          activePoll: poll,
-          lastUpdated: Date.now()
-        }, { merge: true });
-        console.log(`[FirebaseSync] Active poll saved to Firestore: ${poll.id}`);
-      } catch (err) {
-        console.warn('[FirebaseSync] saveActivePoll error:', err);
-      }
-    },
-
-    async castVote(roomCode, pollId, roommateId, voteObj) {
-      if (!this.isAvailable || !db) return;
-      const cleanCode = this.getCleanRoom(roomCode);
-      try {
-        const updatePayload = {
-          lastUpdated: Date.now()
-        };
-        updatePayload[`activePoll.votes.${roommateId}`] = voteObj;
-        await db.collection('rooms').doc(cleanCode).update(updatePayload);
-        console.log(`[FirebaseSync] Vote cast saved to Firestore for ${roommateId}`);
-      } catch (err) {
-        console.warn('[FirebaseSync] castVote error:', err);
-      }
-    },
-
-    async finalizePoll(roomCode, pollId, winner, mealsApplied, day, mealSlot) {
-      if (!this.isAvailable || !db) return;
-      const cleanCode = this.getCleanRoom(roomCode);
-      try {
-        const updatePayload = {
-          'activePoll.status': 'finalized',
-          'activePoll.winner': winner,
-          lastUpdated: Date.now()
-        };
-        if (day) {
-          updatePayload[`state.days.${day}.sabzi`] = winner;
-          updatePayload[`state.days.${day}.sabziUpdatedAt`] = Date.now();
-          if (mealsApplied) {
-            const slot = (mealSlot || 'Dinner').toLowerCase();
-            Object.entries(mealsApplied).forEach(([rId, portion]) => {
-              updatePayload[`state.days.${day}.meals.${rId}.${slot}`] = portion === 'Off' ? '' : portion;
-            });
-          }
-        }
-        await db.collection('rooms').doc(cleanCode).update(updatePayload);
-        console.log(`[FirebaseSync] Poll finalized in Firestore: ${winner}`);
-      } catch (err) {
-        console.warn('[FirebaseSync] finalizePoll error:', err);
-      }
-    },
-
-    async cancelPoll(roomCode) {
-      if (!this.isAvailable || !db) return;
-      const cleanCode = this.getCleanRoom(roomCode);
-      try {
-        await db.collection('rooms').doc(cleanCode).update({
-          activePoll: null,
-          lastUpdated: Date.now()
-        });
-      } catch (err) {
-        console.warn('[FirebaseSync] cancelPoll error:', err);
       }
     },
 

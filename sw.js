@@ -1,10 +1,10 @@
-const CACHE_NAME = 'tiffin-tracker-v5.2.1';
+const CACHE_NAME = 'tiffin-tracker-v5.3.4';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=5.2.1',
-  './app.js?v=5.2.1',
-  './qr.js?v=5.2.1',
+  './styles.css?v=5.3.4',
+  './app.js?v=5.3.4',
+  './qr.js?v=5.3.4',
   './manifest.json',
   './icon.svg'
 ];
@@ -33,32 +33,6 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Background Poll Reminder Dispatcher in Service Worker
-let swReminderInterval = null;
-self.addEventListener('message', (event) => {
-  if (!event.data) return;
-  if (event.data.type === 'START_POLL_REMINDER') {
-    const { pollId, mealSlot, options, day } = event.data;
-    if (swReminderInterval) clearInterval(swReminderInterval);
-    // Every 5 minutes (300,000 ms), push phone notification reminder
-    swReminderInterval = setInterval(() => {
-      self.registration.showNotification(`Poll Reminder`, {
-        body: `Please cast your vote for ${mealSlot || 'meal'}.`,
-        icon: './icon.svg',
-        badge: './icon.svg',
-        tag: 'poll-reminder-' + pollId,
-        renotify: true,
-        data: { url: './#view-poll' }
-      });
-    }, 5 * 60 * 1000);
-  } else if (event.data.type === 'STOP_POLL_REMINDER') {
-    if (swReminderInterval) {
-      clearInterval(swReminderInterval);
-      swReminderInterval = null;
-    }
-  }
-});
-
 // Native Web Push Notification Event (Handles incoming alerts even when app/browser is closed)
 self.addEventListener('push', (event) => {
   let payload = { title: 'Tiffin Tracker 🍲', body: 'New meal update from flatmates!' };
@@ -72,12 +46,12 @@ self.addEventListener('push', (event) => {
 
   const title = payload.title || 'Tiffin Tracker 🍲';
   const options = {
-    body: payload.body || payload.message || 'Tap to cast your vote or view meal updates.',
+    body: payload.body || payload.message || 'Tap to view meal updates.',
     icon: './icon.svg',
     badge: './icon.svg',
     tag: payload.tag || 'tiffin-alert',
     renotify: true,
-    data: { url: payload.click || payload.url || './#view-poll' }
+    data: { url: payload.click || payload.url || './#view-logger' }
   };
 
   event.waitUntil(
@@ -88,7 +62,7 @@ self.addEventListener('push', (event) => {
 // Native Notification Click Handler (Brings PWA / browser window to foreground)
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || './#view-poll';
+  const targetUrl = (event.notification.data && event.notification.data.url) || './#view-logger';
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
@@ -96,7 +70,7 @@ self.addEventListener('notificationclick', (event) => {
         if (client.url && 'focus' in client) {
           client.focus();
           if ('postMessage' in client) {
-            client.postMessage({ type: 'NAVIGATE_TAB', tab: 'poll' });
+            client.postMessage({ type: 'NAVIGATE_TAB', tab: 'logger' });
           }
           return;
         }

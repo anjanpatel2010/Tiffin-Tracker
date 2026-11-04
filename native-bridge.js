@@ -67,11 +67,8 @@
           PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
             console.log('[NativeBridge] Push action performed:', action);
             const data = action.notification.data || {};
-            const targetUrl = data.url || data.click_action || '#view-poll';
+            const targetUrl = data.url || data.click_action || '#view-logger';
             window.location.hash = targetUrl;
-            if (typeof renderPollView === 'function') {
-              renderPollView();
-            }
           });
 
           // Auto-register if permission was already granted
@@ -262,63 +259,6 @@
         } catch (e) {}
       }
       return false;
-    },
-
-    // Schedule native background reminders for polls (runs even when app is killed)
-    async schedulePollReminders(poll) {
-      if (!isNative() || !poll || !poll.id) return;
-      const { LocalNotifications } = getPlugins();
-      if (!LocalNotifications) return;
-
-      try {
-        const hasPerm = await this.checkNotificationPermission();
-        if (!hasPerm) return;
-
-        // Cancel any existing reminder alarms first
-        await this.cancelPollReminders();
-
-        const meal = poll.mealSlot || 'Dinner';
-        const optionsStr = (poll.options || []).slice(0, 3).join(' vs ');
-        const notifications = [];
-
-        // Schedule alarms for every 5 min up to 30 mins (runs even if app process is killed)
-        for (let i = 1; i <= 6; i++) {
-          const delayMs = i * 5 * 60 * 1000;
-          notifications.push({
-            id: 9100 + i,
-            title: `⏰ Reminder (${i * 5}m): ${meal} Poll`,
-            body: `Cast your vote! Options: ${optionsStr}`,
-            smallIcon: 'ic_launcher',
-            iconColor: '#00f5a0',
-            sound: null,
-            schedule: { at: new Date(Date.now() + delayMs) },
-            extra: { pollId: poll.id, type: 'poll-reminder' }
-          });
-        }
-
-        await LocalNotifications.schedule({ notifications });
-        console.log(`[NativeBridge] Scheduled ${notifications.length} native alarms for poll ${poll.id}`);
-      } catch (e) {
-        console.warn('[NativeBridge] schedulePollReminders failed:', e);
-      }
-    },
-
-    // Cancel native background reminder alarms
-    async cancelPollReminders() {
-      if (!isNative()) return;
-      const { LocalNotifications } = getPlugins();
-      if (!LocalNotifications) return;
-
-      try {
-        const cancelList = [];
-        for (let i = 1; i <= 6; i++) {
-          cancelList.push({ id: 9100 + i });
-        }
-        await LocalNotifications.cancel({ notifications: cancelList });
-        console.log('[NativeBridge] Cancelled native poll reminder alarms');
-      } catch (e) {
-        console.warn('[NativeBridge] cancelPollReminders failed:', e);
-      }
     }
   };
 

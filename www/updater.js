@@ -8,7 +8,7 @@
 (function () {
   'use strict';
 
-  const CURRENT_VERSION = '5.3.3';
+  const CURRENT_VERSION = '5.3.4';
   const UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/anjanpatel2010/Tiffin-Tracker/master/version.json';
   const SNOOZE_KEY = 'tiffin_update_snooze_until';
 

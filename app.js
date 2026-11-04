@@ -1,13 +1,13 @@
 /**
  * October Tiffin Expense Tracker - Core Application Logic
- * Mobile-First, Real-Time Cloud Sync, Voting Poll, Configurable Pricing & Audit Log
+ * Mobile-First, Real-Time Cloud Sync, Configurable Pricing & Audit Log
  */
 
 (function () {
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.3.3';
+  const APP_VERSION = '5.3.4';
 
   function checkAndMigrateAppVersion() {
     try {
@@ -201,8 +201,6 @@
       rates: rates,
       provider: provider,
       days: days,
-      activePoll: null,
-      pollHistory: [],
       amulMembers: ROOMMATES.map(r => r.id),
       auditLog: []
     };
@@ -216,7 +214,7 @@
         const jsonStr = decodeURIComponent(atob(encoded));
         const parsed = JSON.parse(jsonStr);
         if (parsed && parsed.days) {
-          if (!parsed.pollHistory) parsed.pollHistory = [];
+          
           if (!parsed.amulMembers || !Array.isArray(parsed.amulMembers)) parsed.amulMembers = (ROOMMATES.length > 0 ? ROOMMATES.map(r => r.id) : []);
           saveStateForMonth(year, month, parsed);
           return parsed;
@@ -236,7 +234,7 @@
           parsed.rates = { ...CONFIG.defaultRates, ...(parsed.rates || {}) };
           parsed.provider = { ...CONFIG.defaultProvider, ...(parsed.provider || {}) };
           if (!parsed.auditLog) parsed.auditLog = [];
-          if (!parsed.pollHistory) parsed.pollHistory = [];
+          
           if (!parsed.amulMembers || !Array.isArray(parsed.amulMembers)) parsed.amulMembers = (ROOMMATES.length > 0 ? ROOMMATES.map(r => r.id) : []);
 
           // Ensure timestamps dictionaries exist on every day
@@ -316,20 +314,7 @@
       const roomKey = (actionPayload?.roomCode || getActiveRoomCode() || '').toString().toUpperCase();
       if (!roomKey) return;
       if (actionPayload) {
-        if (actionPayload.type === 'poll_created') {
-          FirebaseSync.saveActivePoll(roomKey, actionPayload.poll);
-        } else if (actionPayload.type === 'poll_voted') {
-          FirebaseSync.castVote(roomKey, actionPayload.pollId, actionPayload.roommateId, {
-            option: actionPayload.option,
-            portion: actionPayload.portion,
-            time: Date.now(),
-            voterName: actionPayload.voterName || actionPayload.author
-          });
-        } else if (actionPayload.type === 'poll_finalized') {
-          FirebaseSync.finalizePoll(roomKey, actionPayload.pollId, actionPayload.winner, actionPayload.mealsApplied, actionPayload.day, actionPayload.mealSlot);
-        } else if (actionPayload.type === 'poll_cancelled') {
-          FirebaseSync.cancelPoll(roomKey);
-        } else if (actionPayload.type === 'room_meta_sync') {
+        if (actionPayload.type === 'room_meta_sync') {
           FirebaseSync.saveRoomData(roomKey, actionPayload.roomData);
           FirebaseSync.saveLedgerState(roomKey, actionPayload.state);
         } else {
@@ -390,7 +375,6 @@
 
   function populateDateSelectors() {
     const daySelect = document.getElementById('daySelectInput');
-    const pollDaySelect = document.getElementById('pollDaySelect');
 
     const fillSelect = (sel) => {
       if (!sel) return;
@@ -407,7 +391,6 @@
     };
 
     fillSelect(daySelect);
-    fillSelect(pollDaySelect);
   }
 
   // Convert base64 VAPID public key to Uint8Array for PushManager
@@ -530,7 +513,7 @@
         title: payload.title || 'Tiffin Tracker 🍲',
         body: payload.body || 'New meal update from flatmates!',
         tag: payload.tag || 'tiffin-alert',
-        url: payload.url || './#view-poll',
+        url: payload.url || './#view-logger',
         senderEndpoint: mySub ? mySub.endpoint : null,
         additionalSubscriptions: cachedSubs
       };
@@ -547,22 +530,8 @@
     },
 
     updateUI() {
-      const btn = document.getElementById('pollNotificationBtn');
       const settingsBtn = document.getElementById('settingsNotificationBtn');
       const perm = this.getPermission();
-
-      if (btn) {
-        if (perm === 'granted') {
-          btn.className = 'notification-status-chip';
-          btn.title = 'Phone Notifications are enabled';
-          btn.innerHTML = `<span class="pulse-dot"></span><span id="pollNotificationBtnText">Alerts Active</span>`;
-        } else {
-          btn.className = 'notification-chip-btn';
-          btn.title = 'Tap to enable Phone Notification Bar Alerts';
-          btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span id="pollNotificationBtnText">Enable Alerts</span>`;
-        }
-      }
-
       if (settingsBtn) {
         settingsBtn.textContent = perm === 'granted' ? '✓ Phone Alerts Active (Tap to Test)' : 'Enable Phone Notification Bar Alerts';
       }
@@ -577,12 +546,9 @@
             this.updateUI();
             if (showFeedback) showToast('🔔 Phone alerts enabled! Sending test notification...');
             await this.send('Alerts Active', {
-              body: 'You will receive phone alerts when flatmates vote or start meal polls.',
+              body: 'You will receive phone alerts for mess expenses and updates.',
               tag: 'tiffin-welcome'
             });
-            if (appState && appState.activePoll && appState.activePoll.status === 'active') {
-              PollReminderManager.start(appState.activePoll);
-            }
             return true;
           } else {
             if (showFeedback) showToast('Notification permission was dismissed.');
@@ -604,14 +570,11 @@
         if (result === 'granted') {
           if (showFeedback) showToast('Phone alerts enabled! Sending test notification...');
           await this.send('Alerts Active', {
-            body: 'You will receive phone alerts when a poll starts.',
+            body: 'You will receive phone alerts for mess expenses and updates.',
             tag: 'tiffin-welcome'
           });
           // Register native Web Push subscription on Vercel backend
           await this.subscribeWebPush();
-          if (appState && appState.activePoll && appState.activePoll.status === 'active') {
-            PollReminderManager.start(appState.activePoll);
-          }
           return true;
         } else if (result === 'denied' && showFeedback) {
           showToast('Notification permission was denied in browser settings.');
@@ -635,7 +598,7 @@
         badge: './icon.svg',
         tag: 'tiffin-alert',
         renotify: true,
-        data: { url: window.location.href.split('#')[0] + '#view-poll' },
+        data: { url: window.location.href.split('#')[0] + '#view-logger' },
         ...options
       };
 
@@ -776,201 +739,7 @@
   }
 
   // ==========================================================================
-  // POLL CANONICAL VOTE RESOLVER & DEDUPLICATOR
-  // ==========================================================================
-  /**
-   * Deduplicate and resolve poll votes to strictly 1 vote per unique flatmate.
-   * Prevents double-counting when a user votes or logs in from multiple devices (app vs web).
-   */
-  function getCanonicalPollVotes(poll) {
-    if (!poll || !poll.votes || typeof poll.votes !== 'object') {
-      return new Map();
-    }
-
-    const uniqueMap = new Map(); // canonicalId -> voteObj
-
-    Object.entries(poll.votes).forEach(([rawKey, voteObj]) => {
-      if (!voteObj || !voteObj.option) return;
-
-      const cleanKey = (rawKey || '').toLowerCase().trim();
-      const voterName = (voteObj.voterName || '').trim();
-
-      // Find the matched roommate in ROOMMATES
-      let canonicalId = cleanKey;
-      let canonicalName = voterName || cleanKey;
-
-      if (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES)) {
-        const found = ROOMMATES.find(r => {
-          const rId = (r.id || '').toLowerCase().trim();
-          const rName = (r.name || '').toLowerCase().trim();
-          const rSanitized = (typeof RoomManager !== 'undefined' && RoomManager.sanitizeId) ? RoomManager.sanitizeId(r.name).toLowerCase().trim() : rId;
-          return rId === cleanKey ||
-                 rName === cleanKey ||
-                 (voterName && rName === voterName.toLowerCase()) ||
-                 rSanitized === cleanKey;
-        });
-
-        if (found) {
-          canonicalId = (found.id || found.name).toLowerCase().trim();
-          canonicalName = found.name;
-        }
-      }
-
-      // If user voted multiple times from web and app, keep the latest vote by timestamp
-      const existing = uniqueMap.get(canonicalId);
-      const voteTime = Number(voteObj.time || 0);
-      if (!existing || voteTime >= Number(existing.time || 0)) {
-        uniqueMap.set(canonicalId, {
-          ...voteObj,
-          voterName: canonicalName,
-          roommateId: canonicalId
-        });
-      }
-    });
-
-    return uniqueMap;
-  }
-
-  // ==========================================================================
-  // POLL 5-MINUTE RECURRING REMINDER MANAGER
-  // ==========================================================================
-  const PollReminderManager = {
-    intervalId: null,
-    REMINDER_INTERVAL_MS: 5 * 60 * 1000, // 5 minutes
-
-    isUserCreator(poll) {
-      if (!poll) return false;
-      const pollId = poll.id;
-      if (sessionStorage.getItem('tiffin_poll_creator_' + pollId) === 'true') return true;
-      const myRaw = (typeof SyncEngine !== 'undefined' && SyncEngine.identity ? SyncEngine.identity : '').trim().toLowerCase();
-      const sessionName = (typeof RoomManager !== 'undefined' && RoomManager.session?.name ? RoomManager.session.name : '').trim().toLowerCase();
-      const myId = (typeof RoomManager !== 'undefined' && RoomManager.sanitizeId ? RoomManager.sanitizeId(sessionName || myRaw) : myRaw).toLowerCase();
-
-      if (poll.authorId && poll.authorId.toLowerCase() === myId) return true;
-      if (poll.author && (poll.author.trim().toLowerCase() === myRaw || poll.author.trim().toLowerCase() === sessionName)) return true;
-      return false;
-    },
-
-    hasUserVoted(poll) {
-      if (!poll || !poll.votes) return false;
-      const canonicalMap = getCanonicalPollVotes(poll);
-      const myRaw = (typeof SyncEngine !== 'undefined' && SyncEngine.identity ? SyncEngine.identity : '').trim().toLowerCase();
-      const sessionName = (typeof RoomManager !== 'undefined' && RoomManager.session?.name ? RoomManager.session.name : '').trim().toLowerCase();
-      const myId = (typeof RoomManager !== 'undefined' && RoomManager.sanitizeId ? RoomManager.sanitizeId(sessionName || myRaw) : myRaw).toLowerCase();
-
-      let foundCanonical = null;
-      if (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES)) {
-        const found = ROOMMATES.find(r => 
-          (r.name && (r.name.toLowerCase() === myRaw || r.name.toLowerCase() === sessionName)) || 
-          (r.id && (r.id.toLowerCase() === myId || r.id.toLowerCase() === myRaw))
-        );
-        if (found) foundCanonical = (found.id || found.name).toLowerCase().trim();
-      }
-
-      return canonicalMap.has(myId) ||
-             canonicalMap.has(myRaw) ||
-             (sessionName && canonicalMap.has(sessionName)) ||
-             (foundCanonical && canonicalMap.has(foundCanonical));
-    },
-
-    start(poll) {
-      if (!poll || poll.status !== 'active') {
-        this.stop();
-        return;
-      }
-
-      // Creator must NEVER receive reminders
-      if (this.isUserCreator(poll)) {
-        this.stop(poll.id);
-        hidePollAlertBanner();
-        return;
-      }
-
-      // If user has already voted, do not remind
-      if (this.hasUserVoted(poll)) {
-        this.stop(poll.id);
-        hidePollAlertBanner();
-        return;
-      }
-
-      // Record baseline reminder timestamp if not present
-      const pollKey = 'tiffin_poll_remind_' + poll.id;
-      if (!localStorage.getItem(pollKey)) {
-        localStorage.setItem(pollKey, Date.now().toString());
-      }
-
-      // Schedule native Android alarms (triggers every 5 mins even if app is closed/killed)
-      if (window.NativeBridge && typeof window.NativeBridge.schedulePollReminders === 'function') {
-        window.NativeBridge.schedulePollReminders(poll);
-      }
-
-      // Keep client-side check running every 20 seconds
-      if (!this.intervalId) {
-        this.intervalId = setInterval(() => {
-          this.checkAndRemind();
-        }, 20000);
-      }
-    },
-
-    checkAndRemind() {
-      const poll = appState ? appState.activePoll : null;
-      if (!poll || poll.status !== 'active') {
-        this.stop();
-        return;
-      }
-
-      // If user is creator or has already voted, stop immediately
-      if (this.isUserCreator(poll) || this.hasUserVoted(poll)) {
-        this.stop(poll.id);
-        hidePollAlertBanner();
-        return;
-      }
-
-      const pollKey = 'tiffin_poll_remind_' + poll.id;
-      const lastReminded = parseInt(localStorage.getItem(pollKey) || '0', 10);
-      const now = Date.now();
-
-      if (now - lastReminded >= this.REMINDER_INTERVAL_MS) {
-        localStorage.setItem(pollKey, now.toString());
-        const meal = poll.mealSlot || 'Dinner';
-        NotificationManager.send(`⏰ Poll Reminder: ${meal}`, {
-          body: `Please cast your vote for ${meal}! Options: ${(poll.options || []).join(' vs ')}`,
-          tag: 'poll-reminder-' + poll.id,
-          renotify: true
-        });
-        playJoinAlertChime();
-      }
-    },
-
-    stop(pollId) {
-      if (this.intervalId) {
-        clearInterval(this.intervalId);
-        this.intervalId = null;
-      }
-      if (pollId) {
-        localStorage.removeItem('tiffin_poll_remind_' + pollId);
-      } else if (appState && appState.activePoll) {
-        localStorage.removeItem('tiffin_poll_remind_' + appState.activePoll.id);
-      }
-
-      // Cancel native Android alarms
-      if (window.NativeBridge && typeof window.NativeBridge.cancelPollReminders === 'function') {
-        window.NativeBridge.cancelPollReminders();
-      }
-    }
-  };
-
-  // Real-time floating in-app banner disabled per user request (keeps in-app experience sleek & clean)
-  function showPollAlertBanner(poll) {
-    hidePollAlertBanner();
-  }
-
-  function hidePollAlertBanner() {
-    const banner = document.getElementById('pollAlertBanner');
-    if (banner) {
-      try { banner.remove(); } catch (e) {}
-    }
-  }
+  
 
   // Create lean, reliable sync snapshot (< 2KB) preventing NTFY attachment conversion
   function getCompactSyncState(state) {
@@ -1003,9 +772,7 @@
       lastModified: state.lastModified || new Date().toISOString(),
       rates: state.rates || CONFIG.defaultRates,
       provider: state.provider || CONFIG.defaultProvider,
-      days: compactDays,
-      activePoll: state.activePoll || null
-    };
+      days: compactDays,    };
   }
 
   // ==========================================================================
@@ -1044,10 +811,7 @@
       // 3. Connect EventSource
       this.connect();
 
-      // 4. Catch up poll
-      this.catchUp();
-
-      // 5. Fast resilience polling (every 8s) to ensure instant synchronization across all room devices
+      // 4. Fast resilience polling (every 8s) to ensure instant synchronization across all room devices
       if (this.resilienceTimer) clearInterval(this.resilienceTimer);
       this.resilienceTimer = setInterval(() => {
         if (document.visibilityState === 'visible') {
@@ -1055,16 +819,7 @@
         }
       }, 8000);
 
-      // 6. Setup 5-minute Poll Reminder Check & In-App Banner
-      if (appState && appState.activePoll && appState.activePoll.status === 'active') {
-        if (!PollReminderManager.isUserCreator(appState.activePoll) && !PollReminderManager.hasUserVoted(appState.activePoll)) {
-          showPollAlertBanner(appState.activePoll);
-          PollReminderManager.start(appState.activePoll);
-        } else {
-          hidePollAlertBanner();
-          PollReminderManager.stop(appState.activePoll.id);
-        }
-      }
+      
 
       // 7. Auto-ensure native Web Push subscription with Vercel backend
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -1098,16 +853,6 @@
       this.identity = name;
       localStorage.setItem('tiffin_my_identity', name);
       updateIdentityUI(name);
-
-      if (appState && appState.activePoll && appState.activePoll.status === 'active') {
-        if (!PollReminderManager.isUserCreator(appState.activePoll) && !PollReminderManager.hasUserVoted(appState.activePoll)) {
-          showPollAlertBanner(appState.activePoll);
-          PollReminderManager.start(appState.activePoll);
-        } else {
-          hidePollAlertBanner();
-          PollReminderManager.stop(appState.activePoll.id);
-        }
-      }
     },
 
     updateStatusUI(status, label) {
@@ -1245,62 +990,6 @@
           headers['Title'] = 'Flatmate Knocking!';
           headers['Priority'] = 'high';
           headers['Tags'] = 'bell,door';
-        } else if (action.type === 'poll_created') {
-          const meal = toAscii(action.poll?.mealSlot || 'Dinner');
-          headers['Title'] = `New ${meal} Poll!`;
-          headers['Priority'] = 'high';
-          headers['Tags'] = 'ballot_box,curry';
-          headers['Click'] = window.location.href.split('#')[0] + '#view-poll';
-          headers['Actions'] = `view, Vote Now, ${window.location.href.split('#')[0]}#view-poll`;
-        } else if (action.type === 'poll_voted') {
-          const author = toAscii(action.author || action.voterName || 'Flatmate');
-          headers['Title'] = `Vote Cast: ${author}`;
-          headers['Priority'] = 'default';
-          headers['Tags'] = 'white_check_mark';
-          headers['Click'] = window.location.href.split('#')[0] + '#view-poll';
-        } else if (action.type === 'poll_finalized') {
-          const win = toAscii(action.winner || 'Meal');
-          headers['Title'] = `Menu Decided: ${win}`;
-          headers['Priority'] = 'high';
-          headers['Tags'] = 'trophy,curry';
-          headers['Click'] = window.location.href.split('#')[0] + '#view-poll';
-        }
-        await fetch(`https://ntfy.sh/${this.getTopic(targetRoom)}`, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify(action)
-        });
-
-        // Trigger Native Web Push directly via Vercel serverless function to alert closed phones
-        if (action.type === 'poll_created') {
-          const meal = action.poll?.mealSlot || 'Dinner';
-          NotificationManager.sendWebPush({
-            title: `🍲 New ${meal} Poll!`,
-            body: `${action.author || 'Flatmate'} created a poll! Tap to cast your vote.`,
-            tag: 'poll-created-' + (action.poll?.id || Date.now()),
-            url: window.location.href.split('#')[0] + '#view-poll'
-          });
-        } else if (action.type === 'poll_voted') {
-          NotificationManager.sendWebPush({
-            title: `🗳️ Vote Cast: ${action.author || 'Flatmate'}`,
-            body: `${action.author || 'A flatmate'} just voted in the meal poll.`,
-            tag: 'poll-vote',
-            url: window.location.href.split('#')[0] + '#view-poll'
-          });
-        } else if (action.type === 'poll_finalized') {
-          NotificationManager.sendWebPush({
-            title: `🏆 Menu Decided: ${action.winner || 'Meal finalized'}`,
-            body: `Decision locked in for ${action.mealSlot || 'today'}: ${action.winner}!`,
-            tag: 'poll-final',
-            url: window.location.href.split('#')[0] + '#view-poll'
-          });
-        } else if (action.type === 'poll_cancelled') {
-          NotificationManager.sendWebPush({
-            title: `🚫 Poll Cancelled`,
-            body: `${action.author || 'Flatmate'} cancelled the active poll.`,
-            tag: 'poll-cancel',
-            url: window.location.href.split('#')[0] + '#view-poll'
-          });
         } else if (action.type === 'join_request') {
           NotificationManager.sendWebPush({
             title: `Flatmate Knocking! 🔔`,
@@ -1346,7 +1035,6 @@
 
       // If action belongs to a different month, persist silently in background (only for month-scoped data)
       const isGlobalAction = action.type && (
-        action.type.startsWith('poll_') ||
         action.type.startsWith('room_') ||
         action.type.startsWith('member_') ||
         action.type.startsWith('join_') ||
@@ -1479,303 +1167,6 @@
             appState.days[day].amulTimestamps[person] = msgTime || Date.now();
             logActivity(author, 'Milk Update', `${capitalize(person)} milk packets: ${value} (Day ${day})`);
             modified = true;
-          }
-        }
-      } else if (action.type === 'poll_created') {
-        const targetRoom = (action.roomCode || '').toString().trim().toUpperCase();
-        const myRoom = getActiveRoomCode().toString().trim().toUpperCase();
-        if (targetRoom && myRoom && targetRoom !== myRoom) return;
-
-        if (appState.activePoll && appState.activePoll.id !== action.poll.id) {
-          appState.pollHistory = appState.pollHistory || [];
-          const exists = appState.pollHistory.some(p => p.id === appState.activePoll.id);
-          if (!exists) appState.pollHistory.unshift(appState.activePoll);
-        }
-        appState.activePoll = action.poll;
-        const roomKey = (targetRoom || myRoom).toLowerCase();
-        localStorage.setItem('tiffin_active_poll_' + roomKey, JSON.stringify(action.poll));
-        logActivity(action.author, 'Created Poll', `${action.poll.mealSlot} Poll for Day ${action.poll.day}: ${action.poll.options.join(', ')}`);
-        modified = true;
-
-        const isCreator = PollReminderManager.isUserCreator(action.poll);
-        const hasVoted = PollReminderManager.hasUserVoted(action.poll);
-        const pollAlertKey = 'tiffin_notified_poll_' + action.poll.id;
-        const alreadyNotified = sessionStorage.getItem(pollAlertKey);
-
-        if (!isCreator && !hasVoted) {
-          // Alert user via system notification if not already alerted
-          if (!alreadyNotified || !isCatchUp) {
-            sessionStorage.setItem(pollAlertKey, 'true');
-            playJoinAlertChime();
-            NotificationManager.send(`🍲 New ${action.poll.mealSlot || 'Meal'} Poll!`, {
-              body: `Launched by ${action.author || 'Flatmate'}. Tap to choose your sabzi!`,
-              tag: 'poll-' + action.poll.id,
-              renotify: true
-            });
-          }
-          localStorage.setItem('tiffin_poll_remind_' + action.poll.id, Date.now().toString());
-          PollReminderManager.start(action.poll);
-        } else {
-          hidePollAlertBanner();
-          PollReminderManager.stop(action.poll.id);
-        }
-      } else if (action.type === 'poll_voted') {
-        const targetRoom = (action.roomCode || '').toString().trim().toUpperCase();
-        const myRoom = getActiveRoomCode().toString().trim().toUpperCase();
-        if (targetRoom && myRoom && targetRoom !== myRoom) return;
-
-        if (appState.activePoll && appState.activePoll.id === action.pollId) {
-          if (!appState.activePoll.votes) appState.activePoll.votes = {};
-
-          // Resolve canonical roommate ID to prevent duplicate keys
-          let canonicalId = (action.roommateId || '').toLowerCase().trim();
-          if (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES)) {
-            const matched = ROOMMATES.find(r => 
-              (r.id && r.id.toLowerCase() === canonicalId) ||
-              (action.voterName && r.name && r.name.toLowerCase() === action.voterName.toLowerCase())
-            );
-            if (matched) {
-              canonicalId = matched.id.toLowerCase();
-            }
-          }
-
-          appState.activePoll.votes[canonicalId] = {
-            option: action.option,
-            portion: action.portion,
-            time: action.timestamp,
-            voterName: action.voterName || action.author
-          };
-          const roomKey = (targetRoom || myRoom).toLowerCase();
-          localStorage.setItem('tiffin_active_poll_' + roomKey, JSON.stringify(appState.activePoll));
-          logActivity(action.author, 'Cast Vote', `Voted "${action.option}" (${action.portion})`);
-          modified = true;
-
-          const hasMyVote = PollReminderManager.hasUserVoted(appState.activePoll);
-          if (hasMyVote) {
-            PollReminderManager.stop(action.pollId);
-            hidePollAlertBanner();
-          }
-
-          if (!isCatchUp && !hasMyVote) {
-            NotificationManager.send(`${appState.activePoll.mealSlot || 'Meal'} Poll Update`, {
-              body: `${action.voterName || action.author} voted! Don't forget to cast your choice.`,
-              tag: 'poll-vote-' + action.pollId
-            });
-          }
-        }
-      } else if (action.type === 'poll_finalized') {
-        const targetRoom = (action.roomCode || '').toString().trim().toUpperCase();
-        const myRoom = getActiveRoomCode().toString().trim().toUpperCase();
-        if (targetRoom && myRoom && targetRoom !== myRoom) return;
-
-        hidePollAlertBanner();
-        const roomKey = (targetRoom || myRoom).toLowerCase();
-        localStorage.removeItem('tiffin_active_poll_' + roomKey);
-
-        if (appState.activePoll) {
-          PollReminderManager.stop(appState.activePoll.id);
-          appState.activePoll.status = 'finalized';
-          appState.activePoll.winner = action.winner;
-
-          appState.pollHistory = appState.pollHistory || [];
-          const idx = appState.pollHistory.findIndex(p => p.id === appState.activePoll.id);
-          if (idx >= 0) {
-            appState.pollHistory[idx] = { ...appState.activePoll };
-          } else {
-            appState.pollHistory.unshift({ ...appState.activePoll });
-          }
-        }
-        // Apply winner sabzi to ledger
-        if (action.day && appState.days[action.day]) {
-          appState.days[action.day].sabzi = action.winner;
-          appState.days[action.day].sabziUpdatedAt = Date.now();
-          if (action.mealsApplied) {
-            Object.entries(action.mealsApplied).forEach(([rId, portion]) => {
-              const slot = (action.mealSlot || 'Dinner').toLowerCase();
-              if (appState.days[action.day].meals[rId]) {
-                appState.days[action.day].meals[rId][slot] = portion === 'Off' ? '' : portion;
-              }
-            });
-          }
-        }
-        logActivity(action.author, 'Finalized Poll', `Winner dish: ${action.winner}`);
-        modified = true;
-        if (!isCatchUp) {
-          playJoinAlertChime();
-          showToast(`🏆 Poll Finalized: ${action.winner}`);
-          NotificationManager.send(`Poll Finalized: ${action.winner}`, {
-            body: `${action.mealSlot || 'Meal'} decided. Tap to view.`,
-            tag: 'poll-winner-' + action.day,
-            renotify: true
-          });
-        }
-      } else if (action.type === 'poll_cancelled') {
-        const targetRoom = (action.roomCode || '').toString().trim().toUpperCase();
-        const myRoom = getActiveRoomCode().toString().trim().toUpperCase();
-        if (targetRoom && myRoom && targetRoom !== myRoom) return;
-
-        hidePollAlertBanner();
-        const roomKey = (targetRoom || myRoom).toLowerCase();
-        localStorage.removeItem('tiffin_active_poll_' + roomKey);
-
-        if (appState.activePoll) {
-          PollReminderManager.stop(appState.activePoll.id);
-          const targetDay = action.day || appState.activePoll.day;
-          const targetWinner = action.winner || appState.activePoll.winner;
-          if (targetDay && appState.days[targetDay] && targetWinner && appState.days[targetDay].sabzi === targetWinner) {
-            appState.days[targetDay].sabzi = '';
-            appState.days[targetDay].sabziUpdatedAt = Date.now();
-          }
-          appState.activePoll = null;
-          modified = true;
-          if (!isCatchUp) showToast('Active poll was cancelled.');
-        }
-      } else if (action.type === 'poll_history_delete') {
-        if (appState.pollHistory && action.pollId) {
-          const toDelete = appState.pollHistory.find(p => p.id === action.pollId);
-          const targetDay = action.day || (toDelete ? toDelete.day : null);
-          const targetWinner = action.winner || (toDelete ? toDelete.winner : null);
-          if (targetDay && appState.days[targetDay] && targetWinner && appState.days[targetDay].sabzi === targetWinner) {
-            appState.days[targetDay].sabzi = '';
-            appState.days[targetDay].sabziUpdatedAt = Date.now();
-          }
-          appState.pollHistory = appState.pollHistory.filter(p => p.id !== action.pollId);
-          modified = true;
-        }
-      } else if (action.type === 'poll_history_clear') {
-        appState.pollHistory = [];
-        modified = true;
-      } else if (action.type === 'amul_members_update') {
-        if (Array.isArray(action.members) && action.members.length > 0) {
-          appState.amulMembers = action.members;
-          logActivity(action.author, 'Milk Members', `Updated Amul milk tracker members`);
-          modified = true;
-        }
-      } else if (action.type === 'rates_updated') {
-        appState.rates = action.rates;
-        logActivity(action.author, 'Rates Updated', `Half: ₹${action.rates.half}, Full: ₹${action.rates.full}, Special: ₹${action.rates.special}`);
-        modified = true;
-        if (!isCatchUp) {
-          showToast(`Meal rates updated by ${action.author}`);
-        }
-      } else if (action.type === 'day_reset') {
-        const { day, author } = action;
-        if (appState.days && appState.days[day]) {
-          appState.days[day].sabzi = '';
-          ROOMMATES.forEach(r => {
-            if (appState.days[day].meals && appState.days[day].meals[r.id]) {
-              appState.days[day].meals[r.id] = { lunch: '', dinner: '' };
-            }
-          });
-          logActivity(author, 'Admin Action', `Reset meals for Day ${day}`);
-          modified = true;
-          if (!isCatchUp) {
-            showToast(`⚡ ${author} reset Day ${day} meals`);
-          }
-        }
-      } else if (action.type === 'month_reset') {
-        const { year, month, author } = action;
-        if (year === currentYear && month === currentMonth) {
-          const cleanState = getDefaultDataForMonth(currentYear, currentMonth);
-          cleanState.rates = { ...appState.rates };
-          cleanState.provider = { ...appState.provider };
-          cleanState.amulMembers = [...(appState.amulMembers || ['anjan', 'saurabh'])];
-          appState = cleanState;
-          logActivity(author, 'Admin Action', `Hard Reset: Erased month ledger for ${MONTH_NAMES[currentMonth - 1]} ${currentYear}`);
-          modified = true;
-          if (!isCatchUp) {
-            showToast(`⚠️ Entire ledger for ${MONTH_NAMES[currentMonth - 1]} ${currentYear} reset by ${author}`);
-          }
-        }
-      } else if (action.type === 'join_request') {
-        const reqRoom = (action.roomCode || '').toString().toUpperCase().trim();
-        const myActiveRoom = RoomManager.activeRoom;
-        const mySession = RoomManager.session;
-        const myCode = (myActiveRoom?.code || mySession?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
-        const isAdmin = mySession?.role === 'admin' ||
-                        (myActiveRoom && (
-                          (mySession && myActiveRoom.adminPhone === mySession.phone) ||
-                          (mySession && myActiveRoom.adminName === mySession.name) ||
-                          (!mySession && myActiveRoom)
-                        ));
-
-        if (isAdmin && (reqRoom === myCode || !reqRoom || reqRoom === (SyncEngine.roomCode || '').toString().toUpperCase().trim())) {
-          if (!RoomManager.activeRoom && myCode) {
-            RoomManager.loadRoom(myCode);
-          }
-          if (RoomManager.activeRoom) {
-            if (!RoomManager.activeRoom.pendingRequests) RoomManager.activeRoom.pendingRequests = [];
-            const req = action.request || {};
-            const reqName = (req.name || '').trim();
-            const reqPhone = (req.phone || '').trim();
-
-            const exists = (RoomManager.activeRoom.pendingRequests || []).some(p =>
-              (reqPhone && p.phone === reqPhone) ||
-              (reqName && p.name.toLowerCase() === reqName.toLowerCase())
-            ) || (RoomManager.activeRoom.members || []).some(m =>
-              (reqPhone && m.phone === reqPhone) ||
-              (reqName && m.name.toLowerCase() === reqName.toLowerCase())
-            );
-
-            if (!exists && reqName) {
-              RoomManager.activeRoom.pendingRequests.push(req);
-              RoomManager.saveActiveRoom();
-              RoomManager.updatePendingBadges();
-              RoomManager.renderSettingsMembersTab();
-
-              // Trigger alert for Admin ONLY ONCE per request, then forget it
-              const reqKey = 'tiffin_notified_req_' + (req.id || reqPhone || reqName).toString().toLowerCase();
-              if (!isCatchUp && !localStorage.getItem(reqKey)) {
-                localStorage.setItem(reqKey, 'true');
-                playJoinAlertChime();
-                NotificationManager.send('Flatmate Knocking! 🔔', {
-                  body: `${reqName} ${reqPhone ? `(${reqPhone})` : ''} requested to join room #${RoomManager.activeRoom.code}. Tap to admit.`,
-                  tag: 'join-req-' + (req.id || reqPhone || reqName)
-                });
-                showJoinRequestBanner(req);
-                showToast(`🔔 New join request from ${reqName}!`);
-              }
-            }
-          }
-        }
-      } else if (action.type === 'member_approved') {
-        const targetRoom = (action.roomCode || '').toString().toUpperCase().trim();
-        const myRoom = (RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
-
-        if (targetRoom === myRoom || !targetRoom || !myRoom) {
-          if (RoomManager.session && RoomManager.session.status === 'pending') {
-            const myPhone = (RoomManager.session.phone || '').trim();
-            const myName = (RoomManager.session.name || '').trim().toLowerCase();
-            const approvedPhone = (action.member?.phone || '').trim();
-            const approvedName = (action.member?.name || '').trim().toLowerCase();
-
-            if ((myPhone && approvedPhone && myPhone === approvedPhone) || (myName && approvedName && myName === approvedName)) {
-              RoomManager.session.status = 'approved';
-              RoomManager.session.role = 'member';
-              localStorage.setItem('tiffin_user_session', JSON.stringify(RoomManager.session));
-              RoomManager.loadRoom(targetRoom || myRoom);
-              RoomManager.hideGateModal();
-              renderAll();
-              playJoinAlertChime();
-              showToast('🎉 You have been admitted to the room by Admin! Welcome.');
-              // Immediately request current room state
-              SyncEngine.broadcast({
-                type: 'request_room_sync',
-                roomCode: targetRoom || myRoom,
-                requesterName: action.member.name,
-                requesterPhone: action.member.phone
-              });
-            }
-          }
-          if (RoomManager.activeRoom && action.member) {
-            const exists = (RoomManager.activeRoom.members || []).some(m => m.id === action.member.id);
-            if (!exists) {
-              RoomManager.activeRoom.members.push(action.member);
-              RoomManager.saveActiveRoom();
-              ROOMMATES = RoomManager.activeRoom.members;
-              RoomManager.renderSettingsMembersTab();
-              modified = true;
-            }
           }
         }
       } else if (action.type === 'member_joined') {
@@ -1948,28 +1339,6 @@
             populateHeaderIdentityDropdown();
           }
 
-          // Hydrate active poll from room state if present
-          if (action.state && action.state.activePoll) {
-            const incPoll = action.state.activePoll;
-            if (incPoll && incPoll.status === 'active') {
-              const curTime = appState.activePoll ? Number(appState.activePoll.createdTime || 0) : 0;
-              const incTime = Number(incPoll.createdTime || 0);
-              if (!appState.activePoll || appState.activePoll.id !== incPoll.id || incTime >= curTime) {
-                appState.activePoll = incPoll;
-                const rKey = (actionCode || myRoomCode).toLowerCase();
-                localStorage.setItem('tiffin_active_poll_' + rKey, JSON.stringify(incPoll));
-                modified = true;
-                if (!PollReminderManager.isUserCreator(incPoll) && !PollReminderManager.hasUserVoted(incPoll)) {
-                  showPollAlertBanner(incPoll);
-                  PollReminderManager.start(incPoll);
-                } else {
-                  hidePollAlertBanner();
-                  PollReminderManager.stop(incPoll.id);
-                }
-              }
-            }
-          }
-
           // Ensure meal slots exist in appState for all roommates
           if (appState && appState.days) {
             for (let d = 1; d <= CONFIG.daysInMonth; d++) {
@@ -2071,20 +1440,6 @@
         saveStateToStorage(appState);
         renderAll();
       }
-    },
-
-    setupPollReminder() {
-      // Check every 5 minutes if there is an active poll the current user hasn't voted in
-      setInterval(() => {
-        if (appState.activePoll && appState.activePoll.status === 'active') {
-          const myId = (this.identity || '').toLowerCase();
-          const hasVoted = appState.activePoll.votes && appState.activePoll.votes[myId];
-          if (!hasVoted) {
-            showToast(`⏰ Reminder: Please vote in the ${appState.activePoll.mealSlot} Poll!`);
-            triggerHaptic();
-          }
-        }
-      }, 5 * 60 * 1000);
     },
 
     getClientId() {
@@ -2525,427 +1880,7 @@
     });
   }
 
-  // --- Tiffin Supplier WhatsApp Order Text Generator ---
-  function generateSupplierOrderText(poll, winningDish, mealsApplied) {
-    const halfNames = [];
-    const fullNames = [];
-    const specialNames = [];
-
-    ROOMMATES.forEach(r => {
-      let portion = mealsApplied ? mealsApplied[r.id] : null;
-      if (!portion && poll && poll.votes && poll.votes[r.id]) {
-        portion = poll.votes[r.id].portion;
-      }
-      if (!portion || portion === 'Off' || portion === 'No') return;
-
-      // Remove "Sir" from names as requested
-      const cleanName = (r.name || '').replace(/\bSir\b/gi, '').trim();
-      if (portion === 'Half') halfNames.push(cleanName);
-      else if (portion === 'Full') fullNames.push(cleanName);
-      else if (portion === 'Special') specialNames.push(cleanName);
-    });
-
-    const groups = [];
-    if (halfNames.length > 0) groups.push({ type: 'Half', names: halfNames });
-    if (fullNames.length > 0) groups.push({ type: 'Full', names: fullNames });
-    if (specialNames.length > 0) groups.push({ type: 'Special', names: specialNames });
-
-    if (groups.length === 0) {
-      return `No tiffin needed today (${winningDish || ''}).`;
-    }
-
-    // Sort by count descending so main group comes first
-    groups.sort((a, b) => b.names.length - a.names.length);
-
-    const mainGroup = groups[0];
-    const otherGroups = groups.slice(1);
-
-    let msg = '';
-
-    // Primary group
-    if (mainGroup.names.length === 1) {
-      msg += `${mainGroup.type} for ${mainGroup.names[0]}\n`;
-    } else {
-      msg += `${mainGroup.type} tiffin for ${mainGroup.names.length}\n`;
-      msg += `${mainGroup.names.join(' ')}\n`;
-    }
-
-    // Sabzi name
-    const dish = winningDish || (poll ? poll.winner : '') || '';
-    if (dish) {
-      msg += `${dish}\n`;
-    }
-
-    // Secondary group(s)
-    otherGroups.forEach(g => {
-      msg += `\n`;
-      if (g.names.length === 1) {
-        msg += `${g.type} for ${g.names[0]}`;
-      } else {
-        msg += `${g.type} tiffin for ${g.names.length}\n`;
-        msg += `${g.names.join(' ')}`;
-      }
-    });
-
-    return msg.trim();
-  }
-
-  // 2. Menu Voting Poll Render
-  function renderPollView() {
-    NotificationManager.updateUI();
-
-    const pollCardTitle = document.getElementById('pollCardTitle');
-    const pollStatusBadge = document.getElementById('pollStatusBadge');
-    const activePollContainer = document.getElementById('activePollContainer');
-    const createPollContainer = document.getElementById('createPollContainer');
-
-    const poll = appState.activePoll;
-
-    // Populate Poll Date dropdown in create form
-    const pollDaySelect = document.getElementById('pollDaySelect');
-    if (pollDaySelect && pollDaySelect.options.length === 0) {
-      for (let d = 1; d <= CONFIG.daysInMonth; d++) {
-        const opt = document.createElement('option');
-        opt.value = d;
-        opt.textContent = `Day ${d}`;
-        pollDaySelect.appendChild(opt);
-      }
-      pollDaySelect.value = selectedDay;
-    }
-
-    if (!poll || poll.status === 'finalized') {
-      if (pollStatusBadge) {
-        pollStatusBadge.className = 'badge-pill';
-        pollStatusBadge.textContent = poll && poll.status === 'finalized' ? 'Poll Finalized' : 'No Active Poll';
-      }
-      if (activePollContainer) activePollContainer.style.display = 'none';
-      if (createPollContainer) createPollContainer.style.display = 'block';
-    } else {
-      // Active Poll is Running
-      if (pollStatusBadge) {
-        pollStatusBadge.className = 'badge-pill today-pill';
-        pollStatusBadge.textContent = 'Active Poll';
-      }
-      if (activePollContainer) activePollContainer.style.display = 'block';
-      if (createPollContainer) createPollContainer.style.display = 'none';
-
-      // Set Poll texts
-      const mealTag = document.getElementById('pollMealTag');
-      const questionText = document.getElementById('pollQuestionText');
-      const metaText = document.getElementById('pollMetaText');
-
-      if (mealTag) mealTag.textContent = `${(poll.mealSlot || 'DINNER').toUpperCase()} POLL (DAY ${poll.day})`;
-      if (questionText) questionText.textContent = `What should we cook for ${poll.mealSlot || 'Dinner'}?`;
-      if (metaText) metaText.textContent = `Launched by ${poll.author || 'Flatmate'} • Live across all phones`;
-
-      const isCreator = PollReminderManager.isUserCreator(poll);
-      const myRaw = (typeof SyncEngine !== 'undefined' && SyncEngine.identity ? SyncEngine.identity : '').trim().toLowerCase();
-      const sessionName = (typeof RoomManager !== 'undefined' && RoomManager.session?.name ? RoomManager.session.name : '').trim().toLowerCase();
-      const myId = (typeof RoomManager !== 'undefined' && RoomManager.sanitizeId ? RoomManager.sanitizeId(sessionName || myRaw) : myRaw).toLowerCase();
-
-      const canonicalVotes = getCanonicalPollVotes(poll);
-      let foundCanonical = null;
-      if (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES)) {
-        const found = ROOMMATES.find(r => 
-          (r.name && (r.name.toLowerCase() === myRaw || r.name.toLowerCase() === sessionName)) || 
-          (r.id && (r.id.toLowerCase() === myId || r.id.toLowerCase() === myRaw))
-        );
-        if (found) foundCanonical = (found.id || found.name).toLowerCase().trim();
-      }
-
-      const myVote = canonicalVotes.get(myId) ||
-                     canonicalVotes.get(myRaw) ||
-                     (sessionName && canonicalVotes.get(sessionName)) ||
-                     (foundCanonical && canonicalVotes.get(foundCanonical));
-      const hasVoted = !!myVote;
-
-      if (hasVoted || isCreator) {
-        hidePollAlertBanner();
-      } else {
-        showPollAlertBanner(poll);
-      }
-
-      const blindNotice = document.getElementById('pollBlindNotice');
-      const myVoteBox = document.getElementById('myVoteBox');
-      const myVotedSummary = document.getElementById('myVotedSummaryBox');
-      const myVotedChoiceText = document.getElementById('myVotedChoiceText');
-      const myVoteIdentityLabel = document.getElementById('myVoteIdentityLabel');
-      const pollResultsTray = document.getElementById('pollResultsTray');
-      const votersBreakdownCard = document.getElementById('votersBreakdownCard');
-      const finalizeActions = document.getElementById('pollFinalizeActions');
-
-      if (myVoteIdentityLabel) myVoteIdentityLabel.textContent = SyncEngine.identity || RoomManager.session?.name || 'You';
-
-      // Clean & Smart Voting UX
-      if (!hasVoted) {
-        if (myVoteBox) myVoteBox.style.display = 'block';
-        if (myVotedSummary) myVotedSummary.style.display = 'none';
-
-        if (isCreator) {
-          if (blindNotice) {
-            blindNotice.style.display = 'flex';
-            blindNotice.innerHTML = `
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="color:var(--emerald); flex-shrink:0;"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
-              <div class="blind-notice-content">
-                <strong>Poll Host Notice</strong>
-                <p>Choose your sabzi and portion below to cast the opening vote.</p>
-              </div>
-            `;
-          }
-          if (pollResultsTray) pollResultsTray.style.display = 'none';
-          if (votersBreakdownCard) votersBreakdownCard.style.display = 'none';
-          if (finalizeActions) finalizeActions.style.display = 'none';
-        } else {
-          if (blindNotice) {
-            blindNotice.style.display = 'flex';
-            blindNotice.innerHTML = `
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="color:var(--amber); flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              <div class="blind-notice-content">
-                <strong>Blind Voting Active</strong>
-                <p>Results and flatmate choices are hidden until you cast your vote.</p>
-              </div>
-            `;
-          }
-          if (pollResultsTray) pollResultsTray.style.display = 'none';
-          if (votersBreakdownCard) votersBreakdownCard.style.display = 'none';
-          if (finalizeActions) finalizeActions.style.display = 'none';
-        }
-      } else {
-        if (blindNotice) blindNotice.style.display = 'none';
-        if (myVoteBox) myVoteBox.style.display = 'none';
-        if (myVotedSummary) {
-          myVotedSummary.style.display = 'block';
-          if (myVotedChoiceText) {
-            const portionText = myVote.portion === 'No' ? 'No Tiffin' : myVote.portion;
-            const dishText = (myVote.portion === 'No' && (!myVote.option || myVote.option === 'No Tiffin')) ? 'Opted out' : escapeHtml(myVote.option);
-            myVotedChoiceText.textContent = `You voted: ${dishText} • ${portionText}`;
-          }
-        }
-        if (pollResultsTray) pollResultsTray.style.display = 'block';
-        if (votersBreakdownCard) votersBreakdownCard.style.display = 'block';
-        if (finalizeActions) finalizeActions.style.display = 'block';
-      }
-
-      // Radio Options for Current User to Vote
-      const radioGrid = document.getElementById('pollOptionsRadioGrid');
-      if (radioGrid) {
-        radioGrid.innerHTML = '';
-        const currentVoteOption = myVote ? myVote.option : null;
-
-        poll.options.forEach((optText) => {
-          const isSelected = currentVoteOption === optText;
-          const label = document.createElement('label');
-          label.className = `poll-radio-label ${isSelected ? 'selected' : ''}`;
-          label.innerHTML = `
-            <input type="radio" name="pollDishChoice" value="${escapeHtml(optText)}" ${isSelected ? 'checked' : ''}>
-            <strong>${escapeHtml(optText)}</strong>
-          `;
-          label.addEventListener('click', () => {
-            radioGrid.querySelectorAll('.poll-radio-label').forEach(l => l.classList.remove('selected'));
-            label.classList.add('selected');
-          });
-          radioGrid.appendChild(label);
-        });
-      }
-
-      // Set portion buttons active state
-      const currentPortion = myVote ? myVote.portion : 'Half';
-      document.querySelectorAll('#pollPortionToggle .seg-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-portion') === currentPortion);
-      });
-
-      // Live Tally Progress Bars (Strictly 1 vote per flatmate)
-      const resultsContainer = document.getElementById('pollResultsBars');
-      if (resultsContainer) {
-        resultsContainer.innerHTML = '';
-        const totalVotesCast = canonicalVotes.size;
-
-        const tally = {};
-        poll.options.forEach(opt => tally[opt] = 0);
-        canonicalVotes.forEach(v => {
-          if (tally[v.option] !== undefined) tally[v.option]++;
-        });
-
-        poll.options.forEach(opt => {
-          const count = tally[opt] || 0;
-          const pct = totalVotesCast > 0 ? ((count / totalVotesCast) * 100).toFixed(0) : 0;
-
-          const barItem = document.createElement('div');
-          barItem.className = 'poll-bar-item';
-          barItem.innerHTML = `
-            <div class="poll-bar-header">
-              <span>${escapeHtml(opt)}</span>
-              <span>${count} vote${count === 1 ? '' : 's'} (${pct}%)</span>
-            </div>
-            <div class="poll-bar-track">
-              <div class="poll-bar-fill" style="width: ${pct}%"></div>
-            </div>
-          `;
-          resultsContainer.appendChild(barItem);
-        });
-      }
-
-      // Who Voted for What Breakdown
-      const chipsWrap = document.getElementById('votersChipsWrap');
-      const votersCountLabel = document.getElementById('votersCountLabel');
-      if (chipsWrap) {
-        chipsWrap.innerHTML = '';
-        const count = canonicalVotes.size;
-        if (votersCountLabel) votersCountLabel.textContent = `${count} / ${ROOMMATES.length} Voted`;
-
-        ROOMMATES.forEach(r => {
-          const rKey = (r.id || r.name).toLowerCase().trim();
-          const rNameKey = (r.name || '').toLowerCase().trim();
-          const v = canonicalVotes.get(rKey) || canonicalVotes.get(rNameKey);
-          const chip = document.createElement('div');
-          chip.className = 'voter-chip';
-          if (v) {
-            const portionDisp = v.portion === 'No' ? 'No Tiffin' : v.portion;
-            const choiceDisp = (v.portion === 'No' && (!v.option || v.option === 'No Tiffin'))
-              ? 'No Tiffin'
-              : `${escapeHtml(v.option)} (${portionDisp})`;
-            chip.innerHTML = `<span>✓</span> <strong>${r.name}:</strong> <span>${choiceDisp}</span>`;
-            chip.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-          } else {
-            chip.innerHTML = `<span style="opacity:0.5">○</span> <span style="opacity:0.7">${r.name}: Pending</span>`;
-            chip.style.opacity = '0.6';
-          }
-          chipsWrap.appendChild(chip);
-        });
-      }
-    }
-
-    // --- Render Previous Polls Archive Section ---
-    const prevCard = document.getElementById('previousPollsCard');
-    const prevListContainer = document.getElementById('previousPollsList');
-    const prevCountBadge = document.getElementById('prevPollsCountBadge');
-    const clearAllBtn = document.getElementById('clearAllPrevPollsBtn');
-    const pollHistory = appState.pollHistory || [];
-
-    if (prevCard) {
-      prevCard.style.display = pollHistory.length > 0 ? 'block' : 'none';
-    }
-
-    if (prevCountBadge) {
-      prevCountBadge.textContent = `${pollHistory.length} Saved`;
-    }
-
-    if (clearAllBtn) {
-      clearAllBtn.style.display = pollHistory.length > 0 ? 'inline-block' : 'none';
-    }
-
-    if (prevListContainer) {
-      prevListContainer.innerHTML = '';
-      pollHistory.forEach(pastPoll => {
-        const card = document.createElement('div');
-        card.className = 'previous-poll-card-item';
-
-        const votes = pastPoll.votes || {};
-        const totalVotes = Object.keys(votes).length;
-        const dateStr = `Day ${pastPoll.day || '?'}`;
-        const slotStr = (pastPoll.mealSlot || 'Dinner').toUpperCase();
-
-        const tally = {};
-        (pastPoll.options || []).forEach(opt => tally[opt] = 0);
-        Object.values(votes).forEach(v => {
-          if (v.portion !== 'No' && tally[v.option] !== undefined) {
-            tally[v.option]++;
-          }
-        });
-
-        let optionsBarsHtml = '';
-        (pastPoll.options || []).forEach(opt => {
-          const count = tally[opt] || 0;
-          const pct = totalVotes > 0 ? ((count / totalVotes) * 100).toFixed(0) : 0;
-          const isWinner = pastPoll.winner === opt;
-          optionsBarsHtml += `
-            <div class="prev-opt-bar-row">
-              <div class="prev-opt-text-row">
-                <span>${escapeHtml(opt)}</span>
-                <span>${count} (${pct}%)</span>
-              </div>
-              <div class="prev-opt-progress-track">
-                <div class="prev-opt-progress-bar ${isWinner ? 'winner' : ''}" style="width: ${pct}%"></div>
-              </div>
-            </div>
-          `;
-        });
-
-        let votersChipsHtml = '';
-        ROOMMATES.forEach(r => {
-          const v = votes[r.id];
-          if (v) {
-            const portionDisp = v.portion === 'No' ? 'No Tiffin' : v.portion;
-            const choiceDisp = (v.portion === 'No' && (!v.option || v.option === 'No Tiffin'))
-              ? 'No Tiffin'
-              : `${escapeHtml(v.option)} (${portionDisp})`;
-            votersChipsHtml += `<span class="prev-voter-chip"><strong>${r.name}:</strong> ${choiceDisp}</span>`;
-          }
-        });
-
-        card.innerHTML = `
-          <div class="prev-poll-top-row" style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
-            <div style="flex:1;">
-              <div class="prev-poll-tag-wrap">
-                <span class="poll-tag" style="font-size:0.65rem;">${slotStr} • ${dateStr}</span>
-                ${pastPoll.winner ? `<span class="prev-winner-badge">✓ Winner: ${escapeHtml(pastPoll.winner)}</span>` : ''}
-              </div>
-              <h4 class="prev-poll-title">${pastPoll.options ? pastPoll.options.join(' vs ') : 'Poll'}</h4>
-              <p class="prev-poll-meta">By ${pastPoll.author || 'Flatmate'} • ${totalVotes} / ${ROOMMATES.length} voted</p>
-            </div>
-            <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
-              ${pastPoll.winner ? `<button class="pill-btn-ghost btn-xs resend-past-poll-btn" data-poll-id="${pastPoll.id}" title="Forward order to cook" style="color:var(--wa-green); font-size:0.75rem; padding:3px 8px; border:1px solid rgba(37,211,102,0.3);">Forward</button>` : ''}
-              <button class="pill-btn-ghost btn-xs text-muted delete-single-poll-btn" data-poll-id="${pastPoll.id}" title="Delete this old poll" style="font-size:0.75rem; padding:3px 8px; border:1px solid rgba(255,255,255,0.08);">Delete</button>
-            </div>
-          </div>
-          <div class="prev-poll-options-summary">
-            ${optionsBarsHtml}
-          </div>
-          ${votersChipsHtml ? `<div class="prev-voters-list">${votersChipsHtml}</div>` : ''}
-        `;
-
-        card.querySelector('.resend-past-poll-btn')?.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const provider = appState.provider || CONFIG.defaultProvider;
-          const msg = generateSupplierOrderText(pastPoll, pastPoll.winner, null);
-          copyToClipboard(msg);
-          showToast(`Order copied for ${provider.name || 'cook'}!`);
-          const phoneParam = provider.phone ? `&phone=${encodeURIComponent(provider.phone.replace(/[^0-9]/g, ''))}` : '';
-          const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}${phoneParam}`;
-          setTimeout(() => {
-            window.open(waUrl, '_blank');
-          }, 300);
-        });
-
-        card.querySelector('.delete-single-poll-btn')?.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const pid = pastPoll.id;
-          const pollToDelete = (appState.pollHistory || []).find(p => p.id === pid);
-          if (pollToDelete && pollToDelete.day && appState.days[pollToDelete.day]) {
-            if (pollToDelete.winner && appState.days[pollToDelete.day].sabzi === pollToDelete.winner) {
-              appState.days[pollToDelete.day].sabzi = '';
-              appState.days[pollToDelete.day].sabziUpdatedAt = Date.now();
-            }
-          }
-          appState.pollHistory = (appState.pollHistory || []).filter(p => p.id !== pid);
-          persistAndBroadcast({
-            type: 'poll_history_delete',
-            pollId: pid,
-            day: pollToDelete ? pollToDelete.day : null,
-            winner: pollToDelete ? pollToDelete.winner : null
-          });
-          showToast('Poll deleted & sabji removed from Logger tab.');
-          renderPollView();
-          renderDailyLogger();
-          renderMasterSheet();
-        });
-
-        prevListContainer.appendChild(card);
-      });
-    }
-  }
-
-  // 3. Master Sheet Matrix Render
+  // 2. Master Sheet Matrix Render
   function renderMasterSheet() {
     const thead = document.getElementById('masterSheetHead');
     const tbody = document.getElementById('masterSheetBody');
@@ -3613,7 +2548,6 @@
   // Master Render Coordinator
   function renderAll() {
     renderDailyLogger();
-    renderPollView();
     renderMasterSheet();
     renderAnalytics();
     renderUpiSettlement();
@@ -3670,7 +2604,7 @@
       return;
     }
     const clean = raw.replace('view-', '');
-    if (['logger', 'poll', 'sheet', 'split', 'upi', 'amul'].includes(clean)) {
+    if (['logger', 'sheet', 'split', 'upi', 'amul'].includes(clean)) {
       switchTab(clean);
     }
   }
@@ -3688,598 +2622,11 @@
     window.addEventListener('hashchange', handleUrlHash);
     handleUrlHash();
 
-    // Header poll quick button
-    const headerPollBtn = document.getElementById('headerPollBtn');
-    if (headerPollBtn) {
-      headerPollBtn.addEventListener('click', () => {
-        triggerHaptic();
-        const pollTab = document.querySelector('.nav-tab[data-tab="poll"]') || document.querySelector('.m-nav-tab[data-tab="poll"]');
-        if (pollTab) pollTab.click();
-      });
-    }
-
-    // Logger poll quick button
-    const openPollQuickBtn = document.getElementById('openPollQuickBtn');
-    if (openPollQuickBtn) {
-      openPollQuickBtn.addEventListener('click', () => {
-        triggerHaptic();
-        const pollTab = document.querySelector('.nav-tab[data-tab="poll"]') || document.querySelector('.m-nav-tab[data-tab="poll"]');
-        if (pollTab) pollTab.click();
-      });
-    }
-  }
-
-  function setupDateControls() {
-    const prevBtn = document.getElementById('prevDayBtn');
-    const nextBtn = document.getElementById('nextDayBtn');
-    const jumpTodayBtn = document.getElementById('jumpTodayBtn');
-    const daySelect = document.getElementById('daySelectInput');
-    const sheetJumpTodayBtn = document.getElementById('sheetJumpTodayBtn');
-
-    if (prevBtn) {
-      prevBtn.addEventListener('click', () => {
-        triggerHaptic();
-        if (selectedDay > 1) {
-          selectedDay--;
-          renderAll();
-        } else {
-          // Rollover to previous month's last day
-          let prevY = currentYear;
-          let prevM = currentMonth - 1;
-          if (prevM < 1) { prevM = 12; prevY--; }
-          switchMonth(prevY, prevM);
-          selectedDay = CONFIG.daysInMonth;
-          renderAll();
-        }
-      });
-    }
-
-    if (nextBtn) {
-      nextBtn.addEventListener('click', () => {
-        triggerHaptic();
-        if (selectedDay < CONFIG.daysInMonth) {
-          selectedDay++;
-          renderAll();
-        } else {
-          // Rollover to next month's Day 1
-          let nextY = currentYear;
-          let nextM = currentMonth + 1;
-          if (nextM > 12) { nextM = 1; nextY++; }
-          switchMonth(nextY, nextM);
-          selectedDay = 1;
-          renderAll();
-        }
-      });
-    }
-
-    if (jumpTodayBtn) {
-      jumpTodayBtn.addEventListener('click', () => {
-        triggerHaptic();
-        const d = new Date();
-        const realY = d.getFullYear();
-        const realM = d.getMonth() + 1;
-        if (currentYear !== realY || currentMonth !== realM) {
-          switchMonth(realY, realM);
-        } else {
-          selectedDay = CONFIG.todayDay;
-          renderAll();
-        }
-        showToast(`Jumped to Today (Day ${d.getDate()} ${MONTH_SHORTS[realM - 1]})`);
-      });
-    }
-
-    if (sheetJumpTodayBtn) {
-      sheetJumpTodayBtn.addEventListener('click', () => {
-        triggerHaptic();
-        const d = new Date();
-        const realY = d.getFullYear();
-        const realM = d.getMonth() + 1;
-        if (currentYear !== realY || currentMonth !== realM) {
-          switchMonth(realY, realM);
-        } else {
-          selectedDay = CONFIG.todayDay;
-          renderAll();
-        }
-        const row = document.querySelector('.row-today');
-        if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-    }
-
-    if (daySelect) {
-      daySelect.addEventListener('change', (e) => {
-        selectedDay = parseInt(e.target.value);
-        renderAll();
-      });
-    }
-  }
-
-  function setupSabziControls() {
-    const sabziInput = document.getElementById('sabziInput');
-    const clearBtn = document.getElementById('clearSabziBtn');
-
-    let debounceTimer = null;
-    if (sabziInput) {
-      sabziInput.addEventListener('input', (e) => {
-        const timestamp = Date.now();
-        appState.days[selectedDay].sabzi = e.target.value;
-        appState.days[selectedDay].sabziUpdatedAt = timestamp;
-        saveStateToStorage(appState);
-        renderMasterSheet();
-
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-          logActivity(SyncEngine.identity, 'Sabzi Update', `Day ${selectedDay} dish set to "${e.target.value}"`);
-          SyncEngine.broadcast({
-            type: 'sabzi_update',
-            year: currentYear,
-            month: currentMonth,
-            day: selectedDay,
-            sabzi: e.target.value,
-            timestamp: timestamp
-          });
-        }, 400);
-      });
-    }
-
-    if (clearBtn) {
-      clearBtn.addEventListener('click', () => {
-        triggerHaptic();
-        const timestamp = Date.now();
-        appState.days[selectedDay].sabzi = '';
-        appState.days[selectedDay].sabziUpdatedAt = timestamp;
-        if (sabziInput) sabziInput.value = '';
-        renderDailyLogger();
-        renderMasterSheet();
-        logActivity(SyncEngine.identity, 'Cleared Sabzi', `Day ${selectedDay}`);
-        persistAndBroadcast({
-          type: 'sabzi_update',
-          year: currentYear,
-          month: currentMonth,
-          day: selectedDay,
-          sabzi: '',
-          timestamp: timestamp
-        });
-      });
-    }
-
-    // Change / Edit dish button on banner
-    const editBannerBtn = document.getElementById('editSabziBannerBtn');
-    if (editBannerBtn) {
-      editBannerBtn.addEventListener('click', () => {
-        triggerHaptic();
-        const banner = document.getElementById('sabziDisplayBanner');
-        const inputRow = document.getElementById('sabziInputRow');
-        if (banner) banner.style.display = 'none';
-        if (inputRow) inputRow.style.display = 'flex';
-        if (sabziInput) sabziInput.focus();
-      });
-    }
-  }
-
-  function setupFastActions() {
-    const clearTodayBtn = document.getElementById('clearTodayMealsBtn');
-
-    if (clearTodayBtn) {
-      clearTodayBtn.addEventListener('click', () => {
-        triggerHaptic();
-        requireAdminPassword(() => {
-          const timestamp = Date.now();
-          appState.days[selectedDay].sabzi = '';
-          appState.days[selectedDay].sabziUpdatedAt = timestamp;
-          if (!appState.days[selectedDay].mealTimestamps) {
-            appState.days[selectedDay].mealTimestamps = {};
-          }
-          ROOMMATES.forEach(r => {
-            if (appState.days[selectedDay].meals && appState.days[selectedDay].meals[r.id]) {
-              appState.days[selectedDay].meals[r.id] = { lunch: '', dinner: '' };
-              appState.days[selectedDay].mealTimestamps[`${r.id}_lunch`] = timestamp;
-              appState.days[selectedDay].mealTimestamps[`${r.id}_dinner`] = timestamp;
-            }
-          });
-          logActivity(SyncEngine.identity, 'Admin Action', `Reset meals for Day ${selectedDay}`);
-          persistAndBroadcast({
-            type: 'day_reset',
-            year: currentYear,
-            month: currentMonth,
-            day: selectedDay,
-            timestamp: timestamp
-          });
-          showToast(`Meals for Day ${selectedDay} reset to Off`);
-        });
-      });
-    }
-
-    function handleMonthReset() {
-      triggerHaptic();
-      requireAdminPassword(() => {
-        const cleanState = getDefaultDataForMonth(currentYear, currentMonth);
-        cleanState.rates = { ...appState.rates };
-        cleanState.provider = { ...appState.provider };
-        cleanState.amulMembers = [...(appState.amulMembers || (ROOMMATES.length > 0 ? ROOMMATES.map(r => r.id) : []))];
-        appState = cleanState;
-
-        logActivity(SyncEngine.identity, 'Admin Action', `Hard Reset: Erased month ledger for ${MONTH_NAMES[currentMonth - 1]} ${currentYear}`);
-        persistAndBroadcast({
-          type: 'month_reset',
-          year: currentYear,
-          month: currentMonth
-        });
-        showToast(`💥 Month ledger for ${MONTH_NAMES[currentMonth - 1]} ${currentYear} has been reset!`);
-      });
-    }
-
-    const settingsResetMonthBtn = document.getElementById('settingsResetMonthBtn');
-    if (settingsResetMonthBtn) {
-      settingsResetMonthBtn.addEventListener('click', () => {
-        const modal = document.getElementById('settingsModal');
-        if (modal) modal.classList.remove('active');
-        handleMonthReset();
-      });
-    }
-  }
-
-  // --- Voting Poll Interaction ---
-  function setupPollControls() {
-    const addOptBtn = document.getElementById('addPollOptionBtn');
-    const optContainer = document.getElementById('pollOptionInputsContainer');
-    const launchPollBtn = document.getElementById('launchPollBtn');
-    const submitVoteBtn = document.getElementById('submitVoteBtn');
-    const changeVoteBtn = document.getElementById('changeVoteBtn');
-    const finalizePollBtn = document.getElementById('finalizePollBtn');
-    const portionButtons = document.querySelectorAll('#pollPortionToggle .seg-btn');
-
-    let selectedPortion = 'Half';
-
-    portionButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        portionButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        selectedPortion = btn.getAttribute('data-portion');
-      });
-    });
-
-    if (changeVoteBtn) {
-      changeVoteBtn.addEventListener('click', () => {
-        triggerHaptic();
-        const myVoteBox = document.getElementById('myVoteBox');
-        const myVotedSummary = document.getElementById('myVotedSummaryBox');
-        if (myVoteBox) myVoteBox.style.display = 'block';
-        if (myVotedSummary) myVotedSummary.style.display = 'none';
-      });
-    }
-
-    if (addOptBtn && optContainer) {
-      addOptBtn.addEventListener('click', () => {
-        triggerHaptic();
-        const inputCount = optContainer.querySelectorAll('input').length + 1;
-        const newInput = document.createElement('input');
-        newInput.type = 'text';
-        newInput.className = 'text-input poll-opt-input';
-        newInput.placeholder = `Option ${inputCount}`;
-        optContainer.appendChild(newInput);
-        newInput.focus();
-      });
-    }
-
-    if (launchPollBtn) {
-      launchPollBtn.addEventListener('click', () => {
-        triggerHaptic();
-        const day = parseInt(document.getElementById('pollDaySelect')?.value || selectedDay);
-        const slot = document.getElementById('pollMealSlotSelect')?.value || 'Dinner';
-        const inputs = document.querySelectorAll('.poll-opt-input');
-
-        const options = [];
-        inputs.forEach(inp => {
-          const val = inp.value.trim();
-          if (val && !options.includes(val)) options.push(val);
-        });
-
-        if (options.length < 2) {
-          alert('Please enter at least 2 distinct sabzi options for the poll.');
-          return;
-        }
-
-        const roomCodeKey = getActiveRoomCode().toUpperCase().trim();
-        const myName = (RoomManager.session?.name || SyncEngine.identity || 'Admin').trim();
-        const myId = RoomManager.sanitizeId(myName);
-
-        const newPoll = {
-          id: 'poll_' + Date.now(),
-          roomCode: roomCodeKey,
-          day: day,
-          mealSlot: slot,
-          author: myName,
-          authorId: myId,
-          createdTime: Date.now(),
-          status: 'active',
-          options: options,
-          votes: {},
-          winner: null
-        };
-
-        if (appState.activePoll && appState.activePoll.id !== newPoll.id) {
-          appState.pollHistory = appState.pollHistory || [];
-          const exists = appState.pollHistory.some(p => p.id === appState.activePoll.id);
-          if (!exists) appState.pollHistory.unshift(appState.activePoll);
-        }
-
-        appState.activePoll = newPoll;
-        localStorage.setItem('tiffin_active_poll_' + roomCodeKey.toLowerCase(), JSON.stringify(newPoll));
-        logActivity(myName, 'Created Poll', `${slot} poll for Day ${day}: ${options.join(', ')}`);
-
-        persistAndBroadcast({
-          type: 'poll_created',
-          roomCode: roomCodeKey,
-          poll: newPoll
-        });
-
-        // The creator will NEVER receive notifications or recurring 5-min reminders
-        sessionStorage.setItem('tiffin_poll_creator_' + newPoll.id, 'true');
-        sessionStorage.setItem('tiffin_notified_poll_' + newPoll.id, 'true');
-        hidePollAlertBanner();
-        PollReminderManager.stop(newPoll.id);
-
-        showToast('🚀 Poll launched to flatmates! Select your option below to vote.');
-
-        // Directly redirect creator to choose their option
-        renderPollView();
-
-        const activePollContainer = document.getElementById('activePollContainer');
-        const createPollContainer = document.getElementById('createPollContainer');
-        if (activePollContainer) activePollContainer.style.display = 'block';
-        if (createPollContainer) createPollContainer.style.display = 'none';
-
-        const myVoteBox = document.getElementById('myVoteBox');
-        if (myVoteBox) {
-          myVoteBox.style.display = 'block';
-          myVoteBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          const firstRadio = myVoteBox.querySelector('input[type="radio"]');
-          if (firstRadio) {
-            firstRadio.checked = true;
-            const parentLabel = firstRadio.closest('.poll-radio-label');
-            if (parentLabel) parentLabel.classList.add('selected');
-          }
-        }
-      });
-    }
-
-    const pollNotifBtn = document.getElementById('pollNotificationBtn');
-    if (pollNotifBtn) {
-      pollNotifBtn.addEventListener('click', () => {
-        triggerHaptic();
-        NotificationManager.requestPermission(true);
-      });
-    }
-
     const settingsNotifBtn = document.getElementById('settingsNotificationBtn');
     if (settingsNotifBtn) {
       settingsNotifBtn.addEventListener('click', () => {
         triggerHaptic();
         NotificationManager.requestPermission(true);
-      });
-    }
-
-    const resetActivePollBtn = document.getElementById('resetActivePollBtn');
-    if (resetActivePollBtn) {
-      resetActivePollBtn.addEventListener('click', () => {
-        if (!appState.activePoll) return;
-        if (confirm('Menu shifted? This will cancel the current poll and clear its sabji so you can launch a new one.')) {
-          triggerHaptic();
-          const oldPoll = appState.activePoll;
-          const roomCodeKey = getActiveRoomCode().toUpperCase().trim();
-          PollReminderManager.stop(oldPoll.id);
-          oldPoll.status = 'cancelled';
-          if (oldPoll.day && appState.days[oldPoll.day]) {
-            if (oldPoll.winner && appState.days[oldPoll.day].sabzi === oldPoll.winner) {
-              appState.days[oldPoll.day].sabzi = '';
-              appState.days[oldPoll.day].sabziUpdatedAt = Date.now();
-            }
-          }
-          appState.pollHistory = appState.pollHistory || [];
-          appState.pollHistory.unshift({ ...oldPoll });
-          appState.activePoll = null;
-          localStorage.removeItem('tiffin_active_poll_' + roomCodeKey.toLowerCase());
-
-          persistAndBroadcast({
-            type: 'poll_cancelled',
-            roomCode: roomCodeKey,
-            pollId: oldPoll.id,
-            day: oldPoll.day,
-            winner: oldPoll.winner
-          });
-          showToast('Active poll cancelled & sabji reset.');
-          renderPollView();
-          renderDailyLogger();
-          renderMasterSheet();
-        }
-      });
-    }
-
-    const clearAllPrevPollsBtn = document.getElementById('clearAllPrevPollsBtn');
-    if (clearAllPrevPollsBtn) {
-      clearAllPrevPollsBtn.addEventListener('click', () => {
-        if (!appState.pollHistory || appState.pollHistory.length === 0) return;
-        if (confirm('Delete all previous polls?')) {
-          triggerHaptic();
-          appState.pollHistory = [];
-          persistAndBroadcast({ type: 'poll_history_clear' });
-          showToast('All previous polls deleted.');
-          renderPollView();
-        }
-      });
-    }
-
-    if (submitVoteBtn) {
-      submitVoteBtn.addEventListener('click', () => {
-        triggerHaptic();
-        if (!appState.activePoll || appState.activePoll.status !== 'active') return;
-
-        const activePortionBtn = document.querySelector('#pollPortionToggle .seg-btn.active');
-        const portionChoice = activePortionBtn ? activePortionBtn.getAttribute('data-portion') : selectedPortion;
-
-        const selectedRadio = document.querySelector('input[name="pollDishChoice"]:checked');
-        if (portionChoice !== 'No' && !selectedRadio) {
-          alert('Please select a sabzi option to submit your vote!');
-          return;
-        }
-
-        const dishChoice = selectedRadio ? selectedRadio.value : 'No Tiffin';
-        const myName = (RoomManager.session?.name || SyncEngine.identity || 'Admin').trim();
-        const myId = RoomManager.sanitizeId(myName);
-        const roomCodeKey = getActiveRoomCode().toUpperCase().trim();
-
-        const foundMember = (typeof ROOMMATES !== 'undefined' && Array.isArray(ROOMMATES))
-          ? ROOMMATES.find(r => (r.name && r.name.toLowerCase() === myName.toLowerCase()) || (r.id && r.id.toLowerCase() === myId.toLowerCase()))
-          : null;
-        const resolvedId = foundMember ? foundMember.id : myId;
-        const resolvedName = foundMember ? foundMember.name : myName;
-
-        if (!appState.activePoll.votes) appState.activePoll.votes = {};
-        const voteObj = {
-          option: dishChoice,
-          portion: portionChoice,
-          time: Date.now(),
-          voterName: resolvedName
-        };
-
-        // Purge any alias keys for this user so they NEVER have duplicate entries
-        const allMyAliases = [
-          resolvedId,
-          myId,
-          myName.toLowerCase(),
-          resolvedName.toLowerCase(),
-          (resolvedId || '').replace(/_/g, ' '),
-          (myId || '').replace(/_/g, ' ')
-        ];
-        allMyAliases.forEach(k => {
-          if (k && appState.activePoll.votes[k]) {
-            delete appState.activePoll.votes[k];
-          }
-        });
-
-        // Set strictly on canonical resolvedId (never duplicate)
-        appState.activePoll.votes[resolvedId] = voteObj;
-
-        localStorage.setItem('tiffin_active_poll_' + roomCodeKey.toLowerCase(), JSON.stringify(appState.activePoll));
-        logActivity(resolvedName, 'Cast Vote', `Voted "${dishChoice}" (${portionChoice === 'No' ? 'No Tiffin' : portionChoice}) in ${appState.activePoll.mealSlot} Poll`);
-
-        persistAndBroadcast({
-          type: 'poll_voted',
-          roomCode: roomCodeKey,
-          pollId: appState.activePoll.id,
-          roommateId: resolvedId,
-          voterName: resolvedName,
-          option: dishChoice,
-          portion: portionChoice
-        });
-
-        PollReminderManager.stop(appState.activePoll.id);
-        hidePollAlertBanner();
-        showToast('✓ Vote submitted');
-        renderPollView();
-      });
-    }
-
-    if (finalizePollBtn) {
-      finalizePollBtn.addEventListener('click', () => {
-        triggerHaptic();
-        const poll = appState.activePoll;
-        if (!poll) return;
-
-        const canonicalVotes = getCanonicalPollVotes(poll);
-        if (canonicalVotes.size === 0) {
-          alert('No votes have been cast in this poll yet.');
-          return;
-        }
-
-        const roomCodeKey = getActiveRoomCode().toUpperCase().trim();
-
-        // Count votes and find winner (strictly 1 vote per flatmate)
-        const tally = {};
-        poll.options.forEach(opt => tally[opt] = 0);
-        canonicalVotes.forEach(v => {
-          if (v.portion !== 'No' && tally[v.option] !== undefined) {
-            tally[v.option]++;
-          }
-        });
-
-        let winningDish = poll.options[0];
-        let maxVotes = -1;
-        Object.entries(tally).forEach(([dish, count]) => {
-          if (count > maxVotes) {
-            maxVotes = count;
-            winningDish = dish;
-          }
-        });
-
-        // Apply winning sabzi to selected day
-        if (appState.days && appState.days[poll.day]) {
-          appState.days[poll.day].sabzi = winningDish;
-          appState.days[poll.day].sabziUpdatedAt = Date.now();
-        }
-
-        // Apply each roommate's chosen portion
-        const slotKey = (poll.mealSlot || 'Dinner').toLowerCase();
-        const mealsApplied = {};
-
-        ROOMMATES.forEach(r => {
-          const rKey = (r.id || r.name).toLowerCase().trim();
-          const rNameKey = (r.name || '').toLowerCase().trim();
-          const voterData = canonicalVotes.get(rKey) || canonicalVotes.get(rNameKey);
-          const portion = voterData ? voterData.portion : 'Off';
-          mealsApplied[r.id] = (portion === 'No') ? 'Off' : portion;
-          if (appState.days && appState.days[poll.day] && appState.days[poll.day].meals && appState.days[poll.day].meals[r.id]) {
-            appState.days[poll.day].meals[r.id][slotKey] = (portion === 'Off' || portion === 'No') ? '' : portion;
-          }
-        });
-
-        poll.status = 'finalized';
-        poll.winner = winningDish;
-
-        appState.pollHistory = appState.pollHistory || [];
-        const existingIdx = appState.pollHistory.findIndex(p => p.id === poll.id);
-        if (existingIdx >= 0) {
-          appState.pollHistory[existingIdx] = { ...poll };
-        } else {
-          appState.pollHistory.unshift({ ...poll });
-        }
-
-        localStorage.removeItem('tiffin_active_poll_' + roomCodeKey.toLowerCase());
-        PollReminderManager.stop(poll.id);
-        hidePollAlertBanner();
-
-        logActivity(SyncEngine.identity, 'Finalized Poll', `Winner: ${winningDish} (${maxVotes > 0 ? maxVotes : 0} votes)`);
-        persistAndBroadcast({
-          type: 'poll_finalized',
-          roomCode: roomCodeKey,
-          day: poll.day,
-          mealSlot: poll.mealSlot,
-          winner: winningDish,
-          mealsApplied: mealsApplied
-        });
-
-        NotificationManager.send(`Poll Finalized`, {
-          body: `${poll.mealSlot || 'Meal'} menu decided: ${winningDish}. Tap to view.`,
-          tag: 'poll-winner-' + poll.day,
-          renotify: true
-        });
-
-        // Generate WhatsApp Order Message for Tiffin Supplier
-        const provider = appState.provider || CONFIG.defaultProvider;
-        const waOrder = generateSupplierOrderText(poll, winningDish, mealsApplied);
-
-        // Copy and open WhatsApp
-        copyToClipboard(waOrder);
-        showToast(`Order copied for ${provider.name || 'cook'}!`);
-        renderPollView();
-        renderDailyLogger();
-        renderMasterSheet();
-
-        const phoneParam = provider.phone ? `&phone=${encodeURIComponent(provider.phone.replace(/[^0-9]/g, ''))}` : '';
-        const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(waOrder)}${phoneParam}`;
-        setTimeout(() => {
-          window.open(waUrl, '_blank');
-        }, 300);
       });
     }
   }
@@ -4970,12 +3317,6 @@
               delete day.amul[oldId];
             }
           }
-          if (appState.activePoll && appState.activePoll.votes && appState.activePoll.votes[oldId]) {
-            if (!appState.activePoll.votes[canonicalId]) {
-              appState.activePoll.votes[canonicalId] = appState.activePoll.votes[oldId];
-            }
-            delete appState.activePoll.votes[oldId];
-          }
         });
       }
 
@@ -5174,31 +3515,6 @@
 
       // Reload ledger state for this room
       appState = loadStateForMonth(currentYear, currentMonth);
-
-      // Restore active room poll if present
-      const savedPoll = localStorage.getItem('tiffin_active_poll_' + codeKey.toLowerCase());
-      if (savedPoll) {
-        try {
-          const parsedPoll = JSON.parse(savedPoll);
-          if (parsedPoll && parsedPoll.status === 'active') {
-            appState.activePoll = parsedPoll;
-          }
-        } catch (e) {}
-      }
-
-      // Ensure all members have meal slots in appState
-      if (appState && appState.days) {
-        for (let d = 1; d <= CONFIG.daysInMonth; d++) {
-          if (appState.days[d]) {
-            if (!appState.days[d].meals) appState.days[d].meals = {};
-            ROOMMATES.forEach(r => {
-              if (!appState.days[d].meals[r.id]) {
-                appState.days[d].meals[r.id] = { lunch: '', dinner: '' };
-              }
-            });
-          }
-        }
-      }
 
       if (roomData.adminPin) {
         CONFIG.adminPassword = roomData.adminPin;
@@ -6225,7 +4541,7 @@
 
     const groupName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'Tiffin Tracker';
     if (title) title.textContent = `Welcome to ${groupName}! 🎉`;
-    if (sub) sub.textContent = `Turn on notifications so you get alerted when flatmates schedule meal polls or update dinner menus.`;
+    if (sub) sub.textContent = `Turn on notifications so you get alerted when flatmates update dinner menus or expenses.`;
 
     if (modal) {
       modal.classList.add('active');
@@ -6245,7 +4561,7 @@
         try {
           const granted = await NotificationManager.requestPermission(true);
           if (granted) {
-            showToast('🔔 Phone alerts enabled! You will be notified of meal polls.');
+            showToast('🔔 Phone alerts enabled! You will be notified of mess updates.');
           } else {
             showToast('Notification permission dismissed.');
           }
@@ -6649,7 +4965,6 @@
     setupDateControls();
     setupSabziControls();
     setupFastActions();
-    setupPollControls();
     setupUpiControls();
     setupAmulControls();
     setupSettingsControls();
@@ -6674,11 +4989,6 @@
     // Start Real-Time Cloud Sync Engine
     SyncEngine.init();
 
-    // Check active poll reminders on startup
-    if (appState && appState.activePoll && appState.activePoll.status === 'active') {
-      PollReminderManager.start(appState.activePoll);
-    }
-
     // Check reminders & catch up sync when user returns to app
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
@@ -6689,9 +4999,6 @@
             roomCode: RoomManager.activeRoom.code,
             requesterName: RoomManager.session?.name || 'Peer'
           });
-        }
-        if (appState && appState.activePoll && appState.activePoll.status === 'active') {
-          PollReminderManager.checkAndRemind();
         }
       }
     });
