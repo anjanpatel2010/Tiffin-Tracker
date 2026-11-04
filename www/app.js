@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.3.4';
+  const APP_VERSION = '5.3.5';
 
   function checkAndMigrateAppVersion() {
     try {
@@ -2631,6 +2631,215 @@
     }
   }
 
+  function setupDateControls() {
+    const prevBtn = document.getElementById('prevDayBtn');
+    const nextBtn = document.getElementById('nextDayBtn');
+    const jumpTodayBtn = document.getElementById('jumpTodayBtn');
+    const daySelect = document.getElementById('daySelectInput');
+    const sheetJumpTodayBtn = document.getElementById('sheetJumpTodayBtn');
+
+    if (prevBtn) {
+      prevBtn.addEventListener('click', () => {
+        triggerHaptic();
+        if (selectedDay > 1) {
+          selectedDay--;
+          renderAll();
+        } else {
+          // Rollover to previous month's last day
+          let prevY = currentYear;
+          let prevM = currentMonth - 1;
+          if (prevM < 1) { prevM = 12; prevY--; }
+          switchMonth(prevY, prevM);
+          selectedDay = CONFIG.daysInMonth;
+          renderAll();
+        }
+      });
+    }
+
+    if (nextBtn) {
+      nextBtn.addEventListener('click', () => {
+        triggerHaptic();
+        if (selectedDay < CONFIG.daysInMonth) {
+          selectedDay++;
+          renderAll();
+        } else {
+          // Rollover to next month's Day 1
+          let nextY = currentYear;
+          let nextM = currentMonth + 1;
+          if (nextM > 12) { nextM = 1; nextY++; }
+          switchMonth(nextY, nextM);
+          selectedDay = 1;
+          renderAll();
+        }
+      });
+    }
+
+    if (jumpTodayBtn) {
+      jumpTodayBtn.addEventListener('click', () => {
+        triggerHaptic();
+        const d = new Date();
+        const realY = d.getFullYear();
+        const realM = d.getMonth() + 1;
+        if (currentYear !== realY || currentMonth !== realM) {
+          switchMonth(realY, realM);
+        } else {
+          selectedDay = CONFIG.todayDay;
+          renderAll();
+        }
+        showToast(`Jumped to Today (Day ${d.getDate()} ${MONTH_SHORTS[realM - 1]})`);
+      });
+    }
+
+    if (sheetJumpTodayBtn) {
+      sheetJumpTodayBtn.addEventListener('click', () => {
+        triggerHaptic();
+        const d = new Date();
+        const realY = d.getFullYear();
+        const realM = d.getMonth() + 1;
+        if (currentYear !== realY || currentMonth !== realM) {
+          switchMonth(realY, realM);
+        } else {
+          selectedDay = CONFIG.todayDay;
+          renderAll();
+        }
+        const row = document.querySelector('.row-today');
+        if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+
+    if (daySelect) {
+      daySelect.addEventListener('change', (e) => {
+        selectedDay = parseInt(e.target.value);
+        renderAll();
+      });
+    }
+  }
+
+  function setupSabziControls() {
+    const sabziInput = document.getElementById('sabziInput');
+    const clearBtn = document.getElementById('clearSabziBtn');
+
+    let debounceTimer = null;
+    if (sabziInput) {
+      sabziInput.addEventListener('input', (e) => {
+        const timestamp = Date.now();
+        appState.days[selectedDay].sabzi = e.target.value;
+        appState.days[selectedDay].sabziUpdatedAt = timestamp;
+        saveStateToStorage(appState);
+        renderMasterSheet();
+
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          logActivity(SyncEngine.identity, 'Sabzi Update', `Day ${selectedDay} dish set to "${e.target.value}"`);
+          SyncEngine.broadcast({
+            type: 'sabzi_update',
+            year: currentYear,
+            month: currentMonth,
+            day: selectedDay,
+            sabzi: e.target.value,
+            timestamp: timestamp
+          });
+        }, 400);
+      });
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        triggerHaptic();
+        const timestamp = Date.now();
+        appState.days[selectedDay].sabzi = '';
+        appState.days[selectedDay].sabziUpdatedAt = timestamp;
+        if (sabziInput) sabziInput.value = '';
+        renderDailyLogger();
+        renderMasterSheet();
+        logActivity(SyncEngine.identity, 'Cleared Sabzi', `Day ${selectedDay}`);
+        persistAndBroadcast({
+          type: 'sabzi_update',
+          year: currentYear,
+          month: currentMonth,
+          day: selectedDay,
+          sabzi: '',
+          timestamp: timestamp
+        });
+      });
+    }
+
+    // Change / Edit dish button on banner
+    const editBannerBtn = document.getElementById('editSabziBannerBtn');
+    if (editBannerBtn) {
+      editBannerBtn.addEventListener('click', () => {
+        triggerHaptic();
+        const banner = document.getElementById('sabziDisplayBanner');
+        const inputRow = document.getElementById('sabziInputRow');
+        if (banner) banner.style.display = 'none';
+        if (inputRow) inputRow.style.display = 'flex';
+        if (sabziInput) sabziInput.focus();
+      });
+    }
+  }
+
+  function setupFastActions() {
+    const clearTodayBtn = document.getElementById('clearTodayMealsBtn');
+
+    if (clearTodayBtn) {
+      clearTodayBtn.addEventListener('click', () => {
+        triggerHaptic();
+        requireAdminPassword(() => {
+          const timestamp = Date.now();
+          appState.days[selectedDay].sabzi = '';
+          appState.days[selectedDay].sabziUpdatedAt = timestamp;
+          if (!appState.days[selectedDay].mealTimestamps) {
+            appState.days[selectedDay].mealTimestamps = {};
+          }
+          ROOMMATES.forEach(r => {
+            if (appState.days[selectedDay].meals && appState.days[selectedDay].meals[r.id]) {
+              appState.days[selectedDay].meals[r.id] = { lunch: '', dinner: '' };
+              appState.days[selectedDay].mealTimestamps[`${r.id}_lunch`] = timestamp;
+              appState.days[selectedDay].mealTimestamps[`${r.id}_dinner`] = timestamp;
+            }
+          });
+          logActivity(SyncEngine.identity, 'Admin Action', `Reset meals for Day ${selectedDay}`);
+          persistAndBroadcast({
+            type: 'day_reset',
+            year: currentYear,
+            month: currentMonth,
+            day: selectedDay,
+            timestamp: timestamp
+          });
+          showToast(`Meals for Day ${selectedDay} reset to Off`);
+        });
+      });
+    }
+
+    function handleMonthReset() {
+      triggerHaptic();
+      requireAdminPassword(() => {
+        const cleanState = getDefaultDataForMonth(currentYear, currentMonth);
+        cleanState.rates = { ...appState.rates };
+        cleanState.provider = { ...appState.provider };
+        cleanState.amulMembers = [...(appState.amulMembers || (ROOMMATES.length > 0 ? ROOMMATES.map(r => r.id) : []))];
+        appState = cleanState;
+
+        logActivity(SyncEngine.identity, 'Admin Action', `Hard Reset: Erased month ledger for ${MONTH_NAMES[currentMonth - 1]} ${currentYear}`);
+        persistAndBroadcast({
+          type: 'month_reset',
+          year: currentYear,
+          month: currentMonth
+        });
+        showToast(`💥 Month ledger for ${MONTH_NAMES[currentMonth - 1]} ${currentYear} has been reset!`);
+      });
+    }
+
+    const settingsResetMonthBtn = document.getElementById('settingsResetMonthBtn');
+    if (settingsResetMonthBtn) {
+      settingsResetMonthBtn.addEventListener('click', () => {
+        const modal = document.getElementById('settingsModal');
+        if (modal) modal.classList.remove('active');
+        handleMonthReset();
+      });
+    }
+  }
+
   function setupUpiControls() {
     const select = document.getElementById('upiRoommateSelect');
     const copyUpiId = document.getElementById('cookUpiIdCopy');
@@ -4956,65 +5165,76 @@
     }
   }
 
+  function dismissSplash() {
+    const splash = document.getElementById('appSplashOverlay');
+    if (splash && !splash.dataset.dismissed) {
+      splash.dataset.dismissed = 'true';
+      splash.classList.add('splash-fade-out');
+      setTimeout(() => {
+        splash.remove();
+      }, 360);
+    }
+  }
+
+  // Absolute safety timeout: never trap user on splash screen under any circumstances
+  setTimeout(dismissSplash, 2000);
+  window.addEventListener('load', () => setTimeout(dismissSplash, 800));
+
   // Initialize App on DOM Ready
   document.addEventListener('DOMContentLoaded', () => {
-    setupTheme();
-    setupNavigation();
-    setupMonthControls();
-    setupSheetFilterControls();
-    setupDateControls();
-    setupSabziControls();
-    setupFastActions();
-    setupUpiControls();
-    setupAmulControls();
-    setupSettingsControls();
-    setupHeaderIdentityControls();
-    setupPasswordPromptControls();
-    setupCloudSyncControls();
-    setupExportAndSharing();
-    setupRoomAccessControls();
-    setupInvoiceModalControls();
-    registerServiceWorker();
+    try {
+      setupTheme();
+      setupNavigation();
+      setupMonthControls();
+      setupSheetFilterControls();
+      setupDateControls();
+      setupSabziControls();
+      setupFastActions();
+      setupUpiControls();
+      setupAmulControls();
+      setupSettingsControls();
+      setupHeaderIdentityControls();
+      setupPasswordPromptControls();
+      setupCloudSyncControls();
+      setupExportAndSharing();
+      setupRoomAccessControls();
+      setupInvoiceModalControls();
+      registerServiceWorker();
 
-    // Initialize Room & Multi-Tenant Access Gate
-    RoomManager.init();
+      // Initialize Room & Multi-Tenant Access Gate
+      RoomManager.init();
 
-    updateMonthUI();
-    populateDateSelectors();
+      updateMonthUI();
+      populateDateSelectors();
 
-    // Initialize notification status and startup permission prompt
-    NotificationManager.updateUI();
-    setupNotificationStartupPrompt();
+      // Initialize notification status and startup permission prompt
+      NotificationManager.updateUI();
+      setupNotificationStartupPrompt();
 
-    // Start Real-Time Cloud Sync Engine
-    SyncEngine.init();
+      // Start Real-Time Cloud Sync Engine
+      SyncEngine.init();
 
-    // Check reminders & catch up sync when user returns to app
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        SyncEngine.catchUp();
-        if (RoomManager.activeRoom?.code) {
-          SyncEngine.broadcast({
-            type: 'request_room_sync',
-            roomCode: RoomManager.activeRoom.code,
-            requesterName: RoomManager.session?.name || 'Peer'
-          });
+      // Check reminders & catch up sync when user returns to app
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          SyncEngine.catchUp();
+          if (RoomManager.activeRoom?.code) {
+            SyncEngine.broadcast({
+              type: 'request_room_sync',
+              roomCode: RoomManager.activeRoom.code,
+              requesterName: RoomManager.session?.name || 'Peer'
+            });
+          }
         }
-      }
-    });
+      });
 
-    // Initial Full Render
-    renderAll();
-
-    // Dismiss startup brand reveal splash smoothly
-    const splash = document.getElementById('appSplashOverlay');
-    if (splash) {
-      setTimeout(() => {
-        splash.classList.add('splash-fade-out');
-        setTimeout(() => {
-          splash.remove();
-        }, 360);
-      }, 520);
+      // Initial Full Render
+      renderAll();
+    } catch (err) {
+      console.error('Fatal initialization error:', err);
+    } finally {
+      // Dismiss startup brand reveal splash smoothly
+      setTimeout(dismissSplash, 400);
     }
   });
 

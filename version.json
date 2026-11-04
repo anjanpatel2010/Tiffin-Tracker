@@ -1,17 +1,17 @@
 {
-  "version": "5.3.4",
-  "versionCode": 50304,
+  "version": "5.3.5",
+  "versionCode": 50305,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-04",
-  "message": "Streamlined experience: Completely removed poll system for a lighter, faster mess ledger!",
-  "apkFilename": "Tiffin-Tracker-v5.3.4-release.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.3.4-release.apk",
+  "message": "Critical startup fix & lightning-fast 4-tab mess ledger!",
+  "apkFilename": "Tiffin-Tracker-v5.3.5-release.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.3.5-release.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
-    "Completely removed voting poll feature and background poll reminders",
-    "Simplified 4-tab streamlined navigation: Logger, Sheet, Split, and Amul",
-    "Instant, clutter-free meal and expense tracking",
-    "Preserved Morphe-style background update checks and 1-tap APK installer"
+    "Fixed startup freeze / intro loop issue with resilient auto-dismiss fallback",
+    "Restored date controls, sabzi input handlers, and fast day resets",
+    "Clean 4-tab streamlined navigation: Logger, Sheet, Split, and Amul",
+    "Morphe-style 1-tap in-app APK updater"
   ]
 }
