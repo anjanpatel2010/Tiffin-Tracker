@@ -4923,3 +4923,218 @@ input.rate-input-locked {
   display: none !important;
 }
 
+
+/* ========================================================================== */
+/* MORPHE-STYLE LUXURY IN-APP UPDATE MODAL                                    */
+/* ========================================================================== */
+.morphe-update-card {
+  max-width: 440px !important;
+  text-align: center;
+  padding: 28px 22px !important;
+  background: linear-gradient(160deg, #0e1520 0%, #06090f 100%) !important;
+  border: 1px solid rgba(0, 245, 160, 0.35) !important;
+  border-radius: 28px !important;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.92), 0 0 45px rgba(0, 245, 160, 0.16) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.morphe-update-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 10%;
+  right: 10%;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, rgba(0, 245, 160, 0.8), rgba(0, 212, 255, 0.8), transparent);
+}
+
+.morphe-update-avatar-ring {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(0, 245, 160, 0.18), rgba(0, 212, 255, 0.18));
+  border: 1.5px solid rgba(0, 245, 160, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
+  margin: 0 auto 16px;
+  position: relative;
+  box-shadow: 0 10px 28px rgba(0, 245, 160, 0.28);
+}
+
+.morphe-update-avatar-glow {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px dashed rgba(0, 245, 160, 0.4);
+  animation: morpheSpin 12s linear infinite;
+}
+
+@keyframes morpheSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.morphe-version-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.morphe-chip-current {
+  color: #94a3b8;
+}
+
+.morphe-version-arrow {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.morphe-chip-latest {
+  color: #00f5a0;
+}
+
+.morphe-latest-pill {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgba(0, 245, 160, 0.2);
+  color: #00f5a0;
+  letter-spacing: 0.05em;
+  font-weight: 800;
+}
+
+.morphe-update-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+
+.morphe-update-desc {
+  font-size: 0.88rem;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.morphe-changelog-box {
+  text-align: left;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  backdrop-filter: blur(8px);
+}
+
+.morphe-changelog-header {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #00d4ff;
+  font-weight: 800;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.morphe-notes-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.84rem;
+  color: #e2e8f0;
+  line-height: 1.65;
+}
+
+.morphe-notes-list li {
+  margin-bottom: 4px;
+}
+
+.morphe-github-row {
+  margin-bottom: 16px;
+}
+
+.morphe-github-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.morphe-github-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.morphe-progress-wrap {
+  margin-bottom: 16px;
+}
+
+.morphe-progress-bar-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.morphe-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00d4ff, #00f5a0);
+  border-radius: 999px;
+  transition: width 0.15s ease-out;
+  box-shadow: 0 0 12px rgba(0, 245, 160, 0.6);
+}
+
+.morphe-progress-status-text {
+  font-size: 0.8rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: #00f5a0;
+  font-weight: 600;
+}
+
+.morphe-update-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.morphe-update-btn {
+  padding: 14px !important;
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+  border-radius: 16px !important;
+  background: linear-gradient(135deg, #00f5a0 0%, #00d26a 100%) !important;
+  color: #04090e !important;
+  box-shadow: 0 6px 20px rgba(0, 245, 160, 0.35) !important;
+  transition: all 0.2s ease !important;
+}
+
+.morphe-update-btn:active {
+  transform: scale(0.98);
+}

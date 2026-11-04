@@ -1,14 +1,17 @@
 package com.tiffin.tracker;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
@@ -16,9 +19,18 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.work.Constraints;
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.NetworkType;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
+
 import com.getcapacitor.BridgeActivity;
 
+import java.util.concurrent.TimeUnit;
+
 public class MainActivity extends BridgeActivity {
+    private static final String TAG = "MainActivity";
     private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 1001;
 
     @Override
@@ -68,8 +80,76 @@ public class MainActivity extends BridgeActivity {
             return windowInsets;
         });
 
-        // 3. Automatically request POST_NOTIFICATIONS runtime permission on Android 13+ (API 33+)
+        // 3. Register NativeAppInstaller Javascript Interface for direct in-app downloads
+        if (bridge != null && bridge.getWebView() != null) {
+            bridge.getWebView().addJavascriptInterface(
+                new NativeAppInstaller(this, bridge.getWebView()),
+                "NativeAppInstaller"
+            );
+        }
+
+        // 4. Automatically request POST_NOTIFICATIONS runtime permission on Android 13+ (API 33+)
         requestNotificationPermissionIfNeeded();
+
+        // 5. Schedule Background WorkManager Update Checker (Checks even when app is killed)
+        scheduleBackgroundUpdateCheck();
+
+        // 6. Handle notification click if app was launched from an update alert
+        handleUpdateNotificationIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleUpdateNotificationIntent(intent);
+    }
+
+    private void handleUpdateNotificationIntent(Intent intent) {
+        if (intent != null && intent.getBooleanExtra("OPEN_UPDATE_MODAL", false)) {
+            final String payload = intent.getStringExtra("UPDATE_PAYLOAD");
+            Log.d(TAG, "Opened via background Update Notification! Triggering UI dialog...");
+            if (bridge != null && bridge.getWebView() != null) {
+                bridge.getWebView().postDelayed(() -> {
+                    if (payload != null && !payload.trim().isEmpty()) {
+                        bridge.getWebView().evaluateJavascript(
+                            "if (window.AppUpdater && window.AppUpdater.showUpdateModalFromPayload) { window.AppUpdater.showUpdateModalFromPayload(" + payload + "); }",
+                            null
+                        );
+                    } else {
+                        bridge.getWebView().evaluateJavascript(
+                            "if (window.AppUpdater && window.AppUpdater.checkForUpdate) { window.AppUpdater.checkForUpdate(true); }",
+                            null
+                        );
+                    }
+                }, 1000);
+            }
+        }
+    }
+
+    private void scheduleBackgroundUpdateCheck() {
+        try {
+            Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build();
+
+            PeriodicWorkRequest updateRequest = new PeriodicWorkRequest.Builder(
+                    UpdateCheckWorker.class,
+                    2, TimeUnit.HOURS
+                )
+                .setConstraints(constraints)
+                .addTag("tiffin_update_worker")
+                .build();
+
+            WorkManager.getInstance(getApplicationContext()).enqueueUniquePeriodicWork(
+                "TiffinTrackerUpdateChecker",
+                ExistingPeriodicWorkPolicy.KEEP,
+                updateRequest
+            );
+            Log.d(TAG, "Scheduled background UpdateCheckWorker via Android WorkManager successfully.");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to schedule UpdateCheckWorker: " + e.getMessage(), e);
+        }
     }
 
     private void requestNotificationPermissionIfNeeded() {

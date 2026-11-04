@@ -1,11 +1,14 @@
 /**
- * In-App Auto-Update Sentinel for Tiffin Tracker Standalone APK
- * Automatically checks for updates and displays a popup notification when a new version is published.
+ * Morphe-Inspired In-App Auto-Update Sentinel for Tiffin Tracker
+ * - Background update alerts (via Android WorkManager when app is closed)
+ * - Direct in-app APK download with live progress bar
+ * - Automatic native Android PackageInstaller execution
+ * - GitHub Release link integration
  */
 (function () {
   'use strict';
 
-  const CURRENT_VERSION = '5.3.2';
+  const CURRENT_VERSION = '5.3.3';
   const UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/anjanpatel2010/Tiffin-Tracker/master/version.json';
   const SNOOZE_KEY = 'tiffin_update_snooze_until';
 
@@ -29,6 +32,8 @@
 
   const AppUpdater = {
     currentVersion: CURRENT_VERSION,
+    activeUpdateData: null,
+    isDownloading: false,
 
     async checkForUpdate(isManual = false) {
       if (!isManual) {
@@ -40,7 +45,7 @@
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
 
         const response = await fetch(`${UPDATE_CHECK_URL}?t=${Date.now()}`, {
           cache: 'no-store',
@@ -55,9 +60,9 @@
           this.showUpdateModal(updateData);
         } else if (isManual) {
           if (typeof window.showToast === 'function') {
-            window.showToast(`✨ You're using the latest version (v${CURRENT_VERSION})!`, 3000);
+            window.showToast(`✨ You're running the latest version (v${CURRENT_VERSION})!`, 3000);
           } else {
-            alert(`You are using the latest version of Tiffin Tracker (v${CURRENT_VERSION}).`);
+            alert(`You are running the latest version of Tiffin Tracker (v${CURRENT_VERSION}).`);
           }
         }
       } catch (err) {
@@ -72,7 +77,20 @@
       }
     },
 
+    showUpdateModalFromPayload(payload) {
+      if (!payload) return;
+      try {
+        const data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+        if (data && data.version) {
+          this.showUpdateModal(data);
+        }
+      } catch (e) {
+        this.checkForUpdate(true);
+      }
+    },
+
     showUpdateModal(data) {
+      this.activeUpdateData = data;
       const modal = document.getElementById('appUpdateModal');
       if (!modal) return;
 
@@ -80,11 +98,35 @@
       const curTag = document.getElementById('updateCurrentVersionTag');
       const notesList = document.getElementById('updateNotesList');
       const downloadBtn = document.getElementById('updateDownloadBtn');
+      const btnText = document.getElementById('updateDownloadBtnText');
       const msgElem = document.getElementById('updateMessage');
+      const githubBtn = document.getElementById('updateGithubReleaseBtn');
+      const progressWrap = document.getElementById('updateDownloadProgressWrap');
+      const progressBar = document.getElementById('updateProgressBar');
+      const progressStatus = document.getElementById('updateProgressStatus');
 
       if (verTag) verTag.textContent = `v${data.version}`;
-      if (curTag) curTag.textContent = `Current: v${CURRENT_VERSION}`;
+      if (curTag) curTag.textContent = `v${CURRENT_VERSION}`;
       if (msgElem && data.message) msgElem.textContent = data.message;
+
+      // GitHub Release Link (Morphe Style)
+      if (githubBtn) {
+        const releaseUrl = data.downloadUrl ? 'https://github.com/anjanpatel2010/Tiffin-Tracker/releases' : 'https://github.com/anjanpatel2010/Tiffin-Tracker';
+        githubBtn.href = releaseUrl;
+        githubBtn.onclick = (e) => {
+          if (window.NativeAppInstaller && typeof window.NativeAppInstaller.openExternalUrl === 'function') {
+            e.preventDefault();
+            window.NativeAppInstaller.openExternalUrl(releaseUrl);
+          }
+        };
+      }
+
+      // Reset progress bar state
+      if (progressWrap) progressWrap.style.display = 'none';
+      if (progressBar) progressBar.style.width = '0%';
+      if (progressStatus) progressStatus.textContent = 'Downloading update... 0%';
+      if (downloadBtn) downloadBtn.disabled = false;
+      if (btnText) btnText.textContent = 'Update Now ⚡';
 
       if (notesList) {
         notesList.innerHTML = '';
@@ -96,23 +138,110 @@
           });
         } else {
           const li = document.createElement('li');
-          li.textContent = 'Bug fixes and performance improvements.';
+          li.textContent = 'Performance improvements and bug fixes.';
           notesList.appendChild(li);
         }
       }
 
       if (downloadBtn) {
-        downloadBtn.onclick = () => {
-          const targetUrl = data.downloadUrl || data.apkUrl || `https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/${data.apkFilename || 'Tiffin-Tracker-v5.3.0-release.apk'}`;
-          window.open(targetUrl, '_system');
-        };
+        downloadBtn.onclick = () => this.startUpdateDownload();
       }
 
       modal.style.display = 'flex';
       setTimeout(() => modal.classList.add('active'), 10);
     },
 
-    dismissModal(snoozeHours = 12) {
+    startUpdateDownload() {
+      const data = this.activeUpdateData;
+      if (!data) return;
+
+      const downloadUrl = data.downloadUrl || `https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/${data.apkFilename || 'Tiffin-Tracker-v5.3.3-release.apk'}`;
+      const filename = data.apkFilename || `Tiffin-Tracker-v${data.version}-release.apk`;
+
+      const downloadBtn = document.getElementById('updateDownloadBtn');
+      const btnText = document.getElementById('updateDownloadBtnText');
+      const progressWrap = document.getElementById('updateDownloadProgressWrap');
+
+      // Native Android App: Direct in-app stream & PackageInstaller launch
+      if (window.NativeAppInstaller && typeof window.NativeAppInstaller.downloadAndInstall === 'function') {
+        this.isDownloading = true;
+        if (downloadBtn) downloadBtn.disabled = true;
+        if (btnText) btnText.textContent = 'Downloading Update... ⏳';
+        if (progressWrap) progressWrap.style.display = 'block';
+
+        window.NativeAppInstaller.downloadAndInstall(downloadUrl, filename);
+      } else {
+        // Fallback for Web Browsers
+        if (downloadBtn) {
+          downloadBtn.disabled = true;
+          if (btnText) btnText.textContent = 'Opening Download... 🚀';
+        }
+        window.open(downloadUrl, '_system');
+        setTimeout(() => {
+          if (downloadBtn) downloadBtn.disabled = false;
+          if (btnText) btnText.textContent = 'Update Now ⚡';
+        }, 3000);
+      }
+    },
+
+    onDownloadProgress(percent, downloadedBytes, totalBytes) {
+      const wrap = document.getElementById('updateDownloadProgressWrap');
+      const bar = document.getElementById('updateProgressBar');
+      const status = document.getElementById('updateProgressStatus');
+      const btnText = document.getElementById('updateDownloadBtnText');
+
+      if (wrap) wrap.style.display = 'block';
+      if (bar) bar.style.width = Math.min(Math.max(percent, 0), 100) + '%';
+
+      if (status) {
+        if (totalBytes > 0) {
+          const mbDownloaded = (downloadedBytes / (1024 * 1024)).toFixed(1);
+          const mbTotal = (totalBytes / (1024 * 1024)).toFixed(1);
+          status.textContent = `Downloading update: ${percent}% (${mbDownloaded} MB / ${mbTotal} MB)`;
+        } else {
+          status.textContent = `Downloading update: ${percent}%`;
+        }
+      }
+
+      if (btnText) {
+        btnText.textContent = `Downloading... ${percent}%`;
+      }
+    },
+
+    onDownloadComplete() {
+      this.isDownloading = false;
+      const bar = document.getElementById('updateProgressBar');
+      const status = document.getElementById('updateProgressStatus');
+      const btnText = document.getElementById('updateDownloadBtnText');
+      const downloadBtn = document.getElementById('updateDownloadBtn');
+
+      if (bar) bar.style.width = '100%';
+      if (status) status.textContent = '✅ Download complete! Launching installer...';
+      if (btnText) btnText.textContent = 'Installing... 🚀';
+      if (downloadBtn) downloadBtn.disabled = true;
+    },
+
+    onDownloadError(errorMessage) {
+      this.isDownloading = false;
+      const status = document.getElementById('updateProgressStatus');
+      const btnText = document.getElementById('updateDownloadBtnText');
+      const downloadBtn = document.getElementById('updateDownloadBtn');
+
+      if (status) status.textContent = `⚠️ Download failed: ${errorMessage || 'Network error'}`;
+      if (btnText) btnText.textContent = 'Retry Download ⚡';
+      if (downloadBtn) downloadBtn.disabled = false;
+
+      if (typeof window.showToast === 'function') {
+        window.showToast('Download interrupted. Tap retry to resume.', 4000);
+      }
+    },
+
+    dismissModal(snoozeHours = 18) {
+      if (this.isDownloading) {
+        if (!confirm('An update is currently downloading. Are you sure you want to dismiss?')) {
+          return;
+        }
+      }
       const modal = document.getElementById('appUpdateModal');
       if (modal) {
         modal.classList.remove('active');
@@ -122,13 +251,10 @@
     },
 
     init() {
-      // Setup dismiss buttons
-      const closeBtn = document.getElementById('updateModalCloseBtn');
       const laterBtn = document.getElementById('updateLaterBtn');
-      if (closeBtn) closeBtn.onclick = () => this.dismissModal(6);
       if (laterBtn) laterBtn.onclick = () => this.dismissModal(24);
 
-      // Setup manual check button in settings
+      // Manual check from Settings
       const manualBtn = document.getElementById('checkUpdateManualBtn');
       if (manualBtn) {
         manualBtn.onclick = () => {
@@ -142,10 +268,13 @@
         };
       }
 
-      // Auto check after a pleasant delay
-      setTimeout(() => {
-        this.checkForUpdate(false);
-      }, 2500);
+      // Check if URL hash requested update dialog
+      if (window.location.hash === '#open-update') {
+        setTimeout(() => this.checkForUpdate(true), 500);
+      } else {
+        // Auto check in foreground after startup
+        setTimeout(() => this.checkForUpdate(false), 2600);
+      }
     }
   };
 

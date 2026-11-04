@@ -24,7 +24,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css?v=5.3.2">
+  <link rel="stylesheet" href="styles.css?v=5.3.3">
 </head>
 <body>
   <!-- Luxury Startup Animation (Fast & Smooth Brand Reveal) -->
@@ -1367,32 +1367,66 @@
     </div>
 
 
-    <!-- MODAL: APK IN-APP UPDATE NOTIFICATION -->
+    <!-- MODAL: MORPHE-STYLE APK IN-APP UPDATE NOTIFICATION -->
     <div id="appUpdateModal" class="modal-backdrop" style="display:none; z-index:99999;">
-      <div class="modal-box update-modal-window" style="max-width:440px; text-align:center; padding:26px 22px; border:1px solid rgba(0, 245, 160, 0.4); box-shadow:0 20px 60px rgba(0,0,0,0.85), 0 0 35px rgba(0, 245, 160, 0.18); background:#0c131b; border-radius:24px;">
-        <div style="width:68px; height:68px; border-radius:50%; background:linear-gradient(135deg, rgba(0,245,160,0.22), rgba(0,212,255,0.22)); border:1.5px solid rgba(0,245,160,0.5); display:flex; align-items:center; justify-content:center; font-size:2.1rem; margin:0 auto 14px; box-shadow:0 8px 24px rgba(0,245,160,0.25);">
-          🚀
+      <div class="modal-box update-modal-window morphe-update-card">
+        <!-- Morphe Glowing Hex/Pulse Icon -->
+        <div class="morphe-update-avatar-ring">
+          <div class="morphe-update-avatar-glow"></div>
+          <div class="morphe-update-icon">🚀</div>
         </div>
-        <div style="display:inline-block; padding:4px 12px; border-radius:20px; background:rgba(0, 245, 160, 0.15); border:1px solid rgba(0, 245, 160, 0.3); color:#00f5a0; font-family:'JetBrains Mono', monospace; font-size:0.82rem; font-weight:700; margin-bottom:10px;" id="updateVersionTag">
-          v5.3.2
+
+        <!-- Version Comparison Badge -->
+        <div class="morphe-version-badge">
+          <span id="updateCurrentVersionTag" class="morphe-chip-current">v5.3.2</span>
+          <span class="morphe-version-arrow">➔</span>
+          <span id="updateVersionTag" class="morphe-chip-latest">v5.3.3</span>
+          <span class="morphe-latest-pill">LATEST</span>
         </div>
-        <h3 style="font-size:1.35rem; font-weight:800; color:#fff; margin-bottom:6px;">Update Available!</h3>
-        <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:12px;" id="updateCurrentVersionTag">Current: v5.3.2</p>
-        <p style="font-size:0.9rem; color:var(--text-secondary); line-height:1.5; margin-bottom:16px;" id="updateMessage">
-          A new version of Tiffin Tracker is available with performance improvements and updates.
+
+        <h3 class="morphe-update-title">Update Available!</h3>
+        <p class="morphe-update-desc" id="updateMessage">
+          A new version of Tiffin Tracker is available with background updates and installer integration.
         </p>
-        <div style="text-align:left; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:12px 16px; margin-bottom:20px;">
-          <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:#00d4ff; font-weight:700; margin-bottom:6px;">What's New:</div>
-          <ul id="updateNotesList" style="margin:0; padding-left:18px; font-size:0.84rem; color:var(--text-primary); line-height:1.6;">
-            <li>Strict single-vote deduplication across devices</li>
-            <li>Clean, popup-free in-app user interface</li>
+
+        <!-- Changelog Section -->
+        <div class="morphe-changelog-box">
+          <div class="morphe-changelog-header">
+            <span class="morphe-sparkle">✨</span>
+            <span>WHAT'S NEW IN THIS RELEASE</span>
+          </div>
+          <ul id="updateNotesList" class="morphe-notes-list">
+            <li>Background update checks when app is closed</li>
+            <li>Direct in-app APK download with live progress bar</li>
+            <li>1-Tap native package installation prompt</li>
+            <li>GitHub Release notes integration</li>
           </ul>
         </div>
-        <div style="display:flex; flex-direction:column; gap:10px;">
-          <button id="updateDownloadBtn" class="primary-btn glow-btn w-full" style="padding:14px; font-size:1rem; font-weight:800; background:linear-gradient(135deg, #00f5a0, #00d26a); color:#05080c;">
-            <span>Update Now ⚡</span>
+
+        <!-- GitHub Release Link Button -->
+        <div class="morphe-github-row">
+          <a id="updateGithubReleaseBtn" href="https://github.com/anjanpatel2010/Tiffin-Tracker/releases" target="_blank" rel="noopener noreferrer" class="morphe-github-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:6px;">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+            </svg>
+            <span>View Release on GitHub ↗</span>
+          </a>
+        </div>
+
+        <!-- In-App Download Progress Tracker -->
+        <div id="updateDownloadProgressWrap" class="morphe-progress-wrap" style="display:none;">
+          <div class="morphe-progress-bar-track">
+            <div id="updateProgressBar" class="morphe-progress-bar-fill" style="width: 0%;"></div>
+          </div>
+          <div id="updateProgressStatus" class="morphe-progress-status-text">Downloading update... 0%</div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="morphe-update-actions">
+          <button id="updateDownloadBtn" class="primary-btn glow-btn w-full morphe-update-btn">
+            <span id="updateDownloadBtnText">Update Now ⚡</span>
           </button>
-          <button id="updateLaterBtn" class="pill-btn-ghost btn-sm text-muted w-full" style="padding:10px; font-size:0.88rem;">
+          <button id="updateLaterBtn" class="pill-btn-ghost btn-sm text-muted w-full">
             <span>Remind Me Later</span>
           </button>
         </div>
@@ -1410,17 +1444,17 @@
   </div>
 
   <!-- Firebase Cloud Realtime Engine -->
-  <script src="firebase-app.js?v=5.3.2"></script>
-  <script src="firebase-firestore.js?v=5.3.2"></script>
+  <script src="firebase-app.js?v=5.3.3"></script>
+  <script src="firebase-firestore.js?v=5.3.3"></script>
   <!-- Native Device Bridge (Status bar, Insets, Back Button, Local Notifications, Push Notifications) -->
-  <script src="native-bridge.js?v=5.3.2"></script>
+  <script src="native-bridge.js?v=5.3.3"></script>
   <!-- QR Generator Script -->
-  <script src="qr.js?v=5.3.2"></script>
+  <script src="qr.js?v=5.3.3"></script>
   <!-- Firebase Cloud Sync Bridge -->
-  <script src="firebase-sync.js?v=5.3.2"></script>
+  <script src="firebase-sync.js?v=5.3.3"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=5.3.2"></script>
+  <script src="app.js?v=5.3.3"></script>
   <!-- In-App Auto Update Sentinel -->
-  <script src="updater.js?v=5.3.2"></script>
+  <script src="updater.js?v=5.3.3"></script>
 </body>
 </html>
