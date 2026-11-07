@@ -22,6 +22,8 @@
   const FirebaseSync = {
     isAvailable: false,
     status: 'disconnected',
+    listeners: [],
+    latestSnapshot: null,
 
     init() {
       try {
@@ -50,8 +52,7 @@
         console.log('[FirebaseSync] Cloud Firestore initialized successfully.');
 
         // Auto-subscribe to active room
-        const initialRoom = (typeof getActiveRoomCode === 'function' ? getActiveRoomCode() : null) ||
-                            localStorage.getItem('tiffin_sync_room');
+        const initialRoom = this.getCleanRoom();
         if (initialRoom) {
           this.subscribeRoom(initialRoom);
         }
@@ -71,9 +72,47 @@
       }
     },
 
+    onRoomDataChange(callback) {
+      if (typeof callback !== 'function') return;
+      this.listeners.push(callback);
+      if (this.latestSnapshot) {
+        try {
+          callback(this.latestSnapshot);
+        } catch (e) {
+          console.error('[FirebaseSync] Initial snapshot callback error:', e);
+        }
+      }
+    },
+
+    notifySubscribers(data) {
+      this.listeners.forEach((callback) => {
+        try {
+          callback(data);
+        } catch (e) {
+          console.error('[FirebaseSync] Listener callback error:', e);
+        }
+      });
+      if (typeof window.handleCloudSyncUpdate === 'function') {
+        try {
+          window.handleCloudSyncUpdate(data);
+        } catch (e) {
+          console.error('[FirebaseSync] window.handleCloudSyncUpdate error:', e);
+        }
+      }
+    },
+
     getCleanRoom(code) {
-      const c = code || currentRoomCode || (typeof RoomManager !== 'undefined' && RoomManager?.activeRoom?.code) || localStorage.getItem('tiffin_sync_room');
-      return c ? c.toString().trim().toUpperCase() : null;
+      if (code) return code.toString().trim().toUpperCase();
+      if (currentRoomCode) return currentRoomCode;
+      try {
+        const rawSession = localStorage.getItem('tiffin_user_session');
+        if (rawSession) {
+          const s = JSON.parse(rawSession);
+          if (s && s.roomCode) return s.roomCode.toString().trim().toUpperCase();
+        }
+      } catch (e) {}
+      const stored = localStorage.getItem('tiffin_sync_room');
+      return stored ? stored.toString().trim().toUpperCase() : null;
     },
 
     subscribeRoom(roomCode) {
@@ -100,150 +139,8 @@
           }
 
           const data = doc.data() || {};
-          let modified = false;
-
-          // 1. Synchronize Room Data & Members
-          if (data.roomData && typeof RoomManager !== 'undefined') {
-            const current = RoomManager.activeRoom || {};
-            const cloudMembers = Array.isArray(data.roomData.members) ? data.roomData.members : [];
-            const combined = [...(current.members || []), ...cloudMembers];
-            const deduplicated = RoomManager.deduplicateMembers(combined, data.roomData.adminName || current.adminName);
-
-            // Synchronize session role & guarantee local user is never stripped
-            if (RoomManager.session && RoomManager.session.name) {
-              let matchedSessionMember = RoomManager.findMatchingMember(deduplicated, {
-                name: RoomManager.session.name,
-                phone: RoomManager.session.phone
-              });
-              if (!matchedSessionMember) {
-                // Keep local user in deduplicated array so they are not kicked out
-                const localMember = {
-                  id: RoomManager.sanitizeId(RoomManager.session.name),
-                  name: RoomManager.session.name,
-                  phone: RoomManager.session.phone || '',
-                  role: RoomManager.session.role || 'member',
-                  avatarColor: '#00d4ff',
-                  joinedAt: new Date().toISOString()
-                };
-                deduplicated.push(localMember);
-                matchedSessionMember = localMember;
-                // Re-save to cloud so other flatmates also see this user
-                setTimeout(() => {
-                  if (FirebaseSync.isAvailable && cleanCode) {
-                    FirebaseSync.saveRoomData(cleanCode, RoomManager.activeRoom);
-                  }
-                }, 500);
-              }
-              RoomManager.session.status = 'approved';
-              if (matchedSessionMember) {
-                RoomManager.session.role = matchedSessionMember.role || RoomManager.session.role || 'member';
-                RoomManager.session.name = matchedSessionMember.name;
-                if (matchedSessionMember.phone && !RoomManager.session.phone) {
-                  RoomManager.session.phone = matchedSessionMember.phone;
-                }
-                localStorage.setItem('tiffin_user_session', JSON.stringify(RoomManager.session));
-              }
-            }
-
-            RoomManager.activeRoom = {
-              ...current,
-              ...data.roomData,
-              members: deduplicated
-            };
-            RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
-            RoomManager.saveActiveRoom();
-            if (typeof ROOMMATES !== 'undefined') {
-              ROOMMATES = RoomManager.activeRoom.members;
-            }
-
-            // Ensure appState.days has meal entries for all roommates so renders never fail
-            if (typeof appState !== 'undefined' && appState && appState.days) {
-              for (let d = 1; d <= (CONFIG.daysInMonth || 31); d++) {
-                if (appState.days[d]) {
-                  if (!appState.days[d].meals) appState.days[d].meals = {};
-                  ROOMMATES.forEach(r => {
-                    if (!appState.days[d].meals[r.id]) {
-                      appState.days[d].meals[r.id] = { lunch: '', dinner: '' };
-                    }
-                  });
-                }
-              }
-              if (typeof saveStateToStorage === 'function') {
-                saveStateToStorage(appState);
-              }
-            }
-
-            RoomManager.updateHeaderRoomUI();
-            RoomManager.renderSettingsMembersTab();
-            if (typeof updateIdentityUI === 'function') {
-              updateIdentityUI(RoomManager.session?.name || (typeof SyncEngine !== 'undefined' ? SyncEngine.identity : ''));
-            }
-            modified = true;
-          }
-
-          // 2. Synchronize Ledger State (Days, Meals, Sabzi, Amul)
-          if (data.state && data.state.days && appState && appState.days) {
-            const incomingDays = data.state.days;
-            for (let d = 1; d <= (CONFIG.daysInMonth || 31); d++) {
-              if (incomingDays[d] && appState.days[d]) {
-                const incD = incomingDays[d];
-                const locD = appState.days[d];
-
-                // Merge sabzi with timestamp
-                const incSabziT = Number(incD.sabziUpdatedAt || 0);
-                const locSabziT = Number(locD.sabziUpdatedAt || 0);
-                if (incSabziT > locSabziT) {
-                  locD.sabzi = (incD.sabzi || '').trim();
-                  locD.sabziUpdatedAt = incSabziT;
-                  modified = true;
-                }
-
-                // Merge meals
-                const incMeals = incD.meals || {};
-                const incTimes = incD.mealTimestamps || {};
-                if (!locD.mealTimestamps) locD.mealTimestamps = {};
-
-                Object.keys(incMeals).forEach(pId => {
-                  if (!locD.meals[pId]) locD.meals[pId] = { lunch: '', dinner: '' };
-                  ['lunch', 'dinner'].forEach(slot => {
-                    const key = `${pId}_${slot}`;
-                    const incT = Number(incTimes[key] || 0);
-                    const locT = Number(locD.mealTimestamps[key] || 0);
-                    if (incT > locT) {
-                      locD.meals[pId][slot] = incMeals[pId][slot] || '';
-                      locD.mealTimestamps[key] = incT;
-                      modified = true;
-                    }
-                  });
-                });
-
-                // Merge Amul milk
-                if (incD.amul) {
-                  if (!locD.amul) locD.amul = {};
-                  if (!locD.amulTimestamps) locD.amulTimestamps = {};
-                  const incAmulTimes = incD.amulTimestamps || {};
-                  Object.keys(incD.amul).forEach(pId => {
-                    const incT = Number(incAmulTimes[pId] || 0);
-                    const locT = Number(locD.amulTimestamps[pId] || 0);
-                    if (incT >= locT) {
-                      locD.amul[pId] = incD.amul[pId];
-                      if (incT) locD.amulTimestamps[pId] = incT;
-                      modified = true;
-                    }
-                  });
-                }
-              }
-            }
-          }
-
-          if (modified) {
-            if (typeof saveStateToStorage === 'function') {
-              saveStateToStorage(appState);
-            }
-            if (typeof renderAll === 'function') {
-              renderAll();
-            }
-          }
+          this.latestSnapshot = data;
+          this.notifySubscribers(data);
         }, (err) => {
           console.warn('[FirebaseSync] Listener error:', err);
         });
@@ -311,6 +208,14 @@
         }, { merge: true });
 
         console.log(`[FirebaseSync] Successfully joined room #${cleanCode} as ${finalMember.name}`);
+
+        // Queue real-time push notification to all flatmates in the room
+        this.sendRoomNotification({
+          title: 'Flatmate Joined! 🍱',
+          body: `${finalMember.name} joined room #${cleanCode}!`,
+          tag: `join-${finalMember.id || Date.now()}`,
+          data: { roomCode: cleanCode, memberName: finalMember.name, type: 'member_joined' }
+        });
 
         return {
           success: true,

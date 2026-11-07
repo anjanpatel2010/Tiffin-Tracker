@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.5.0';
+  const APP_VERSION = '5.6.0';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -1453,6 +1453,173 @@
       return id;
     }
   };
+
+  // ==========================================================================
+  // REAL-TIME FIREBASE CLOUD REALTIME ENGINE (Two-way Firestore synchronization)
+  // ==========================================================================
+  function handleCloudSyncUpdate(cloudData) {
+    if (!cloudData) return;
+    let modified = false;
+
+    // 1. Synchronize Room Data & Members
+    if (cloudData.roomData && typeof RoomManager !== 'undefined') {
+      const currentRoom = RoomManager.activeRoom || {};
+      const currentMembers = Array.isArray(currentRoom.members) ? currentRoom.members : [];
+      const cloudMembers = Array.isArray(cloudData.roomData.members) ? cloudData.roomData.members : [];
+
+      // Detect newly joined members who aren't currently in local memory
+      const newMembers = cloudMembers.filter(cm => {
+        return !RoomManager.findMatchingMember(currentMembers, cm);
+      });
+
+      // Combine local + cloud members and deduplicate
+      const combined = [...currentMembers, ...cloudMembers];
+      const deduplicated = RoomManager.deduplicateMembers(combined, cloudData.roomData.adminName || currentRoom.adminName);
+
+      // Guarantee local user session is preserved in member list
+      if (RoomManager.session && RoomManager.session.name) {
+        let matchedSessionMember = RoomManager.findMatchingMember(deduplicated, {
+          name: RoomManager.session.name,
+          phone: RoomManager.session.phone
+        });
+        if (!matchedSessionMember) {
+          matchedSessionMember = {
+            id: RoomManager.sanitizeId(RoomManager.session.name),
+            name: RoomManager.session.name,
+            phone: RoomManager.session.phone || '',
+            role: RoomManager.session.role || 'member',
+            avatarColor: '#00d4ff',
+            joinedAt: new Date().toISOString()
+          };
+          deduplicated.push(matchedSessionMember);
+        }
+        RoomManager.session.status = 'approved';
+        if (matchedSessionMember) {
+          RoomManager.session.role = matchedSessionMember.role || RoomManager.session.role || 'member';
+          RoomManager.session.name = matchedSessionMember.name;
+          if (matchedSessionMember.phone && !RoomManager.session.phone) {
+            RoomManager.session.phone = matchedSessionMember.phone;
+          }
+          localStorage.setItem('tiffin_user_session', JSON.stringify(RoomManager.session));
+        }
+      }
+
+      RoomManager.activeRoom = {
+        ...currentRoom,
+        ...cloudData.roomData,
+        members: deduplicated
+      };
+      RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
+      RoomManager.saveActiveRoom();
+      ROOMMATES = RoomManager.activeRoom.members;
+
+      // Ensure meal slots exist in appState for all roommates so renders never fail
+      if (appState && appState.days) {
+        for (let d = 1; d <= (CONFIG.daysInMonth || 31); d++) {
+          if (appState.days[d]) {
+            if (!appState.days[d].meals) appState.days[d].meals = {};
+            ROOMMATES.forEach(r => {
+              if (!appState.days[d].meals[r.id]) {
+                appState.days[d].meals[r.id] = { lunch: '', dinner: '' };
+              }
+            });
+          }
+        }
+      }
+
+      RoomManager.updateHeaderRoomUI();
+      RoomManager.renderSettingsMembersTab();
+      populateHeaderIdentityDropdown();
+      if (typeof updateIdentityUI === 'function') {
+        updateIdentityUI(RoomManager.session?.name || (typeof SyncEngine !== 'undefined' ? SyncEngine.identity : ''));
+      }
+
+      // Notify Admin / Room when new flatmates join
+      if (newMembers.length > 0) {
+        newMembers.forEach(nm => {
+          console.log(`[FirebaseSync] Detected new flatmate joined: ${nm.name}`);
+          playJoinAlertChime();
+          showToast(`${nm.name} joined the flat! 👥`, 'success', 3500);
+
+          if (RoomManager.isAdmin()) {
+            NotificationManager.send('Flatmate Joined! 🍱', {
+              body: `${nm.name} joined your flat room!`,
+              tag: `joined_${nm.id || nm.name}`,
+              localOnly: true
+            });
+          }
+        });
+      }
+
+      modified = true;
+    }
+
+    // 2. Synchronize Ledger State (Days, Meals, Sabzi, Amul)
+    if (cloudData.state && cloudData.state.days && appState && appState.days) {
+      const incomingDays = cloudData.state.days;
+      for (let d = 1; d <= (CONFIG.daysInMonth || 31); d++) {
+        if (incomingDays[d] && appState.days[d]) {
+          const incD = incomingDays[d];
+          const locD = appState.days[d];
+
+          // Merge sabzi with timestamp
+          const incSabziT = Number(incD.sabziUpdatedAt || 0);
+          const locSabziT = Number(locD.sabziUpdatedAt || 0);
+          if (incSabziT > locSabziT) {
+            locD.sabzi = (incD.sabzi || '').trim();
+            locD.sabziUpdatedAt = incSabziT;
+            modified = true;
+          }
+
+          // Merge meals with timestamp
+          const incMeals = incD.meals || {};
+          const incTimes = incD.mealTimestamps || {};
+          if (!locD.mealTimestamps) locD.mealTimestamps = {};
+
+          Object.keys(incMeals).forEach(pId => {
+            if (!locD.meals[pId]) locD.meals[pId] = { lunch: '', dinner: '' };
+            ['lunch', 'dinner'].forEach(slot => {
+              const key = `${pId}_${slot}`;
+              const incT = Number(incTimes[key] || 0);
+              const locT = Number(locD.mealTimestamps[key] || 0);
+              if (incT > locT) {
+                locD.meals[pId][slot] = incMeals[pId][slot] || '';
+                locD.mealTimestamps[key] = incT;
+                modified = true;
+              }
+            });
+          });
+
+          // Merge Amul milk
+          if (incD.amul) {
+            if (!locD.amul) locD.amul = {};
+            if (!locD.amulTimestamps) locD.amulTimestamps = {};
+            const incAmulTimes = incD.amulTimestamps || {};
+            Object.keys(incD.amul).forEach(pId => {
+              const incT = Number(incAmulTimes[pId] || 0);
+              const locT = Number(locD.amulTimestamps[pId] || 0);
+              if (incT >= locT) {
+                locD.amul[pId] = incD.amul[pId];
+                if (incT) locD.amulTimestamps[pId] = incT;
+                modified = true;
+              }
+            });
+          }
+        }
+      }
+    }
+
+    if (modified) {
+      saveStateToStorage(appState);
+      renderAll();
+    }
+  }
+
+  // Hook FirebaseSync listener into the app
+  if (window.FirebaseSync && typeof window.FirebaseSync.onRoomDataChange === 'function') {
+    window.FirebaseSync.onRoomDataChange(handleCloudSyncUpdate);
+  }
+  window.handleCloudSyncUpdate = handleCloudSyncUpdate;
 
   // --- Calculation Helpers ---
   function getRates() {
@@ -3704,6 +3871,9 @@
       SyncEngine.setRoomCode(codeKey);
       if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
         FirebaseSync.subscribeRoom(codeKey);
+        if (FirebaseSync.latestSnapshot) {
+          handleCloudSyncUpdate(FirebaseSync.latestSnapshot);
+        }
       }
 
       // Synchronize ROOMMATES
@@ -4472,7 +4642,7 @@
     triggerHaptic();
     const roomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || 'ROOM';
     const roomName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'our flat';
-    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.5.0.apk';
+    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.6.0.apk';
     const webUrl = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
 
     const message = `🏠 Join "${roomName}" on Tiffin Tracker!\n` +
