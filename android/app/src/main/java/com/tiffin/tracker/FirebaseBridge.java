@@ -10,18 +10,22 @@ import androidx.work.NetworkType;
 import androidx.work.OneTimeWorkRequest;
 import androidx.work.WorkManager;
 
+import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.crashlytics.FirebaseCrashlytics;
+import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.perf.FirebasePerformance;
 import com.google.firebase.perf.metrics.Trace;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * JavaScript Interface exposing Firebase SDKs to Tiffin Tracker:
  * - Firebase Crashlytics (Runtime crashes, non-fatal logs, custom keys)
  * - Firebase Performance Monitoring (Custom traces, network & screen timing)
  * - Firebase Remote Config (Cloud feature toggles & settings)
+ * - FCM Token Provider
  */
 public class FirebaseBridge {
     private static final String TAG = "FirebaseBridge";
@@ -186,6 +190,20 @@ public class FirebaseBridge {
             Log.d(TAG, "Dispatched immediate OneTimeWorkRequest for UpdateCheckWorker.");
         } catch (Exception e) {
             Log.e(TAG, "Failed to dispatch immediate update check: " + e.getMessage());
+        }
+    }
+
+    // =========================================================================
+    // 5. FCM REGISTRATION TOKEN PROVIDER
+    // =========================================================================
+
+    @JavascriptInterface
+    public String getFcmToken() {
+        try {
+            return Tasks.await(FirebaseMessaging.getInstance().getToken(), 3, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            Log.w(TAG, "Error fetching FCM token: " + e.getMessage());
+            return null;
         }
     }
 }
