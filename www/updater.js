@@ -268,39 +268,6 @@
         };
       }
 
-      // Test Alert button
-      const testAlertBtn = document.getElementById('testUpdateNotificationBtn');
-      if (testAlertBtn) {
-        testAlertBtn.onclick = () => {
-          if (window.FirebaseBridge && typeof window.FirebaseBridge.triggerImmediateUpdateCheck === 'function') {
-            window.FirebaseBridge.triggerImmediateUpdateCheck();
-            if (typeof window.showToast === 'function') {
-              window.showToast('🚀 Background update worker triggered! Check status bar & lockscreen.', 4000);
-            }
-          } else {
-            this.checkForUpdate(true);
-          }
-        };
-      }
-
-      // Test Crashlytics button
-      const testCrashBtn = document.getElementById('testCrashlyticsBtn');
-      if (testCrashBtn) {
-        testCrashBtn.onclick = () => {
-          if (window.FirebaseBridge && typeof window.FirebaseBridge.recordException === 'function') {
-            window.FirebaseBridge.log('User tapped Test Crashlytics button in Settings');
-            window.FirebaseBridge.recordException('Manual test event from Tiffin Tracker Settings at ' + new Date().toISOString());
-            if (typeof window.showToast === 'function') {
-              window.showToast('✅ Crashlytics test exception recorded! Check Firebase Console.', 4000);
-            }
-          } else {
-            if (typeof window.showToast === 'function') {
-              window.showToast('Firebase Crashlytics is active in the native Android app.', 3000);
-            }
-          }
-        };
-      }
-
       // Check if URL hash requested update dialog
       if (window.location.hash === '#open-update') {
         setTimeout(() => this.checkForUpdate(true), 500);

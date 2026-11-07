@@ -2613,44 +2613,6 @@
         NotificationManager.requestPermission(true);
       });
     }
-
-    const copyFcmTokenBtn = document.getElementById('copyFcmTokenBtn');
-    const fcmPreview = document.getElementById('fcmTokenPreviewText');
-    const updateFcmTokenPreview = () => {
-      let token = localStorage.getItem('tiffin_fcm_token');
-      if (!token && window.FirebaseBridge && typeof window.FirebaseBridge.getFcmToken === 'function') {
-        token = window.FirebaseBridge.getFcmToken();
-        if (token) localStorage.setItem('tiffin_fcm_token', token);
-      }
-      if (token && fcmPreview) {
-        fcmPreview.textContent = `Token: ${token.substring(0, 14)}...${token.substring(token.length - 8)}`;
-      }
-    };
-
-    if (copyFcmTokenBtn) {
-      updateFcmTokenPreview();
-      copyFcmTokenBtn.addEventListener('click', async () => {
-        triggerHaptic();
-        let token = localStorage.getItem('tiffin_fcm_token');
-        if (!token && window.FirebaseBridge && typeof window.FirebaseBridge.getFcmToken === 'function') {
-          token = window.FirebaseBridge.getFcmToken();
-          if (token) localStorage.setItem('tiffin_fcm_token', token);
-        }
-        if (token) {
-          copyToClipboard(token);
-          if (fcmPreview) {
-            fcmPreview.textContent = `Token: ${token.substring(0, 14)}...${token.substring(token.length - 8)}`;
-          }
-          showToast('FCM Device Token copied to clipboard!');
-        } else {
-          showToast('Generating FCM Token... Ensure notifications are enabled.');
-          if (window.NativeBridge) {
-            await window.NativeBridge.requestNotificationPermission();
-            setTimeout(updateFcmTokenPreview, 1500);
-          }
-        }
-      });
-    }
   }
 
   function setupDateControls() {
