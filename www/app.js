@@ -510,39 +510,12 @@
     },
 
     async sendWebPush(payload = {}) {
-      const activeRoom = (typeof SyncEngine !== 'undefined' && SyncEngine.roomCode) || 'default';
-      let mySub = this.currentSubscription;
-      if (!mySub) {
-        try {
-          mySub = JSON.parse(localStorage.getItem('tiffin_push_sub') || 'null');
-        } catch (e) {}
-      }
-
-      // Read peer subscriptions cached in localStorage
-      let cachedSubs = [];
-      try {
-        const stored = JSON.parse(localStorage.getItem('tiffin_room_push_subs') || '{}');
-        cachedSubs = Object.values(stored);
-      } catch (e) {}
-
-      const body = {
-        roomCode: activeRoom,
-        title: payload.title || 'Tiffin Tracker 🍲',
-        body: payload.body || 'New meal update from flatmates!',
-        tag: payload.tag || 'tiffin-alert',
-        url: payload.url || './#view-logger',
-        senderEndpoint: mySub ? mySub.endpoint : null,
-        additionalSubscriptions: cachedSubs
-      };
-
-      try {
-        await fetch('/api/send-push', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
+      if (window.FirebaseSync && typeof window.FirebaseSync.sendRoomNotification === 'function') {
+        window.FirebaseSync.sendRoomNotification({
+          title: payload.title || 'Tiffin Tracker',
+          body: payload.body || 'New update from flatmates',
+          tag: payload.tag || 'tiffin-alert'
         });
-      } catch (e) {
-        console.warn('[WebPush] send-push request failed:', e);
       }
     },
 
@@ -603,6 +576,17 @@
     },
 
     async send(title, options = {}) {
+      // 1. Broadcast FCM push to all other flatmates in this room via secure Firebase queue
+      if (window.FirebaseSync && typeof window.FirebaseSync.sendRoomNotification === 'function') {
+        window.FirebaseSync.sendRoomNotification({
+          title: title,
+          body: options.body || '',
+          tag: options.tag || 'tiffin-alert',
+          data: options.data || {}
+        });
+      }
+
+      // 2. Dispatch Local Notification if native
       if (window.NativeBridge && window.NativeBridge.isNative) {
         await window.NativeBridge.sendNotification(title, options.body || '', options.tag || 'tiffin-alert');
         return;

@@ -369,6 +369,40 @@
       } catch (err) {
         console.warn('[FirebaseSync] registerFcmToken error:', err);
       }
+    },
+
+    /**
+     * Enqueue a push notification in Firestore for this room.
+     * The secure backend (Firebase Cloud Function or server script) automatically
+     * reads this queue and delivers real FCM push notifications to all flatmates.
+     */
+    async sendRoomNotification({ title, body, tag = 'tiffin-alert', data = {} }) {
+      if (!this.isAvailable || !db) return false;
+      const roomCode = this.getCleanRoom();
+      const myId = (typeof RoomManager !== 'undefined' && RoomManager.session?.name)
+        ? RoomManager.sanitizeId(RoomManager.session.name)
+        : 'member';
+      const myName = (typeof RoomManager !== 'undefined' && RoomManager.session?.name)
+        ? RoomManager.session.name
+        : 'Flatmate';
+
+      try {
+        await db.collection('rooms').doc(roomCode).collection('notifications').add({
+          title: title || 'Tiffin Tracker',
+          body: body || 'New update in your flat mess',
+          tag: tag,
+          senderId: myId,
+          senderName: myName,
+          data: data,
+          dispatched: false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        console.log(`[FirebaseSync] Enqueued notification for room #${roomCode}: "${title}"`);
+        return true;
+      } catch (err) {
+        console.warn('[FirebaseSync] sendRoomNotification error:', err);
+        return false;
+      }
     }
   };
 
