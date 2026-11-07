@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.4.0';
+  const APP_VERSION = '5.5.0';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -561,9 +561,10 @@
           if (showFeedback) showToast('Phone alerts enabled! Sending test notification...');
           await this.send('Alerts Active', {
             body: 'You will receive phone alerts for mess expenses and updates.',
-            tag: 'tiffin-welcome'
+            tag: 'tiffin-welcome',
+            localOnly: true
           });
-          // Register native Web Push subscription on Vercel backend
+          // Register native Web Push subscription on backend
           await this.subscribeWebPush();
           return true;
         } else if (result === 'denied' && showFeedback) {
@@ -577,7 +578,7 @@
 
     async send(title, options = {}) {
       // 1. Broadcast FCM push to all other flatmates in this room via secure Firebase queue
-      if (window.FirebaseSync && typeof window.FirebaseSync.sendRoomNotification === 'function') {
+      if (!options.localOnly && options.broadcast !== false && window.FirebaseSync && typeof window.FirebaseSync.sendRoomNotification === 'function') {
         window.FirebaseSync.sendRoomNotification({
           title: title,
           body: options.body || '',
@@ -1660,6 +1661,49 @@
     updateIdentityUI(RoomManager.session?.name || (typeof SyncEngine !== 'undefined' ? SyncEngine.identity : ''));
   }
 
+  // ---------------------------------------------------------------------------
+  // Push Notification Queuing (FCM Backend via Firebase Firestore Queue)
+  // ---------------------------------------------------------------------------
+  let mealNotifyTimer = null;
+  let pendingMealUpdates = [];
+
+  function queueMealPushNotification(person, slot, val, day) {
+    if (typeof FirebaseSync === 'undefined' || !FirebaseSync.isAvailable) return;
+    const author = (typeof SyncEngine !== 'undefined' && SyncEngine.identity) ? SyncEngine.identity : 'Flatmate';
+    pendingMealUpdates.push({ person, slot, val, day });
+
+    if (mealNotifyTimer) clearTimeout(mealNotifyTimer);
+    mealNotifyTimer = setTimeout(() => {
+      if (pendingMealUpdates.length === 0) return;
+      const updates = [...pendingMealUpdates];
+      pendingMealUpdates = [];
+
+      const summary = updates.map(u => `${capitalize(u.person)} ${u.slot}: ${u.val || 'Off'}`).join(', ');
+      FirebaseSync.sendRoomNotification({
+        title: 'Meal Updated 🍱',
+        body: `${capitalize(author)} updated: ${summary}`,
+        tag: 'tiffin-meal-update'
+      });
+    }, 3500);
+  }
+
+  let sabziNotifyTimer = null;
+  function queueSabziPushNotification(sabzi, day) {
+    if (typeof FirebaseSync === 'undefined' || !FirebaseSync.isAvailable) return;
+    const author = (typeof SyncEngine !== 'undefined' && SyncEngine.identity) ? SyncEngine.identity : 'Flatmate';
+    if (sabziNotifyTimer) clearTimeout(sabziNotifyTimer);
+    sabziNotifyTimer = setTimeout(() => {
+      const dish = (sabzi || '').trim();
+      if (dish) {
+        FirebaseSync.sendRoomNotification({
+          title: 'Dish Updated 🍲',
+          body: `${capitalize(author)} set Day ${day} dish: "${dish}"`,
+          tag: 'tiffin-sabzi'
+        });
+      }
+    }, 3000);
+  }
+
   // 1. Daily Logger Render
   function renderDailyLogger() {
     const dayData = appState.days[selectedDay];
@@ -1834,6 +1878,7 @@
         appState.days[selectedDay].meals[person][slot] = val;
 
         logActivity(SyncEngine.identity, 'Logged Meal', `${capitalize(person)} ${slot}: ${val || 'Off'}`);
+        queueMealPushNotification(person, slot, val, selectedDay);
         persistAndBroadcast({
           type: 'meal_update',
           year: currentYear,
@@ -2699,6 +2744,7 @@
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           logActivity(SyncEngine.identity, 'Sabzi Update', `Day ${selectedDay} dish set to "${e.target.value}"`);
+          queueSabziPushNotification(e.target.value, selectedDay);
           SyncEngine.broadcast({
             type: 'sabzi_update',
             year: currentYear,
@@ -4426,7 +4472,7 @@
     triggerHaptic();
     const roomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || 'ROOM';
     const roomName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'our flat';
-    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.4.0.apk';
+    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.5.0.apk';
     const webUrl = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
 
     const message = `🏠 Join "${roomName}" on Tiffin Tracker!\n` +

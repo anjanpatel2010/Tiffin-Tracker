@@ -1,6 +1,6 @@
 {
   "name": "tiffin-tracker",
-  "version": "5.4.0",
+  "version": "5.5.0",
   "description": "Tiffin Tracker PWA with native real-time cloud sync and Web Push notifications",
   "main": "www/index.html",
   "scripts": {
@@ -24,6 +24,7 @@
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.4",
     "firebase": "^13.2.0",
+    "firebase-admin": "^14.5.0",
     "sharp": "^0.35.5",
     "web-push": "^3.6.7"
   },

@@ -1,12 +1,12 @@
 {
-  "version": "5.4.0",
-  "versionCode": 50400,
+  "version": "5.5.0",
+  "versionCode": 50500,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-07",
-  "message": "Tiffin Tracker v5.4.0 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.4.0.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.4.0.apk",
+  "message": "Tiffin Tracker v5.5.0 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.5.0.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.5.0.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
     "Secure Firebase Cloud Messaging backend with lockscreen alerts",
@@ -15,6 +15,17 @@
     "Automated fail-safe version tracking across all devices"
   ],
   "history": [
+    {
+      "version": "5.4.0",
+      "versionCode": 50400,
+      "releaseDate": "2026-11-07",
+      "releaseNotes": [
+        "Secure Firebase Cloud Messaging backend with lockscreen alerts",
+        "Human-crafted UI design: clean emerald & deep slate theme",
+        "Instant update routing directly to in-app installation modal",
+        "Automated fail-safe version tracking across all devices"
+      ]
+    },
     {
       "version": "5.3.8",
       "versionCode": 50308,

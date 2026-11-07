@@ -359,7 +359,15 @@
         : 'member';
 
       try {
-        const updatePayload = {};
+        const updatePayload = {
+          fcmTokens: {
+            [myId]: {
+              token: token,
+              updatedAt: Date.now()
+            }
+          }
+        };
+        // Also support flattened key for direct queries
         updatePayload[`fcmTokens.${myId}`] = {
           token: token,
           updatedAt: Date.now()

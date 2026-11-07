@@ -4,6 +4,41 @@ const admin = require('firebase-admin');
 admin.initializeApp();
 
 /**
+ * Extracts recipient FCM device tokens from room document data.
+ * Supports both nested fcmTokens map and top-level fcmTokens.<member> dotted keys.
+ */
+function extractTokens(roomData, senderId = '') {
+  const result = [];
+
+  // 1. Nested map: roomData.fcmTokens
+  if (roomData.fcmTokens && typeof roomData.fcmTokens === 'object') {
+    for (const [key, val] of Object.entries(roomData.fcmTokens)) {
+      if (key && senderId && key.toLowerCase() === senderId.toLowerCase()) continue;
+      const t = typeof val === 'string' ? val : val?.token;
+      if (t && typeof t === 'string' && t.trim().length > 10) {
+        result.push({ token: t.trim(), key: `fcmTokens.${key}` });
+      }
+    }
+  }
+
+  // 2. Dotted top-level keys: roomData['fcmTokens.member']
+  for (const [key, val] of Object.entries(roomData)) {
+    if (key.startsWith('fcmTokens.')) {
+      const memberKey = key.slice('fcmTokens.'.length);
+      if (memberKey && senderId && memberKey.toLowerCase() === senderId.toLowerCase()) continue;
+      const t = typeof val === 'string' ? val : val?.token;
+      if (t && typeof t === 'string' && t.trim().length > 10) {
+        if (!result.some(r => r.token === t.trim())) {
+          result.push({ token: t.trim(), key });
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
  * Cloud Function: sendPushNotificationOnEvent
  * 
  * Triggers automatically whenever a client app creates a notification doc:
@@ -36,30 +71,17 @@ exports.sendPushNotificationOnEvent = functions.firestore
       }
 
       const roomData = roomDoc.data() || {};
-      const fcmTokensMap = roomData.fcmTokens || {};
+      const tokenEntries = extractTokens(roomData, senderId);
 
-      // 2. Filter tokens: only send to other flatmates (exclude sender)
-      const targetTokens = [];
-      const tokenKeys = [];
-
-      for (const [memberKey, tokenEntry] of Object.entries(fcmTokensMap)) {
-        if (memberKey === senderId) continue; // Skip sender
-
-        const token = typeof tokenEntry === 'string' ? tokenEntry : tokenEntry?.token;
-        if (token && typeof token === 'string' && token.trim().length > 0) {
-          targetTokens.push(token.trim());
-          tokenKeys.push(memberKey);
-        }
-      }
-
-      if (targetTokens.length === 0) {
-        console.log(`[FCM] No recipient tokens found in room #${roomCode} (excluding sender: ${senderId}).`);
+      if (tokenEntries.length === 0) {
+        console.log(`[FCM] No recipient tokens found in room #${roomCode} (excluding sender: "${senderId || 'none'}").`);
         return null;
       }
 
+      const targetTokens = tokenEntries.map(e => e.token);
       console.log(`[FCM] Sending push notification to ${targetTokens.length} flatmates in room #${roomCode}...`);
 
-      // 3. Construct the FCM Multicast Message
+      // 2. Construct the FCM Multicast Message
       const message = {
         tokens: targetTokens,
         notification: {
@@ -69,7 +91,7 @@ exports.sendPushNotificationOnEvent = functions.firestore
         data: {
           title: title,
           body: body,
-          roomCode: roomCode,
+          roomCode: String(roomCode),
           senderId: senderId,
           ...Object.fromEntries(
             Object.entries(customData).map(([k, v]) => [k, String(v)])
@@ -86,21 +108,21 @@ exports.sendPushNotificationOnEvent = functions.firestore
         }
       };
 
-      // 4. Send using modern Firebase Admin SDK Multicast API
+      // 3. Send using modern Firebase Admin SDK Multicast API
       const response = await admin.messaging().sendEachForMulticast(message);
       console.log(`[FCM] Successfully delivered ${response.successCount}/${targetTokens.length} messages.`);
 
-      // 5. Clean up expired / invalid tokens from Firestore automatically
+      // 4. Clean up expired / invalid tokens from Firestore automatically
       const tokensToRemove = {};
       response.responses.forEach((result, idx) => {
         if (!result.success) {
           const errCode = result.error ? result.error.code : '';
-          console.warn(`[FCM] Delivery failed for ${tokenKeys[idx]}:`, errCode);
+          console.warn(`[FCM] Delivery failed for ${tokenEntries[idx].key}:`, errCode);
           if (
             errCode === 'messaging/invalid-registration-token' ||
             errCode === 'messaging/registration-token-not-registered'
           ) {
-            tokensToRemove[`fcmTokens.${tokenKeys[idx]}`] = admin.firestore.FieldValue.delete();
+            tokensToRemove[tokenEntries[idx].key] = admin.firestore.FieldValue.delete();
           }
         }
       });
@@ -110,7 +132,7 @@ exports.sendPushNotificationOnEvent = functions.firestore
         console.log(`[FCM] Cleaned up ${Object.keys(tokensToRemove).length} invalid tokens.`);
       }
 
-      // Mark notification as dispatched
+      // 5. Mark notification as dispatched
       await snap.ref.update({
         dispatched: true,
         dispatchedAt: admin.firestore.FieldValue.serverTimestamp(),
