@@ -287,6 +287,31 @@ body {
 }
 
 /* Header User Identity Dropdown (Adjacent to Settings) */
+/* Header User Identity Profile Badge */
+.header-user-profile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 3px 10px 3px 6px;
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  max-width: 135px;
+  overflow: hidden;
+  flex-shrink: 1;
+}
+
+.header-user-name {
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .header-user-select-wrap {
   display: inline-flex;
   align-items: center;
@@ -3482,7 +3507,32 @@ body {
     flex-shrink: 0;
     align-items: center;
   }
-  .header-user-select-wrap {
+  /* Header User Identity Profile Badge */
+.header-user-profile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 3px 10px 3px 6px;
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  max-width: 135px;
+  overflow: hidden;
+  flex-shrink: 1;
+}
+
+.header-user-name {
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-user-select-wrap {
     padding: 2px 6px 2px 6px !important;
     font-size: 0.76rem !important;
     max-width: 105px !important;

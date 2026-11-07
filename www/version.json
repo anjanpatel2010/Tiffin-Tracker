@@ -1,17 +1,18 @@
 {
-  "version": "5.3.5",
-  "versionCode": 50305,
+  "version": "5.3.6",
+  "versionCode": 50306,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
-  "releaseDate": "2026-11-04",
-  "message": "Critical startup fix & lightning-fast 4-tab mess ledger!",
-  "apkFilename": "Tiffin-Tracker-v5.3.5-release.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.3.5-release.apk",
+  "releaseDate": "2026-11-07",
+  "message": "Simple 4-digit room numbers, real-time member visibility & locked device profiles!",
+  "apkFilename": "Tiffin-Tracker-v5.3.6-release.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.3.6-release.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
-    "Fixed startup freeze / intro loop issue with resilient auto-dismiss fallback",
-    "Restored date controls, sabzi input handlers, and fast day resets",
-    "Clean 4-tab streamlined navigation: Logger, Sheet, Split, and Amul",
+    "Simple 4-digit room numbers (e.g. 4821) for instant flat sharing",
+    "Instant real-time visibility: newly joined roommates appear immediately on all screens",
+    "Profiles are locked to each device so members cannot change or impersonate profiles",
+    "Seamless cloud ledger adoption when joining a room",
     "Morphe-style 1-tap in-app APK updater"
   ]
 }

@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.3.5';
+  const APP_VERSION = '5.3.6';
 
   function checkAndMigrateAppVersion() {
     try {
@@ -314,9 +314,11 @@
       const roomKey = (actionPayload?.roomCode || getActiveRoomCode() || '').toString().toUpperCase();
       if (!roomKey) return;
       if (actionPayload) {
-        if (actionPayload.type === 'room_meta_sync') {
-          FirebaseSync.saveRoomData(roomKey, actionPayload.roomData);
-          FirebaseSync.saveLedgerState(roomKey, actionPayload.state);
+        if (actionPayload.type === 'room_meta_sync' || actionPayload.type === 'member_added' || actionPayload.type === 'member_removed' || actionPayload.type === 'member_joined') {
+          if (typeof RoomManager !== 'undefined' && RoomManager.activeRoom) {
+            FirebaseSync.saveRoomData(roomKey, RoomManager.activeRoom);
+          }
+          FirebaseSync.saveLedgerState(roomKey, actionPayload.state || appState);
         } else {
           FirebaseSync.saveLedgerState(roomKey, appState);
         }
@@ -1591,84 +1593,64 @@
   // --- Rendering UI Modules ---
 
   function updateIdentityUI(name) {
-    const headerSelect = document.getElementById('headerUserIdentitySelect');
-    const settingsSelect = document.getElementById('settingsIdentitySelect');
-    const onboardingSelect = document.getElementById('onboardingNameSelect');
-    const myVoteLabel = document.getElementById('myVoteIdentityLabel');
+    const activeName = name || RoomManager.session?.name || (typeof SyncEngine !== 'undefined' ? SyncEngine.identity : '') || 'You';
+    const cleanFirst = getFirstName(activeName);
 
-    const displayName = name || 'You';
-
-    if (headerSelect && headerSelect.value !== displayName) {
-      headerSelect.value = displayName;
+    const userNameEl = document.getElementById('headerUserNameText');
+    if (userNameEl) {
+      userNameEl.textContent = cleanFirst;
     }
-    if (settingsSelect) settingsSelect.value = displayName;
-    if (onboardingSelect) onboardingSelect.value = displayName;
-    if (myVoteLabel) myVoteLabel.textContent = getFirstName(displayName);
-    updateHeaderUserAvatarDot();
+
+    const currentMember = (ROOMMATES || []).find(r => (r.name || '').toLowerCase() === activeName.toLowerCase() || getFirstName(r.name || '').toLowerCase() === cleanFirst.toLowerCase());
+    const isCurAdmin = currentMember?.role === 'admin' || (typeof RoomManager !== 'undefined' && RoomManager.isAdmin());
+
+    const avatarSvg = getCartoonAvatarSvg(currentMember?.id || activeName, 22);
+
+    const dot = document.querySelector('.user-avatar-dot');
+    if (dot) {
+      dot.innerHTML = avatarSvg;
+      if (isCurAdmin) {
+        dot.classList.add('is-admin');
+      } else {
+        dot.classList.remove('is-admin');
+      }
+    }
+
+    const settingsAvatarDot = document.getElementById('settingsProfileAvatarDot');
+    if (settingsAvatarDot) {
+      settingsAvatarDot.innerHTML = getCartoonAvatarSvg(currentMember?.id || activeName, 36);
+    }
+
+    const settingsProfileName = document.getElementById('settingsLockedProfileName');
+    if (settingsProfileName) {
+      settingsProfileName.textContent = activeName;
+    }
+
+    const settingsProfileRole = document.getElementById('settingsLockedProfileRole');
+    if (settingsProfileRole) {
+      settingsProfileRole.textContent = isCurAdmin ? 'Flat Admin 👑' : 'Flatmate (Member)';
+    }
   }
 
   function updateHeaderUserAvatarDot() {
-    const dot = document.querySelector('.user-avatar-dot');
-    if (!dot) return;
-    const currentName = (SyncEngine.identity || '').toLowerCase().trim();
-    const currentMember = ROOMMATES.find(r => r.name.toLowerCase() === currentName || getFirstName(r.name).toLowerCase() === currentName);
-    const isCurAdmin = currentMember?.role === 'admin' || (RoomManager.isAdmin() && (!currentName || currentName === (RoomManager.session?.name || '').toLowerCase().trim()));
-    if (isCurAdmin) {
-      dot.classList.add('is-admin');
-      dot.innerHTML = '👑';
-    } else {
-      dot.classList.remove('is-admin');
-      dot.innerHTML = currentMember ? getCartoonAvatarSvg(currentMember.id || currentMember.name, 22) : '';
-    }
+    updateIdentityUI(RoomManager.session?.name || (typeof SyncEngine !== 'undefined' ? SyncEngine.identity : ''));
   }
 
   function populateHeaderIdentityDropdown() {
-    const select = document.getElementById('headerUserIdentitySelect');
-    if (!select) return;
-
-    const currentVal = SyncEngine.identity || (ROOMMATES[0] ? ROOMMATES[0].name : '');
-    select.innerHTML = '';
-
-    ROOMMATES.forEach(r => {
-      const opt = document.createElement('option');
-      opt.value = r.name;
-      const fName = getFirstName(r.name);
-      opt.textContent = fName;
-      select.appendChild(opt);
-    });
-
-    if (RoomManager.isAdmin()) {
-      const addOpt = document.createElement('option');
-      addOpt.value = '__add_member__';
-      addOpt.textContent = '+ Add Member';
-      select.appendChild(addOpt);
-    }
-
-    if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
-      select.value = currentVal;
-    } else if (ROOMMATES[0]) {
-      select.value = ROOMMATES[0].name;
-    }
-
-    updateHeaderUserAvatarDot();
+    updateIdentityUI(RoomManager.session?.name || (typeof SyncEngine !== 'undefined' ? SyncEngine.identity : ''));
   }
 
   function handleAddNewMember() {
     if (!RoomManager.isAdmin()) {
       showToast('Only Flat Admin can add members.', 'warning');
-      populateHeaderIdentityDropdown();
       return;
     }
     const raw = prompt('Enter new flatmate / roommate name:');
-    if (!raw || !raw.trim()) {
-      populateHeaderIdentityDropdown();
-      return;
-    }
+    if (!raw || !raw.trim()) return;
     const cleanName = raw.trim();
     const existing = ROOMMATES.find(r => r.name.toLowerCase() === cleanName.toLowerCase() || getFirstName(r.name).toLowerCase() === getFirstName(cleanName).toLowerCase());
     if (existing) {
-      SyncEngine.setIdentity(existing.name);
-      populateHeaderIdentityDropdown();
+      showToast(`${cleanName} is already a member of this flat.`);
       return;
     }
 
@@ -1676,20 +1658,7 @@
   }
 
   function setupHeaderIdentityControls() {
-    const select = document.getElementById('headerUserIdentitySelect');
-    if (!select) return;
-
-    populateHeaderIdentityDropdown();
-
-    select.addEventListener('change', (e) => {
-      triggerHaptic();
-      if (e.target.value === '__add_member__') {
-        handleAddNewMember();
-      } else {
-        SyncEngine.setIdentity(e.target.value);
-        updateHeaderUserAvatarDot();
-      }
-    });
+    updateIdentityUI(RoomManager.session?.name || (typeof SyncEngine !== 'undefined' ? SyncEngine.identity : ''));
   }
 
   // 1. Daily Logger Render
@@ -1725,9 +1694,9 @@
     const dayCost = getDayTotalCost(selectedDay);
     let dayMealsCount = 0;
     ROOMMATES.forEach(r => {
-      const m = dayData.meals[r.id];
-      if (m.lunch) dayMealsCount++;
-      if (m.dinner) dayMealsCount++;
+      const m = dayData.meals?.[r.id];
+      if (m?.lunch) dayMealsCount++;
+      if (m?.dinner) dayMealsCount++;
     });
 
     if (daySummary) {
@@ -3247,17 +3216,6 @@
       });
     }
 
-    // Switch Identity from Settings
-    const settingsIdentitySelect = document.getElementById('settingsIdentitySelect');
-    if (settingsIdentitySelect) {
-      settingsIdentitySelect.addEventListener('change', (e) => {
-        triggerHaptic();
-        SyncEngine.setIdentity(e.target.value);
-        showToast(`You are now logging as ${e.target.value}`);
-      });
-    }
-
-
     // Clear Audit Log
     const clearAuditLogBtn = document.getElementById('clearAuditLogBtn');
     if (clearAuditLogBtn) {
@@ -3746,12 +3704,12 @@
       } catch (e) {}
     },
 
-    createRoom(adminName, adminPhone, groupName, adminPin) {
-      const codeSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const roomCode = `TF-${codeSuffix}`;
-      const cleanName = adminName.trim();
-      const cleanPhone = adminPhone.trim();
-      const cleanGroup = groupName.trim() || 'My Flat';
+    async createRoom(adminName, adminPhone, groupName, adminPin) {
+      // Simple, easy-to-remember 4-digit room code like 4821
+      const roomCode = String(Math.floor(1000 + Math.random() * 9000));
+      const cleanName = (adminName || 'Admin').trim();
+      const cleanPhone = (adminPhone || '').trim();
+      const cleanGroup = (groupName || 'My Flat').trim();
       const cleanPin = (adminPin || '').trim();
 
       const adminMember = {
@@ -3759,7 +3717,8 @@
         name: cleanName,
         phone: cleanPhone,
         role: 'admin',
-        avatarColor: '#00d26a'
+        avatarColor: '#00d26a',
+        joinedAt: new Date().toISOString()
       };
 
       this.activeRoom = {
@@ -3790,25 +3749,20 @@
       ROOMMATES = [adminMember];
       CONFIG.adminPassword = cleanPin;
 
-      SyncEngine.setRoomCode(roomCode);
-      SyncEngine.setIdentity(cleanName);
-
-      this.hideGateModal();
-      this.updateHeaderRoomUI();
-      this.updatePendingBadges();
-      this.renderSettingsMembersTab();
-      populateHeaderIdentityDropdown();
-
       // Refresh default month data
       appState = getDefaultDataForMonth(currentYear, currentMonth);
       saveStateToStorage(appState);
-      renderAll();
 
-      // Immediately persist to Firebase Cloud and broadcast full room metadata so new members can sync instantly
+      // Persist to Firebase Cloud immediately so anyone joining can find it
       if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
-        FirebaseSync.saveRoomData(roomCode, this.activeRoom);
-        FirebaseSync.saveLedgerState(roomCode, appState);
+        await FirebaseSync.saveRoomData(roomCode, this.activeRoom);
+        await FirebaseSync.saveLedgerState(roomCode, appState);
+        FirebaseSync.subscribeRoom(roomCode);
       }
+
+      SyncEngine.setRoomCode(roomCode);
+      SyncEngine.setIdentity(cleanName);
+
       SyncEngine.broadcast({
         type: 'room_meta_sync',
         roomCode: roomCode,
@@ -3816,220 +3770,144 @@
         state: getCompactSyncState(appState)
       });
 
+      this.hideGateModal();
+      this.updateHeaderRoomUI();
+      this.updatePendingBadges();
+      this.renderSettingsMembersTab();
+      updateIdentityUI(cleanName);
+
+      renderAll();
+
       showToast(`Group "${cleanGroup}" created! Room Code: ${roomCode}`);
       setTimeout(() => showStartupWelcomePrompt(), 500);
     },
 
-    enterRoom(roomCode, phone, pin, name, isDirectSync = false) {
+    async enterRoom(roomCode, phone, pin, name, isDirectSync = false) {
       const cleanCode = (roomCode || '').toUpperCase().trim();
       const cleanPhone = (phone || '').trim();
       const cleanPin = (pin || '').trim();
       const cleanName = (name || '').trim();
 
       if (!cleanCode) {
-        alert('Please enter a valid Room Code.');
+        showToast('Please enter a 4-digit Room Code.', 'warning');
+        return false;
+      }
+      if (!cleanName && !cleanPin) {
+        showToast('Please enter your name.', 'warning');
         return false;
       }
 
-      let targetRoom = null;
-      try {
-        const raw = localStorage.getItem(`tiffin_room_${cleanCode}`);
-        if (raw) targetRoom = JSON.parse(raw);
-      } catch (e) {}
+      const submitBtn = document.getElementById('gateJoinSubmitBtn');
+      const submitText = document.getElementById('gateJoinSubmitText');
+      if (submitBtn) submitBtn.disabled = true;
+      if (submitText) submitText.textContent = 'Connecting...';
 
-      // Case 1: Entering with Admin Security PIN (Multi-device Admin login, e.g. Phone to PC)
-      if (cleanPin) {
-        if (targetRoom && targetRoom.adminPin && targetRoom.adminPin !== cleanPin) {
-          alert('Incorrect Admin Security PIN for this room.');
+      try {
+        const avatarColors = ['#00d4ff', '#a78bfa', '#ff3b5c', '#ffb800', '#10b981', '#38bdf8', '#f43f5e', '#ec4899'];
+        const newMemberCandidate = {
+          id: this.sanitizeId(cleanName || 'Admin'),
+          name: cleanName || 'Admin',
+          phone: cleanPhone || '',
+          role: cleanPin ? 'admin' : 'member',
+          avatarColor: avatarColors[Math.floor(Math.random() * avatarColors.length)],
+          joinedAt: new Date().toISOString()
+        };
+
+        let result = null;
+        if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
+          result = await FirebaseSync.joinRoom(cleanCode, newMemberCandidate, cleanPin);
+        }
+
+        if (result && !result.success) {
+          alert(result.error || `Room #${cleanCode} was not found. Please verify the 4-digit code.`);
           return false;
         }
 
-        const adminName = cleanName || targetRoom?.adminName || 'Admin';
-        const adminPhone = cleanPhone || targetRoom?.adminPhone || '';
+        let targetRoom = result?.roomData;
+        let serverState = result?.state;
+
+        if (!targetRoom) {
+          try {
+            const raw = localStorage.getItem(`tiffin_room_${cleanCode}`);
+            if (raw) targetRoom = JSON.parse(raw);
+          } catch (e) {}
+        }
+
+        if (!targetRoom) {
+          alert(`Room #${cleanCode} was not found. Please verify the 4-digit room code.`);
+          return false;
+        }
+
+        const actualRole = cleanPin ? 'admin' : (result?.member?.role || 'member');
+        const actualName = cleanName || result?.member?.name || targetRoom.adminName || 'Admin';
 
         this.session = {
-          name: adminName,
-          phone: adminPhone,
-          role: 'admin',
-          groupName: targetRoom?.name || 'My Flat',
+          name: actualName,
+          phone: cleanPhone || result?.member?.phone || '',
+          role: actualRole,
+          groupName: targetRoom.name || 'My Flat',
           roomCode: cleanCode,
           status: 'approved'
         };
         localStorage.setItem('tiffin_user_session', JSON.stringify(this.session));
 
-        CONFIG.adminPassword = cleanPin;
-        if (!targetRoom) {
-          targetRoom = {
-            code: cleanCode,
-            name: 'My Flat',
-            adminName: adminName,
-            adminPhone: adminPhone,
-            adminPin: cleanPin,
-            createdAt: new Date().toISOString(),
-            members: [{ id: this.sanitizeId(adminName), name: adminName, phone: adminPhone, role: 'admin', avatarColor: '#00d26a' }],
-            pendingRequests: []
-          };
-        } else {
-          targetRoom.adminPin = cleanPin;
-          if (adminName && adminName.toLowerCase() !== 'admin') {
-            targetRoom.adminName = adminName;
-          }
-        }
-
         this.activeRoom = targetRoom;
         this.cleanupAdminDuplicates(this.activeRoom);
         this.saveActiveRoom();
-        this.loadRoom(cleanCode);
-        this.hideGateModal();
+
+        ROOMMATES = this.activeRoom.members || [];
+
+        // Adopt existing ledger state from server so user immediately has all logged meals & sabzi
+        if (serverState && serverState.days) {
+          saveStateForMonth(currentYear, currentMonth, serverState);
+          appState = serverState;
+        } else {
+          appState = loadStateForMonth(currentYear, currentMonth);
+        }
+
+        // Initialize meal slots in appState for all roommates
+        if (appState && appState.days) {
+          for (let d = 1; d <= (CONFIG.daysInMonth || 31); d++) {
+            if (appState.days[d]) {
+              if (!appState.days[d].meals) appState.days[d].meals = {};
+              ROOMMATES.forEach(r => {
+                if (!appState.days[d].meals[r.id]) {
+                  appState.days[d].meals[r.id] = { lunch: '', dinner: '' };
+                }
+              });
+            }
+          }
+          saveStateToStorage(appState);
+        }
+
         if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
           FirebaseSync.subscribeRoom(cleanCode);
-          FirebaseSync.saveRoomData(cleanCode, this.activeRoom);
         }
+        SyncEngine.setRoomCode(cleanCode);
+        SyncEngine.setIdentity(actualName);
 
-        persistAndBroadcast({
-          type: 'request_room_sync',
+        // Broadcast to flatmates
+        SyncEngine.broadcast({
+          type: 'member_joined',
           roomCode: cleanCode,
-          requesterName: adminName,
-          requesterPhone: adminPhone
+          member: result?.member || newMemberCandidate
         });
 
-        showToast(isDirectSync ? `Synced and connected to room #${cleanCode}!` : `Logged into room #${cleanCode} as Admin!`);
+        this.hideGateModal();
+        this.updateHeaderRoomUI();
+        this.updatePendingBadges();
+        this.renderSettingsMembersTab();
+        updateIdentityUI(actualName);
+
         renderAll();
+
+        showToast(`🎉 Connected to "${targetRoom.name}" (Room #${cleanCode})!`);
         setTimeout(() => showStartupWelcomePrompt(), 500);
         return true;
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+        if (submitText) submitText.textContent = 'Join Flat';
       }
-
-      // Case 2: Roommate entering with mobile / name
-      if (targetRoom && targetRoom.members && targetRoom.members.length > 0) {
-        const matchedMember = this.findMatchingMember(targetRoom.members, { name: cleanName, phone: cleanPhone });
-
-        if (matchedMember) {
-          this.session = {
-            name: matchedMember.name,
-            phone: matchedMember.phone || cleanPhone,
-            role: matchedMember.role || 'member',
-            groupName: targetRoom.name || 'My Flat',
-            roomCode: cleanCode,
-            status: 'approved'
-          };
-          localStorage.setItem('tiffin_user_session', JSON.stringify(this.session));
-          this.loadRoom(cleanCode);
-          this.hideGateModal();
-
-          persistAndBroadcast({
-            type: 'request_room_sync',
-            roomCode: cleanCode,
-            requesterName: matchedMember.name,
-            requesterPhone: matchedMember.phone
-          });
-
-          showToast(`Welcome back, ${getFirstName(matchedMember.name)}!`);
-          renderAll();
-          setTimeout(() => showStartupWelcomePrompt(), 500);
-          return true;
-        }
-      }
-
-      // Case 3: Flatmate instant join with Room Code & Name (No waiting / No roadblocks)
-      if (!cleanName) {
-        alert('Please enter your name to join this flat, or enter Admin PIN if you manage this room.');
-        return false;
-      }
-
-      const avatarColors = ['#00d4ff', '#a78bfa', '#ff3b5c', '#ffb800', '#10b981', '#38bdf8', '#f43f5e', '#ec4899'];
-      let memberIndex = targetRoom?.members?.length || 0;
-      let baseId = this.sanitizeId(cleanName);
-      let memberId = baseId;
-
-      const newMember = {
-        id: memberId,
-        name: cleanName,
-        phone: cleanPhone || '',
-        role: 'member',
-        avatarColor: avatarColors[memberIndex % avatarColors.length],
-        joinedAt: new Date().toISOString()
-      };
-
-      if (!targetRoom) {
-        targetRoom = {
-          code: cleanCode,
-          name: 'My Flat',
-          adminName: 'Admin',
-          adminPhone: '',
-          adminPin: '',
-          createdAt: new Date().toISOString(),
-          members: [newMember],
-          pendingRequests: []
-        };
-      } else {
-        if (!targetRoom.members) targetRoom.members = [];
-        const exists = this.findMatchingMember(targetRoom.members, newMember);
-        if (!exists) {
-          targetRoom.members.push(newMember);
-        }
-      }
-
-      this.activeRoom = targetRoom;
-      this.cleanupAdminDuplicates(this.activeRoom);
-      this.saveActiveRoom();
-
-      this.session = {
-        name: cleanName,
-        phone: cleanPhone,
-        role: 'member',
-        groupName: targetRoom.name || 'My Flat',
-        roomCode: cleanCode,
-        status: 'approved'
-      };
-      localStorage.setItem('tiffin_user_session', JSON.stringify(this.session));
-
-      ROOMMATES = targetRoom.members;
-
-      // Initialize meal slots in appState for this new member
-      if (appState && appState.days) {
-        for (let d = 1; d <= CONFIG.daysInMonth; d++) {
-          if (appState.days[d]) {
-            if (!appState.days[d].meals) appState.days[d].meals = {};
-            ROOMMATES.forEach(r => {
-              if (!appState.days[d].meals[r.id]) {
-                appState.days[d].meals[r.id] = { lunch: '', dinner: '' };
-              }
-            });
-          }
-        }
-        saveStateToStorage(appState);
-      }
-
-      SyncEngine.setRoomCode(cleanCode);
-      SyncEngine.setIdentity(cleanName);
-
-      // Broadcast member joined and ask for current room sync
-      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
-        FirebaseSync.subscribeRoom(cleanCode);
-        FirebaseSync.saveRoomData(cleanCode, this.activeRoom);
-        FirebaseSync.saveLedgerState(cleanCode, appState);
-      }
-      SyncEngine.broadcast({
-        type: 'member_joined',
-        roomCode: cleanCode,
-        member: newMember
-      });
-      SyncEngine.broadcast({
-        type: 'request_room_sync',
-        roomCode: cleanCode,
-        requesterName: cleanName,
-        requesterPhone: cleanPhone
-      });
-
-      this.hideGateModal();
-      this.updateHeaderRoomUI();
-      this.renderSettingsMembersTab();
-      populateHeaderIdentityDropdown();
-      renderAll();
-
-      showToast(`🎉 Joined flat #${cleanCode}! Welcome, ${cleanName}.`);
-      setTimeout(() => showStartupWelcomePrompt(), 500);
-      return true;
     },
 
     leaveRoom() {
@@ -4128,7 +4006,7 @@
       showToast('Join request declined.');
     },
 
-    addMemberDirectly(name, phone) {
+    async addMemberDirectly(name, phone) {
       if (!this.isAdmin()) {
         showToast('Only Flat Admin has authority to add members.', 'warning');
         return;
@@ -4156,7 +4034,7 @@
       ROOMMATES = this.activeRoom.members;
 
       if (appState && appState.days) {
-        for (let d = 1; d <= CONFIG.daysInMonth; d++) {
+        for (let d = 1; d <= (CONFIG.daysInMonth || 31); d++) {
           if (appState.days[d]) {
             if (!appState.days[d].meals) appState.days[d].meals = {};
             if (!appState.days[d].meals[newMember.id]) {
@@ -4167,6 +4045,10 @@
         saveStateToStorage(appState);
       }
 
+      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
+        await FirebaseSync.saveRoomData(this.activeRoom.code, this.activeRoom);
+      }
+
       persistAndBroadcast({
         type: 'member_added',
         roomCode: this.activeRoom.code,
@@ -4174,12 +4056,12 @@
       });
 
       this.renderSettingsMembersTab();
-      populateHeaderIdentityDropdown();
+      updateIdentityUI(RoomManager.session?.name);
       renderAll();
       showToast(`Added ${getFirstName(cleanName)} to flat!`);
     },
 
-    removeMember(memberId) {
+    async removeMember(memberId) {
       const isAdmin = this.isAdmin();
       if (!this.activeRoom || !isAdmin) {
         showToast('Only Flat Admin has authority to kick members.', 'warning');
@@ -4199,6 +4081,10 @@
       this.saveActiveRoom();
       ROOMMATES = this.activeRoom.members;
 
+      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
+        await FirebaseSync.saveRoomData(this.activeRoom.code, this.activeRoom);
+      }
+
       // Broadcast kick to all connected devices in the room
       SyncEngine.broadcast({
         type: 'member_kicked',
@@ -4208,7 +4094,7 @@
       });
 
       this.renderSettingsMembersTab();
-      populateHeaderIdentityDropdown();
+      updateIdentityUI(RoomManager.session?.name);
       renderAll();
       showToast(`Kicked ${getFirstName(target.name)} from flat.`);
     },
@@ -4559,7 +4445,7 @@
     }
 
     if (createForm) {
-      createForm.addEventListener('submit', (e) => {
+      createForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         triggerHaptic();
         const name = document.getElementById('gateAdminName')?.value || '';
@@ -4575,12 +4461,12 @@
           alert('Please enter an Admin Security PIN.');
           return;
         }
-        RoomManager.createRoom(name, phone, group, pin);
+        await RoomManager.createRoom(name, phone, group, pin);
       });
     }
 
     if (joinForm) {
-      joinForm.addEventListener('submit', (e) => {
+      joinForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         triggerHaptic();
         const code = document.getElementById('gateRoomCode')?.value || '';
@@ -4589,10 +4475,10 @@
         const name = document.getElementById('gateUserName')?.value || '';
 
         if (!code.trim()) {
-          alert('Please enter the Room Code.');
+          alert('Please enter the 4-digit Room Code.');
           return;
         }
-        RoomManager.enterRoom(code, phone, pin, name);
+        await RoomManager.enterRoom(code, phone, pin, name);
       });
 
       const loginPinInput = document.getElementById('gateLoginPin');
@@ -4629,7 +4515,7 @@
         const roomName = RoomManager.activeRoom?.name || 'our flat';
         const baseUrl = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '');
         const inviteUrl = `${baseUrl}?room=${encodeURIComponent(roomCode)}`;
-        const message = `Hey! Join ${roomName}'s meal tracker on Tiffin Tracker:\n${inviteUrl}\n\n1-tap instant meal logging, monthly mess bills & auto expense split!`;
+        const message = `Hey! Join "${roomName}" on Tiffin Tracker!\n\nRoom Code: ${roomCode}\nDirect Link: ${inviteUrl}\n\nDaily meal logging, monthly mess bills & auto expense split!`;
         const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
         window.open(waUrl, '_blank');
       });

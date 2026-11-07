@@ -105,7 +105,8 @@
           // 1. Synchronize Room Data & Members
           if (data.roomData && typeof RoomManager !== 'undefined') {
             const current = RoomManager.activeRoom || {};
-            const combined = [...(current.members || []), ...(data.roomData.members || [])];
+            const cloudMembers = Array.isArray(data.roomData.members) ? data.roomData.members : [];
+            const combined = [...(current.members || []), ...cloudMembers];
             const deduplicated = RoomManager.deduplicateMembers(combined, data.roomData.adminName || current.adminName);
 
             // Synchronize session role & guarantee local user is never stripped
@@ -131,7 +132,7 @@
                   if (FirebaseSync.isAvailable && cleanCode) {
                     FirebaseSync.saveRoomData(cleanCode, RoomManager.activeRoom);
                   }
-                }, 1000);
+                }, 500);
               }
               RoomManager.session.status = 'approved';
               if (matchedSessionMember) {
@@ -155,11 +156,29 @@
               ROOMMATES = RoomManager.activeRoom.members;
             }
 
+            // Ensure appState.days has meal entries for all roommates so renders never fail
+            if (typeof appState !== 'undefined' && appState && appState.days) {
+              for (let d = 1; d <= (CONFIG.daysInMonth || 31); d++) {
+                if (appState.days[d]) {
+                  if (!appState.days[d].meals) appState.days[d].meals = {};
+                  ROOMMATES.forEach(r => {
+                    if (!appState.days[d].meals[r.id]) {
+                      appState.days[d].meals[r.id] = { lunch: '', dinner: '' };
+                    }
+                  });
+                }
+              }
+              if (typeof saveStateToStorage === 'function') {
+                saveStateToStorage(appState);
+              }
+            }
+
             RoomManager.updateHeaderRoomUI();
             RoomManager.renderSettingsMembersTab();
-            if (typeof populateHeaderIdentityDropdown === 'function') {
-              populateHeaderIdentityDropdown();
+            if (typeof updateIdentityUI === 'function') {
+              updateIdentityUI(RoomManager.session?.name || (typeof SyncEngine !== 'undefined' ? SyncEngine.identity : ''));
             }
+            modified = true;
           }
 
           // 2. Synchronize Ledger State (Days, Meals, Sabzi, Amul)
@@ -230,6 +249,78 @@
         });
       } catch (err) {
         console.warn('[FirebaseSync] Subscription failed:', err);
+      }
+    },
+
+    get db() {
+      return db;
+    },
+
+    async joinRoom(roomCode, newMember, adminPin) {
+      if (!this.isAvailable || !db) {
+        return { success: false, error: 'Cloud sync is currently offline. Please check your internet.' };
+      }
+      const cleanCode = this.getCleanRoom(roomCode);
+      if (!cleanCode) {
+        return { success: false, error: 'Invalid room code.' };
+      }
+
+      try {
+        const roomRef = db.collection('rooms').doc(cleanCode);
+        const doc = await roomRef.get();
+        if (!doc.exists) {
+          return { success: false, notFound: true, error: `Room #${cleanCode} was not found. Please verify the 4-digit code.` };
+        }
+
+        const data = doc.data() || {};
+        const roomData = data.roomData || { code: cleanCode, name: 'My Flat', adminName: 'Admin', members: [] };
+        const state = data.state || null;
+
+        // Check Admin PIN if logging in as Admin
+        if (adminPin) {
+          if (roomData.adminPin && roomData.adminPin !== adminPin) {
+            return { success: false, error: 'Incorrect Admin Security PIN for this flat.' };
+          }
+        }
+
+        // Add member to roomData.members if not already present
+        const members = Array.isArray(roomData.members) ? roomData.members : [];
+        const existing = typeof RoomManager !== 'undefined'
+          ? RoomManager.findMatchingMember(members, newMember)
+          : members.find(m => (m.name || '').toLowerCase() === (newMember.name || '').toLowerCase());
+
+        let finalMember = existing;
+        if (!existing) {
+          members.push(newMember);
+          finalMember = newMember;
+        } else {
+          if (!existing.phone && newMember.phone) existing.phone = newMember.phone;
+          if (adminPin) existing.role = 'admin';
+        }
+
+        const deduplicated = typeof RoomManager !== 'undefined'
+          ? RoomManager.deduplicateMembers(members, roomData.adminName)
+          : members;
+
+        roomData.members = deduplicated;
+
+        // Save updated room members to Firestore without overwriting ledger state
+        await roomRef.set({
+          roomData: roomData,
+          lastUpdated: Date.now()
+        }, { merge: true });
+
+        console.log(`[FirebaseSync] Successfully joined room #${cleanCode} as ${finalMember.name}`);
+
+        return {
+          success: true,
+          roomData: roomData,
+          state: state,
+          member: finalMember
+        };
+      } catch (err) {
+        console.error('[FirebaseSync] joinRoom error:', err);
+        return { success: false, error: 'Failed to join room: ' + (err.message || 'Network error') };
       }
     },
 

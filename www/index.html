@@ -24,7 +24,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css?v=5.3.5">
+  <link rel="stylesheet" href="styles.css?v=5.3.6">
 </head>
 <body>
   <!-- Luxury Startup Animation (Fast & Smooth Brand Reveal) -->
@@ -77,12 +77,10 @@
           <span id="headerPendingCountText">1 Request</span>
         </button>
 
-        <!-- Direct User Identity Dropdown -->
-        <div class="header-user-select-wrap">
-          <span class="user-avatar-dot"></span>
-          <select id="headerUserIdentitySelect" class="header-user-dropdown" title="Switch your active profile">
-            <!-- Populated via JS -->
-          </select>
+        <!-- Locked User Identity Badge (Profile locked to this device) -->
+        <div class="header-user-profile-badge" id="headerUserProfileBadge" title="Your Profile (Locked to this device)">
+          <span class="user-avatar-dot" id="headerUserAvatarDot"></span>
+          <span class="header-user-name" id="headerUserNameText">You</span>
         </div>
         <button id="headerSettingsBtn" class="icon-btn circle-btn" title="Settings, Pricing & Members" aria-label="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -750,13 +748,15 @@
             <div id="subtab-identity" class="subtab-content">
               <div class="settings-pane-header">
                 <h4 class="settings-pane-title">Profile & App Preferences</h4>
-                <p class="settings-pane-desc">Select your identity and configure client notifications.</p>
+                <p class="settings-pane-desc">Your profile is locked to this device. Each flatmate has their own profile.</p>
               </div>
-              <div class="form-group">
-                <label for="settingsIdentitySelect" class="input-label">My Active Profile Name:</label>
-                <select id="settingsIdentitySelect" class="select-dropdown w-full">
-                  <!-- Populated dynamically via JS -->
-                </select>
+              <div class="card-inner-box" style="display:flex; align-items:center; gap:12px; padding:14px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:12px;">
+                <div class="user-avatar-dot" id="settingsProfileAvatarDot" style="width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden; background:rgba(255,255,255,0.05); flex-shrink:0;"></div>
+                <div style="flex:1;">
+                  <strong id="settingsLockedProfileName" style="font-size:0.95rem; color:#fff; display:block;">Anjan</strong>
+                  <span id="settingsLockedProfileRole" style="font-size:0.78rem; color:var(--text-muted);">Flat Admin 👑</span>
+                </div>
+                <span class="badge-pill" style="font-size:0.7rem; background:rgba(0,210,106,0.15); color:var(--emerald); border:1px solid rgba(0,210,106,0.3); padding:3px 8px;">Locked Profile</span>
               </div>
 
               <div class="settings-options-list mt-3">
@@ -901,7 +901,7 @@
               <span class="gate-required-mark">*</span>
             </label>
             <div class="gate-input-wrap">
-              <input type="text" id="gateRoomCode" class="gate-text-input gate-code-input" placeholder="Room Code" autocomplete="off" autocapitalize="characters" maxlength="12" required>
+              <input type="text" id="gateRoomCode" class="gate-text-input gate-code-input" placeholder="4-digit Room Code (e.g. 4821)" autocomplete="off" autocapitalize="characters" maxlength="8" required>
             </div>
           </div>
 
@@ -1188,7 +1188,7 @@
         <div class="morphe-version-badge">
           <span id="updateCurrentVersionTag" class="morphe-chip-current">v5.3.2</span>
           <span class="morphe-version-arrow">➔</span>
-          <span id="updateVersionTag" class="morphe-chip-latest">v5.3.5</span>
+          <span id="updateVersionTag" class="morphe-chip-latest">v5.3.6</span>
           <span class="morphe-latest-pill">LATEST</span>
         </div>
 
@@ -1252,17 +1252,17 @@
   </div>
 
   <!-- Firebase Cloud Realtime Engine -->
-  <script src="firebase-app.js?v=5.3.5"></script>
-  <script src="firebase-firestore.js?v=5.3.5"></script>
+  <script src="firebase-app.js?v=5.3.6"></script>
+  <script src="firebase-firestore.js?v=5.3.6"></script>
   <!-- Native Device Bridge (Status bar, Insets, Back Button, Local Notifications, Push Notifications) -->
-  <script src="native-bridge.js?v=5.3.5"></script>
+  <script src="native-bridge.js?v=5.3.6"></script>
   <!-- QR Generator Script -->
-  <script src="qr.js?v=5.3.5"></script>
+  <script src="qr.js?v=5.3.6"></script>
   <!-- Firebase Cloud Sync Bridge -->
-  <script src="firebase-sync.js?v=5.3.5"></script>
+  <script src="firebase-sync.js?v=5.3.6"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=5.3.5"></script>
+  <script src="app.js?v=5.3.6"></script>
   <!-- In-App Auto Update Sentinel -->
-  <script src="updater.js?v=5.3.5"></script>
+  <script src="updater.js?v=5.3.6"></script>
 </body>
 </html>
