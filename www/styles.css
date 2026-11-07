@@ -41,36 +41,36 @@ a[href*="netlify.com"] {
   /* Specular Highlights & Precision Borders */
   --border-color: rgba(255, 255, 255, 0.08);
   --border-subtle: rgba(255, 255, 255, 0.038);
-  --border-focus: #00f5a0;
-  --border-glow-mint: rgba(0, 245, 160, 0.45);
-  --border-glow-cyan: rgba(0, 212, 255, 0.45);
+  --border-focus: #10b981;
+  --border-glow-mint: rgba(16, 185, 129, 0.35);
+  --border-glow-cyan: rgba(56, 189, 248, 0.35);
 
   /* Typography Colors */
   --text-main: #f0f6fc;
   --text-muted: #8b9fb4;
   --text-dim: #50667a;
 
-  /* Refreshening Brand Accents: Electric Mint, Jade & Glacial Cyan */
-  --accent-primary: #00f5a0;
-  --accent-secondary: #00d4ff;
-  --accent-gradient: linear-gradient(135deg, #00f5a0 0%, #00d26a 50%, #00d4ff 100%);
-  --accent-hover: #1affb0;
-  --accent-light: #5efcc1;
-  --accent-glow: rgba(0, 245, 160, 0.3);
-  --accent-glow-sm: rgba(0, 245, 160, 0.16);
-  --text-on-accent: #021a0f;
+  /* Brand Accents: Grounded Emerald & Clean Contrast */
+  --accent-primary: #10b981;
+  --accent-secondary: #059669;
+  --accent-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --accent-hover: #34d399;
+  --accent-light: #6ee7b7;
+  --accent-glow: rgba(16, 185, 129, 0.2);
+  --accent-glow-sm: rgba(16, 185, 129, 0.1);
+  --text-on-accent: #ffffff;
 
   /* Semantic Palettes */
-  --emerald: #00f5a0;
-  --emerald-bg: rgba(0, 245, 160, 0.1);
-  --cyan: #00d4ff;
-  --cyan-bg: rgba(0, 212, 255, 0.1);
-  --amber: #ffb800;
-  --amber-bg: rgba(255, 184, 0, 0.1);
-  --rose: #ff3b5c;
-  --rose-bg: rgba(255, 59, 92, 0.1);
-  --purple: #a78bfa;
-  --purple-bg: rgba(167, 139, 250, 0.1);
+  --emerald: #10b981;
+  --emerald-bg: rgba(16, 185, 129, 0.12);
+  --cyan: #38bdf8;
+  --cyan-bg: rgba(56, 189, 248, 0.12);
+  --amber: #f59e0b;
+  --amber-bg: rgba(245, 158, 11, 0.12);
+  --rose: #f43f5e;
+  --rose-bg: rgba(244, 63, 94, 0.12);
+  --purple: #8b5cf6;
+  --purple-bg: rgba(139, 92, 246, 0.12);
   --wa-green: #25d366;
   --wa-green-hover: #1eb956;
 
@@ -80,7 +80,7 @@ a[href*="netlify.com"] {
   --shadow-lg: 0 20px 48px -10px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.14);
   --shadow-tactile: 0 4px 12px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.09);
-  --shadow-glow-mint: 0 0 24px rgba(0, 245, 160, 0.28);
+  --shadow-glow-mint: 0 4px 16px rgba(0, 0, 0, 0.4);
   --glass-blur: blur(28px) saturate(190%);
 
   /* Radii */
@@ -152,17 +152,13 @@ body {
   padding-bottom: max(var(--safe-area-bottom), 14px);
 }
 
-/* App Root Layout with Atmospheric Aurora Glow (Video-Ready SaaS Depth) */
+/* App Root Layout with Clean Deep Slate Background */
 .app-root {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   background-color: var(--bg-primary);
-  background-image: 
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 245, 160, 0.11) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 40% at 100% 25%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 40% at 0% 75%, rgba(0, 245, 160, 0.06) 0%, transparent 50%),
-    radial-gradient(ellipse 80% 60% at 50% 120%, rgba(167, 139, 250, 0.05) 0%, transparent 60%);
+  background-image: radial-gradient(circle at 50% 0%, #0d1520 0%, #06090e 100%);
   background-attachment: fixed;
 }
 
@@ -3140,7 +3136,7 @@ body {
 }
 
 .glow-btn {
-  box-shadow: 0 4px 20px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .secondary-btn {
@@ -4039,11 +4035,6 @@ body {
   font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
-  animation: pendingPulse 2s infinite ease-in-out;
-}
-@keyframes pendingPulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 0 0 rgba(245, 158, 11, 0); }
-  50% { transform: scale(1.03); box-shadow: 0 0 12px rgba(245, 158, 11, 0.35); }
 }
 .pending-pill-pulse {
   width: 8px;
@@ -4085,19 +4076,14 @@ body.gate-active .mobile-bottom-nav {
 .gate-modal-card {
   width: 100%;
   max-width: 440px;
-  background: linear-gradient(180deg, #0d1624 0%, #070d16 100%);
-  border: 1px solid rgba(0, 210, 106, 0.28);
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 22px;
   padding: 28px 24px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 40px rgba(0, 210, 106, 0.12);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
   animation: modalScaleUp 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   overflow: hidden;
-}
-
-@keyframes gateIconPulse {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-4px) scale(1.05); }
 }
 
 .gate-brand-header {
@@ -4109,14 +4095,13 @@ body.gate-active .mobile-bottom-nav {
   width: 58px;
   height: 58px;
   border-radius: 18px;
-  background: linear-gradient(135deg, rgba(0, 210, 106, 0.18), rgba(0, 212, 255, 0.08));
-  border: 1px solid rgba(0, 210, 106, 0.35);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 12px;
-  box-shadow: 0 8px 24px rgba(0, 210, 106, 0.2);
-  animation: gateIconPulse 3.5s ease-in-out infinite;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
 .gate-title {
@@ -4951,22 +4936,7 @@ input.rate-input-locked {
 }
 
 .splash-logo-pulse {
-  position: absolute;
-  inset: -6px;
-  border-radius: 30px;
-  border: 2px solid rgba(0, 245, 160, 0.4);
-  animation: splashPulseRing 1.2s infinite ease-out;
-}
-
-@keyframes splashPulseRing {
-  0% {
-    transform: scale(0.95);
-    opacity: 0.8;
-  }
-  100% {
-    transform: scale(1.22);
-    opacity: 0;
-  }
+  display: none;
 }
 
 .splash-logo-icon {
@@ -5040,50 +5010,25 @@ input.rate-input-locked {
   max-width: 440px !important;
   text-align: center;
   padding: 28px 22px !important;
-  background: linear-gradient(160deg, #0e1520 0%, #06090f 100%) !important;
-  border: 1px solid rgba(0, 245, 160, 0.35) !important;
-  border-radius: 28px !important;
-  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.92), 0 0 45px rgba(0, 245, 160, 0.16) !important;
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 24px !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.08) inset !important;
   position: relative;
   overflow: hidden;
 }
 
-.morphe-update-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 10%;
-  right: 10%;
-  height: 1.5px;
-  background: linear-gradient(90deg, transparent, rgba(0, 245, 160, 0.8), rgba(0, 212, 255, 0.8), transparent);
-}
-
-.morphe-update-avatar-ring {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, rgba(0, 245, 160, 0.18), rgba(0, 212, 255, 0.18));
-  border: 1.5px solid rgba(0, 245, 160, 0.5);
+.update-icon-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #10b981;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.2rem;
   margin: 0 auto 16px;
-  position: relative;
-  box-shadow: 0 10px 28px rgba(0, 245, 160, 0.28);
-}
-
-.morphe-update-avatar-glow {
-  position: absolute;
-  inset: -6px;
-  border-radius: 50%;
-  border: 1px dashed rgba(0, 245, 160, 0.4);
-  animation: morpheSpin 12s linear infinite;
-}
-
-@keyframes morpheSpin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }
 
 .morphe-version-badge {
@@ -5214,16 +5159,15 @@ input.rate-input-locked {
 
 .morphe-progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #00d4ff, #00f5a0);
+  background: #10b981;
   border-radius: 999px;
   transition: width 0.15s ease-out;
-  box-shadow: 0 0 12px rgba(0, 245, 160, 0.6);
 }
 
 .morphe-progress-status-text {
   font-size: 0.8rem;
   font-family: 'JetBrains Mono', monospace;
-  color: #00f5a0;
+  color: #10b981;
   font-weight: 600;
 }
 
@@ -5235,12 +5179,13 @@ input.rate-input-locked {
 
 .morphe-update-btn {
   padding: 14px !important;
-  font-size: 1rem !important;
-  font-weight: 800 !important;
-  border-radius: 16px !important;
-  background: linear-gradient(135deg, #00f5a0 0%, #00d26a 100%) !important;
-  color: #04090e !important;
-  box-shadow: 0 6px 20px rgba(0, 245, 160, 0.35) !important;
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  border-radius: 14px !important;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.28) !important;
   transition: all 0.2s ease !important;
 }
 

@@ -60,7 +60,7 @@
           this.showUpdateModal(updateData);
         } else if (isManual) {
           if (typeof window.showToast === 'function') {
-            window.showToast(`✨ You're running the latest version (v${CURRENT_VERSION})!`, 3000);
+            window.showToast(`You're running the latest version (v${CURRENT_VERSION}).`, 3000);
           } else {
             alert(`You are running the latest version of Tiffin Tracker (v${CURRENT_VERSION}).`);
           }
@@ -69,7 +69,7 @@
         console.warn('[AppUpdater] Update check failed or offline:', err);
         if (isManual) {
           if (typeof window.showToast === 'function') {
-            window.showToast('⚠️ Unable to check for updates. Check internet connection.', 3500);
+            window.showToast('Unable to check for updates. Check internet connection.', 3500);
           } else {
             alert('Unable to check for updates. Please check your internet connection.');
           }
@@ -126,7 +126,7 @@
       if (progressBar) progressBar.style.width = '0%';
       if (progressStatus) progressStatus.textContent = 'Downloading update... 0%';
       if (downloadBtn) downloadBtn.disabled = false;
-      if (btnText) btnText.textContent = 'Update Now ⚡';
+      if (btnText) btnText.textContent = 'Update Now';
 
       if (notesList) {
         notesList.innerHTML = '';
@@ -155,8 +155,8 @@
       const data = this.activeUpdateData;
       if (!data) return;
 
-      const downloadUrl = data.downloadUrl || `https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/${data.apkFilename || 'Tiffin-Tracker-v5.3.3-release.apk'}`;
-      const filename = data.apkFilename || `Tiffin-Tracker-v${data.version}-release.apk`;
+      const downloadUrl = data.downloadUrl || `https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/${data.apkFilename || 'Tiffin-Tracker-v5.3.8.apk'}`;
+      const filename = data.apkFilename || `Tiffin-Tracker-v${data.version}.apk`;
 
       const downloadBtn = document.getElementById('updateDownloadBtn');
       const btnText = document.getElementById('updateDownloadBtnText');
@@ -166,7 +166,7 @@
       if (window.NativeAppInstaller && typeof window.NativeAppInstaller.downloadAndInstall === 'function') {
         this.isDownloading = true;
         if (downloadBtn) downloadBtn.disabled = true;
-        if (btnText) btnText.textContent = 'Downloading Update... ⏳';
+        if (btnText) btnText.textContent = 'Downloading Update...';
         if (progressWrap) progressWrap.style.display = 'block';
 
         window.NativeAppInstaller.downloadAndInstall(downloadUrl, filename);
@@ -174,12 +174,12 @@
         // Fallback for Web Browsers
         if (downloadBtn) {
           downloadBtn.disabled = true;
-          if (btnText) btnText.textContent = 'Opening Download... 🚀';
+          if (btnText) btnText.textContent = 'Opening Download...';
         }
         window.open(downloadUrl, '_system');
         setTimeout(() => {
           if (downloadBtn) downloadBtn.disabled = false;
-          if (btnText) btnText.textContent = 'Update Now ⚡';
+          if (btnText) btnText.textContent = 'Update Now';
         }, 3000);
       }
     },
@@ -216,8 +216,8 @@
       const downloadBtn = document.getElementById('updateDownloadBtn');
 
       if (bar) bar.style.width = '100%';
-      if (status) status.textContent = '✅ Download complete! Launching installer...';
-      if (btnText) btnText.textContent = 'Installing... 🚀';
+      if (status) status.textContent = 'Download complete. Launching installer...';
+      if (btnText) btnText.textContent = 'Installing Update...';
       if (downloadBtn) downloadBtn.disabled = true;
     },
 
@@ -227,8 +227,8 @@
       const btnText = document.getElementById('updateDownloadBtnText');
       const downloadBtn = document.getElementById('updateDownloadBtn');
 
-      if (status) status.textContent = `⚠️ Download failed: ${errorMessage || 'Network error'}`;
-      if (btnText) btnText.textContent = 'Retry Download ⚡';
+      if (status) status.textContent = `Download failed: ${errorMessage || 'Network error'}`;
+      if (btnText) btnText.textContent = 'Retry Download';
       if (downloadBtn) downloadBtn.disabled = false;
 
       if (typeof window.showToast === 'function') {

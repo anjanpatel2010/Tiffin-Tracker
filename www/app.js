@@ -64,7 +64,7 @@
             if (parsed && parsed.name && parsed.roomCode) {
               setTimeout(() => {
                 if (typeof showToast === 'function') {
-                  showToast(`✨ Updated to v${APP_VERSION}! You're all set.`);
+                  showToast(`Updated to v${APP_VERSION}! You're all set.`);
                 }
               }, 1200);
             }
@@ -1233,7 +1233,7 @@
             if (!isCatchUp && !alreadyReminded && isAdmin) {
               localStorage.setItem(joinNotifKey, 'true');
               playJoinAlertChime();
-              showToast(`🎉 ${action.member.name} joined the flat!`);
+              showToast(`${action.member.name} joined the flat`);
               RoomManager.showInAppJoinBanner(action.member.name, targetRoom || myRoom);
 
               NotificationManager.send('Flatmate Joined! 🍱', {
@@ -3913,7 +3913,7 @@
 
         renderAll();
 
-        showToast(`🎉 Connected to "${targetRoom.name}" (Room #${cleanCode})!`);
+        showToast(`Connected to "${targetRoom.name}" (Room #${cleanCode})`);
         setTimeout(() => showStartupWelcomePrompt(), 500);
         return true;
       } finally {
@@ -4802,7 +4802,7 @@
     const sub = document.getElementById('welcomeModalSub');
 
     const groupName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'Tiffin Tracker';
-    if (title) title.textContent = `Welcome to ${groupName}! 🎉`;
+    if (title) title.textContent = `Welcome to ${groupName}`;
     if (sub) sub.textContent = `Turn on notifications so you get alerted when flatmates update dinner menus or expenses.`;
 
     if (modal) {

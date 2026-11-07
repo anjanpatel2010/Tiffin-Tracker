@@ -1121,12 +1121,12 @@
           </div>
         </div>
         <div class="modal-body" style="padding-top:0;">
-          <h3 class="modal-title" id="welcomeModalTitle" style="font-size:1.25rem; margin-bottom:8px; font-weight:800; color:#fff;">Welcome to Tiffin Tracker! 🎉</h3>
+          <h3 class="modal-title" id="welcomeModalTitle" style="font-size:1.25rem; margin-bottom:8px; font-weight:800; color:#fff;">Welcome to Tiffin Tracker</h3>
           <p id="welcomeModalSub" style="font-size:0.88rem; color:var(--text-secondary); line-height:1.5; margin-bottom:20px;">
             Turn on notifications so you get alerted when flatmates update menus or mess expenses.
           </p>
           <button id="allowStartNotificationBtn" class="primary-btn glow-btn w-full" style="padding:13px; font-weight:700; font-size:0.95rem; margin-bottom:10px;">
-            <span>Allow Notifications 🔔</span>
+            <span>Allow Notifications</span>
           </button>
           <button id="dismissStartNotificationBtn" class="pill-btn-ghost btn-sm text-muted w-full" style="padding:8px;">
             <span>Continue to Dashboard</span>
@@ -1136,13 +1136,16 @@
     </div>
 
 
-    <!-- MODAL: MORPHE-STYLE APK IN-APP UPDATE NOTIFICATION -->
+    <!-- MODAL: APK IN-APP UPDATE NOTIFICATION -->
     <div id="appUpdateModal" class="modal-backdrop" style="display:none; z-index:99999;">
       <div class="modal-box update-modal-window morphe-update-card">
-        <!-- Morphe Glowing Hex/Pulse Icon -->
-        <div class="morphe-update-avatar-ring">
-          <div class="morphe-update-avatar-glow"></div>
-          <div class="morphe-update-icon">🚀</div>
+        <!-- Professional Update Badge -->
+        <div class="update-icon-badge">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
         </div>
 
         <!-- Version Comparison Badge -->
@@ -1153,7 +1156,7 @@
           <span class="morphe-latest-pill">LATEST</span>
         </div>
 
-        <h3 class="morphe-update-title">Update Available!</h3>
+        <h3 class="morphe-update-title">Update Available</h3>
         <p class="morphe-update-desc" id="updateMessage">
           A new version of Tiffin Tracker is available with background updates and installer integration.
         </p>
@@ -1161,8 +1164,13 @@
         <!-- Changelog Section -->
         <div class="morphe-changelog-box">
           <div class="morphe-changelog-header">
-            <span class="morphe-sparkle">✨</span>
-            <span>WHAT'S NEW IN THIS RELEASE</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            <span>WHAT'S NEW</span>
           </div>
           <ul id="updateNotesList" class="morphe-notes-list">
             <li>Background update checks when app is closed</li>
@@ -1193,7 +1201,7 @@
         <!-- Action Buttons -->
         <div class="morphe-update-actions">
           <button id="updateDownloadBtn" class="primary-btn glow-btn w-full morphe-update-btn">
-            <span id="updateDownloadBtnText">Update Now ⚡</span>
+            <span id="updateDownloadBtnText">Update Now</span>
           </button>
           <button id="updateLaterBtn" class="pill-btn-ghost btn-sm text-muted w-full">
             <span>Remind Me Later</span>
