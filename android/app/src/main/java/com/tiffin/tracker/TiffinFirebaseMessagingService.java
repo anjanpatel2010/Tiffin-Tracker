@@ -99,6 +99,8 @@ public class TiffinFirebaseMessagingService extends FirebaseMessagingService {
 
         Intent intent = new Intent(context, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.putExtra("title", title);
+        intent.putExtra("body", body);
 
         if (data != null) {
             for (Map.Entry<String, String> entry : data.entrySet()) {

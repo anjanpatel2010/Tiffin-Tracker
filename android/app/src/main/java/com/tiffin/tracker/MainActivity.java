@@ -157,9 +157,32 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void handleUpdateNotificationIntent(Intent intent) {
-        if (intent != null && intent.getBooleanExtra("OPEN_UPDATE_MODAL", false)) {
+        if (intent == null) return;
+
+        boolean isUpdate = intent.getBooleanExtra("OPEN_UPDATE_MODAL", false);
+        if (!isUpdate) {
+            String val = intent.getStringExtra("OPEN_UPDATE_MODAL");
+            if (val != null && (val.equalsIgnoreCase("true") || val.equals("1"))) {
+                isUpdate = true;
+            }
+        }
+        if (!isUpdate && intent.hasExtra("update")) {
+            isUpdate = true;
+        }
+        // Also check if notification title/body mentions "update" or "version"
+        if (!isUpdate) {
+            String title = intent.getStringExtra("title");
+            String body = intent.getStringExtra("body");
+            if (body == null) body = intent.getStringExtra("message");
+            if ((title != null && title.toLowerCase().contains("update")) ||
+                (body != null && body.toLowerCase().contains("update"))) {
+                isUpdate = true;
+            }
+        }
+
+        if (isUpdate) {
             final String payload = intent.getStringExtra("UPDATE_PAYLOAD");
-            Log.d(TAG, "Opened via background Update Notification! Triggering UI dialog...");
+            Log.d(TAG, "Opened via Update Notification! Triggering UI dialog...");
             if (bridge != null && bridge.getWebView() != null) {
                 bridge.getWebView().postDelayed(() -> {
                     if (payload != null && !payload.trim().isEmpty()) {
@@ -173,7 +196,7 @@ public class MainActivity extends BridgeActivity {
                             null
                         );
                     }
-                }, 1000);
+                }, 1500);
             }
         }
     }
