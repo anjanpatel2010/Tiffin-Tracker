@@ -1,18 +1,31 @@
 {
-  "version": "5.3.8",
-  "versionCode": 50308,
+  "version": "5.4.0",
+  "versionCode": 50400,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-07",
-  "message": "Streamlined UI, organized file structure, and standalone APK installer!",
-  "apkFilename": "Tiffin-Tracker-v5.3.8.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.3.8.apk",
+  "message": "Tiffin Tracker v5.4.0 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.4.0.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.4.0.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
-    "Clean, lightweight settings without developer clutter",
-    "Streamlined standalone APK naming without -release suffix",
-    "Instant update detection and popups across all connected devices",
-    "Direct APK install link and 4-digit room code included in flat invites",
-    "Auto-fills room code from clipboard and URL links automatically"
+    "Secure Firebase Cloud Messaging backend with lockscreen alerts",
+    "Human-crafted UI design: clean emerald & deep slate theme",
+    "Instant update routing directly to in-app installation modal",
+    "Automated fail-safe version tracking across all devices"
+  ],
+  "history": [
+    {
+      "version": "5.3.8",
+      "versionCode": 50308,
+      "releaseDate": "2026-11-07",
+      "releaseNotes": [
+        "Clean, lightweight settings without developer clutter",
+        "Streamlined standalone APK naming without -release suffix",
+        "Instant update detection and popups across all connected devices",
+        "Direct APK install link and 4-digit room code included in flat invites",
+        "Auto-fills room code from clipboard and URL links automatically"
+      ]
+    }
   ]
 }
