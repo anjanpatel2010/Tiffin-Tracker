@@ -1,6 +1,8 @@
 package com.tiffin.tracker;
 
 import android.Manifest;
+import android.app.NotificationManager;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -12,6 +14,7 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 
+import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
@@ -88,13 +91,16 @@ public class MainActivity extends BridgeActivity {
             );
         }
 
-        // 4. Automatically request POST_NOTIFICATIONS runtime permission on Android 13+ (API 33+)
+        // 4. Register default Android Notification Channel on app startup
+        createDefaultNotificationChannel();
+
+        // 5. Automatically request POST_NOTIFICATIONS runtime permission on Android 13+ (API 33+)
         requestNotificationPermissionIfNeeded();
 
-        // 5. Schedule Background WorkManager Update Checker (Checks even when app is killed)
+        // 6. Schedule Background WorkManager Update Checker (Checks even when app is killed)
         scheduleBackgroundUpdateCheck();
 
-        // 6. Handle notification click if app was launched from an update alert
+        // 7. Handle notification click if app was launched from an update alert
         handleUpdateNotificationIntent(getIntent());
     }
 
@@ -152,6 +158,14 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private void createDefaultNotificationChannel() {
+        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (notificationManager != null) {
+            TiffinFirebaseMessagingService.createDefaultChannel(notificationManager);
+            Log.d(TAG, "Registered default notification channel on startup: " + TiffinFirebaseMessagingService.DEFAULT_CHANNEL_ID);
+        }
+    }
+
     private void requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) 
@@ -161,6 +175,18 @@ public class MainActivity extends BridgeActivity {
                     new String[]{Manifest.permission.POST_NOTIFICATIONS},
                     NOTIFICATION_PERMISSION_REQUEST_CODE
                 );
+            }
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "POST_NOTIFICATIONS permission granted by user.");
+            } else {
+                Log.w(TAG, "POST_NOTIFICATIONS permission denied by user.");
             }
         }
     }
