@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.3.6';
+  const APP_VERSION = '5.3.7';
 
   function checkAndMigrateAppVersion() {
     try {
@@ -2478,8 +2478,8 @@
   function renderExportView() {
     const shareUrlInput = document.getElementById('shareUrlDisplay');
     if (shareUrlInput) {
-      const baseUrl = window.location.href.split('#')[0];
-      shareUrlInput.value = `${baseUrl}#room=${SyncEngine.roomCode}`;
+      const roomCode = SyncEngine.roomCode || RoomManager.activeRoom?.code || '';
+      shareUrlInput.value = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
     }
 
     const waPre = document.getElementById('waSummaryText');
@@ -3226,17 +3226,6 @@
           renderAuditLog();
           showToast('Audit log cleared');
         });
-      });
-    }
-
-    // Open Walkthrough from Settings
-    const openWalkthroughBtn = document.getElementById('openWalkthroughBtn');
-    if (openWalkthroughBtn) {
-      openWalkthroughBtn.addEventListener('click', () => {
-        triggerHaptic();
-        if (modal) modal.classList.remove('active');
-        const onbModal = document.getElementById('onboardingModal');
-        if (onbModal) onbModal.classList.add('active');
       });
     }
 
@@ -4109,7 +4098,16 @@
       const roomName = this.activeRoom?.name || this.session?.groupName || 'My Flat';
 
       if (codePill) codePill.textContent = `#${roomCode}`;
-      if (pill) pill.setAttribute('title', `Active Group: ${roomName} (#${roomCode})`);
+      if (pill) {
+        pill.setAttribute('title', `Active Group: ${roomName} (#${roomCode}) - Tap to share flat invite`);
+        if (!pill.dataset.shareBound) {
+          pill.dataset.shareBound = 'true';
+          pill.style.cursor = 'pointer';
+          pill.addEventListener('click', () => {
+            shareFlatInvite();
+          });
+        }
+      }
       if (settingsRoomName) settingsRoomName.textContent = roomName;
       if (settingsRoomCode) settingsRoomCode.textContent = `#${roomCode}`;
     },
@@ -4272,6 +4270,8 @@
         if (joinForm) joinForm.style.display = 'block';
         if (createForm) createForm.style.display = 'none';
       }
+
+      checkAndAutoFillRoomCode();
     },
 
     hideGateModal() {
@@ -4414,8 +4414,159 @@
     modal.classList.add('active');
   }
 
+  // --- Flat Invite Sharing & Auto-Fill Helpers ---
+  async function shareFlatInvite() {
+    triggerHaptic();
+    const roomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || 'ROOM';
+    const roomName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'our flat';
+    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.3.7-release.apk';
+    const webUrl = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
+
+    const message = `🏠 Join "${roomName}" on Tiffin Tracker!\n` +
+      `🔑 Room Code: ${roomCode}\n\n` +
+      `📱 Download & Install Android App:\n${apkUrl}\n\n` +
+      `🌐 Or Open Web App:\n${webUrl}\n\n` +
+      `👉 Quick Setup:\n` +
+      `1. Download & open the app\n` +
+      `2. Room Code ${roomCode} auto-fills (or tap Paste)\n` +
+      `3. Enter your Name and tap 'Join Flat'!`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Join ${roomName} - Tiffin Tracker`,
+          text: message,
+        });
+        showToast('Invite shared!');
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.warn('Native share failed, using fallback', err);
+      }
+    }
+
+    copyToClipboard(message);
+    showToast(`Room #${roomCode} invite copied to clipboard!`);
+    const waUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
+    const waWebUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+    try {
+      window.location.href = waUrl;
+    } catch (e) {
+      window.open(waWebUrl, '_blank');
+    }
+  }
+
+  function checkAndAutoFillRoomCode() {
+    const codeInput = document.getElementById('gateRoomCode');
+    const banner = document.getElementById('gateCodeAutofilledBanner');
+    const bannerText = document.getElementById('gateCodeAutofilledText');
+    if (!codeInput) return;
+
+    function applyDetectedCode(code, source = 'link') {
+      if (!code) return;
+      const clean = code.trim().toUpperCase();
+      if (!clean) return;
+      codeInput.value = clean;
+      if (banner) {
+        if (bannerText) {
+          bannerText.textContent = `Room Code #${clean} detected from ${source} & applied!`;
+        }
+        banner.style.display = 'flex';
+      }
+    }
+
+    // 1. Query parameters (?room=4821 or ?code=4821)
+    const urlParams = new URLSearchParams(window.location.search);
+    const candidateQuery = urlParams.get('room') || urlParams.get('code');
+    if (candidateQuery) {
+      applyDetectedCode(candidateQuery, 'link');
+      return;
+    }
+
+    // 2. URL hash (#room=4821 or #4821)
+    if (window.location.hash) {
+      const hashMatch = window.location.hash.match(/(?:room|code|flat)[=\/:]([0-9A-Za-z]+)/i) ||
+                        window.location.hash.match(/#([0-9]{4,6})\b/);
+      if (hashMatch && hashMatch[1]) {
+        applyDetectedCode(hashMatch[1], 'link');
+        return;
+      }
+    }
+
+    // 3. System clipboard (safe asynchronous check)
+    if (!codeInput.value && navigator.clipboard && navigator.clipboard.readText) {
+      navigator.clipboard.readText().then(text => {
+        if (!text || (codeInput.value && codeInput.value.trim().length > 0)) return;
+        const match = text.match(/(?:room|flat|code)?[\s:#*-]*([0-9]{4,6})\b/i) || text.match(/\b([0-9]{4,6})\b/);
+        if (match && match[1]) {
+          applyDetectedCode(match[1], 'clipboard');
+        }
+      }).catch(() => {
+        // Safe to ignore if permissions require direct user click
+      });
+    }
+  }
+
+  function setupRoomCodeAutoFillHandlers() {
+    const pasteBtn = document.getElementById('gatePasteCodeBtn');
+    const codeInput = document.getElementById('gateRoomCode');
+    const banner = document.getElementById('gateCodeAutofilledBanner');
+    const bannerText = document.getElementById('gateCodeAutofilledText');
+
+    if (pasteBtn && codeInput) {
+      pasteBtn.addEventListener('click', async () => {
+        triggerHaptic();
+        try {
+          let text = '';
+          if (navigator.clipboard && navigator.clipboard.readText) {
+            text = await navigator.clipboard.readText();
+          }
+          if (!text) {
+            showToast('Clipboard is empty. Copy the Room Code first.');
+            return;
+          }
+          const match = text.match(/(?:room|flat|code)?[\s:#*-]*([0-9]{4,6})\b/i) || text.match(/\b([0-9]{4,6})\b/);
+          const code = match ? match[1] : text.trim().slice(0, 8);
+          codeInput.value = code;
+          showToast(`Room Code ${code} pasted!`);
+          if (banner) {
+            if (bannerText) bannerText.textContent = `Room Code #${code} pasted!`;
+            banner.style.display = 'flex';
+          }
+          setTimeout(() => {
+            document.getElementById('gateUserName')?.focus();
+          }, 100);
+        } catch (err) {
+          codeInput.focus();
+          showToast('Please paste the room code into the box');
+        }
+      });
+    }
+
+    if (codeInput) {
+      codeInput.addEventListener('paste', (e) => {
+        const pasted = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+        const match = pasted.match(/(?:room|flat|code)?[\s:#*-]*([0-9]{4,6})\b/i) || pasted.match(/\b([0-9]{4,6})\b/);
+        if (match && match[1]) {
+          e.preventDefault();
+          codeInput.value = match[1];
+          showToast(`Room Code ${match[1]} applied!`);
+          if (banner) {
+            if (bannerText) bannerText.textContent = `Room Code #${match[1]} extracted!`;
+            banner.style.display = 'flex';
+          }
+          setTimeout(() => {
+            document.getElementById('gateUserName')?.focus();
+          }, 50);
+        }
+      });
+    }
+  }
+
   // --- Room Access & Gate Event Controls ---
   function setupRoomAccessControls() {
+    setupRoomCodeAutoFillHandlers();
+
     const tabCreateBtn = document.getElementById('tabCreateRoomBtn');
     const tabJoinBtn = document.getElementById('tabJoinRoomBtn');
     const createForm = document.getElementById('createRoomForm');
@@ -4510,14 +4661,7 @@
     const shareWhatsAppBtn = document.getElementById('shareWhatsAppBtn');
     if (shareWhatsAppBtn) {
       shareWhatsAppBtn.addEventListener('click', () => {
-        triggerHaptic();
-        const roomCode = RoomManager.activeRoom?.code || SyncEngine.roomCode || 'ROOM';
-        const roomName = RoomManager.activeRoom?.name || 'our flat';
-        const baseUrl = window.location.origin + window.location.pathname.replace(/\/index\.html$/, '');
-        const inviteUrl = `${baseUrl}?room=${encodeURIComponent(roomCode)}`;
-        const message = `Hey! Join "${roomName}" on Tiffin Tracker!\n\nRoom Code: ${roomCode}\nDirect Link: ${inviteUrl}\n\nDaily meal logging, monthly mess bills & auto expense split!`;
-        const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-        window.open(waUrl, '_blank');
+        shareFlatInvite();
       });
     }
 
@@ -4741,11 +4885,7 @@
 
     const copyShare = () => {
       triggerHaptic();
-      const input = document.getElementById('shareUrlDisplay');
-      if (input) {
-        copyToClipboard(input.value);
-        showToast(`Copied share link (#${SyncEngine.roomCode})`);
-      }
+      shareFlatInvite();
     };
 
     if (headerShareBtn) headerShareBtn.addEventListener('click', copyShare);

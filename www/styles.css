@@ -4251,6 +4251,65 @@ body.gate-active .mobile-bottom-nav {
   color: #38bdf8;
 }
 
+.gate-input-with-action {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.gate-input-with-action .gate-text-input {
+  flex: 1;
+}
+
+.gate-action-inline-btn {
+  height: 50px;
+  padding: 0 16px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 12px;
+  color: #38bdf8;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.gate-action-inline-btn:active {
+  transform: scale(0.96);
+}
+
+.gate-action-inline-btn:hover {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: #38bdf8;
+  color: #e0f2fe;
+}
+
+.gate-autofilled-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 210, 106, 0.12);
+  border: 1px solid rgba(0, 210, 106, 0.3);
+  border-radius: 10px;
+  color: #00d26a;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-top: 6px;
+  animation: fadeInCode 0.25s ease-out;
+}
+
+@keyframes fadeInCode {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .gate-input-hint {
   font-size: 0.77rem;
   color: #64748b;

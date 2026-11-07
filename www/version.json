@@ -1,18 +1,18 @@
 {
-  "version": "5.3.6",
-  "versionCode": 50306,
+  "version": "5.3.7",
+  "versionCode": 50307,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-07",
-  "message": "Simple 4-digit room numbers, real-time member visibility & locked device profiles!",
-  "apkFilename": "Tiffin-Tracker-v5.3.6-release.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.3.6-release.apk",
+  "message": "Direct APK install sharing, auto-filling room codes & streamlined interface!",
+  "apkFilename": "Tiffin-Tracker-v5.3.7-release.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.3.7-release.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
-    "Simple 4-digit room numbers (e.g. 4821) for instant flat sharing",
-    "Instant real-time visibility: newly joined roommates appear immediately on all screens",
-    "Profiles are locked to each device so members cannot change or impersonate profiles",
-    "Seamless cloud ledger adoption when joining a room",
-    "Morphe-style 1-tap in-app APK updater"
+    "Direct APK install link and 4-digit room code included in flat invites",
+    "Auto-fills room code from clipboard and URL links automatically",
+    "1-Tap paste button with intelligent 4-digit code extraction from full messages",
+    "Preserved room sessions - flat creators and members stay logged in across updates",
+    "Cleaned up interface and removed obsolete app guide"
   ]
 }
