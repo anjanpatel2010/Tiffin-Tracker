@@ -9,6 +9,21 @@
   // --- Application Version & Automatic Cache Sentinel ---
   const APP_VERSION = '5.3.7';
 
+  // --- Firebase Crashlytics Runtime Error Tracker ---
+  window.addEventListener('error', (event) => {
+    if (window.FirebaseBridge && typeof window.FirebaseBridge.recordException === 'function') {
+      const location = `${event.filename || 'app.js'}:${event.lineno || 0}:${event.colno || 0}`;
+      window.FirebaseBridge.recordException(`${event.message || 'Error'} at ${location}`);
+    }
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    if (window.FirebaseBridge && typeof window.FirebaseBridge.recordException === 'function') {
+      const reason = event.reason ? (event.reason.stack || event.reason.message || String(event.reason)) : 'Unhandled rejection';
+      window.FirebaseBridge.recordException('UnhandledRejection: ' + reason);
+    }
+  });
+
   function checkAndMigrateAppVersion() {
     try {
       const storedVersion = localStorage.getItem('tiffin_app_version');
@@ -3646,6 +3661,14 @@
       }
 
       this.activeRoom = roomData;
+      if (window.FirebaseBridge) {
+        try {
+          window.FirebaseBridge.setCustomKey('active_room', codeKey);
+          if (this.session && this.session.name) {
+            window.FirebaseBridge.setUserId(this.session.name);
+          }
+        } catch (e) {}
+      }
       this.cleanupAdminDuplicates(this.activeRoom);
       this.saveActiveRoom();
       SyncEngine.setRoomCode(codeKey);

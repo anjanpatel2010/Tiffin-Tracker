@@ -772,10 +772,24 @@
                 <div class="settings-option-item">
                   <div class="settings-option-info">
                     <strong>Check for APK Updates</strong>
-                    <span class="helper-text">Check for newer versions and update notifications.</span>
+                    <span class="helper-text">Trigger update check & verify background notification worker.</span>
                   </div>
-                  <button id="checkUpdateManualBtn" class="secondary-btn btn-xs">
-                    <span>Check Now</span>
+                  <div style="display:flex; gap:6px;">
+                    <button id="checkUpdateManualBtn" class="secondary-btn btn-xs">
+                      <span>Check Now</span>
+                    </button>
+                    <button id="testUpdateNotificationBtn" class="pill-btn-ghost btn-xs text-muted" title="Send a test notification to verify status bar & lockscreen display">
+                      <span>Test Alert</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="settings-option-item">
+                  <div class="settings-option-info">
+                    <strong>Firebase Crashlytics & Remote Config</strong>
+                    <span class="helper-text">Cloud crash reporting, perf metrics & remote feature flags.</span>
+                  </div>
+                  <button id="testCrashlyticsBtn" class="pill-btn-ghost btn-xs text-muted" title="Record a test non-fatal event to verify Firebase Crashlytics">
+                    <span>Test Crashlytics</span>
                   </button>
                 </div>
                 <div class="settings-option-item">

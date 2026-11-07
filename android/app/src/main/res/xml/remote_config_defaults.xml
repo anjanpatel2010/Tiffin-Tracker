@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<defaultsMap>
+    <entry>
+        <key>feature_inapp_update</key>
+        <value>true</value>
+    </entry>
+    <entry>
+        <key>maintenance_mode</key>
+        <value>false</value>
+    </entry>
+    <entry>
+        <key>announcement_message</key>
+        <value></value>
+    </entry>
+    <entry>
+        <key>min_required_version</key>
+        <value>5.0.0</value>
+    </entry>
+</defaultsMap>

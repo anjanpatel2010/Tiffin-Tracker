@@ -78,14 +78,16 @@ public class UpdateCheckWorker extends Worker {
             }
             Log.d(TAG, "Background Check: Local versionCode=" + localVersionCode + ", Remote versionCode=" + remoteVersionCode);
 
-            if (remoteVersionCode > localVersionCode) {
+            boolean isManualTest = getTags().contains("manual_test_check");
+
+            if (remoteVersionCode > localVersionCode || isManualTest) {
                 SharedPreferences prefs = getApplicationContext().getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
                 String lastNotifiedVer = prefs.getString(KEY_LAST_NOTIFIED_VERSION, "");
                 long lastNotifiedTime = prefs.getLong(KEY_LAST_NOTIFIED_TIME, 0);
                 long now = System.currentTimeMillis();
 
-                // Alert if it's a new version or if 18 hours have passed since last notification
-                if (!remoteVersion.equals(lastNotifiedVer) || (now - lastNotifiedTime) > (18 * 3600 * 1000L)) {
+                // Alert if it's a new version, a manual test, or if 18 hours have passed
+                if (isManualTest || !remoteVersion.equals(lastNotifiedVer) || (now - lastNotifiedTime) > (18 * 3600 * 1000L)) {
                     sendUpdateNotification(remoteVersion, message, jsonString);
                     prefs.edit()
                          .putString(KEY_LAST_NOTIFIED_VERSION, remoteVersion)
@@ -119,6 +121,7 @@ public class UpdateCheckWorker extends Worker {
             channel.setDescription("Notifications about new versions and feature updates");
             channel.enableVibration(true);
             channel.setShowBadge(true);
+            channel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
             manager.createNotificationChannel(channel);
         }
 
@@ -146,6 +149,7 @@ public class UpdateCheckWorker extends Worker {
             .setContentText(message)
             .setStyle(new NotificationCompat.BigTextStyle().bigText(message + "\nTap to see what's new and update!"))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent);

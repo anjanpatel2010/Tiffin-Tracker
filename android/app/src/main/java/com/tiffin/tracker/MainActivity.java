@@ -25,10 +25,16 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.NetworkType;
+import androidx.work.OneTimeWorkRequest;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 
 import com.getcapacitor.BridgeActivity;
+import com.google.firebase.crashlytics.FirebaseCrashlytics;
+import com.google.firebase.perf.FirebasePerformance;
+import com.google.firebase.perf.metrics.Trace;
+import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
+import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings;
 
 import java.util.concurrent.TimeUnit;
 
@@ -36,9 +42,37 @@ public class MainActivity extends BridgeActivity {
     private static final String TAG = "MainActivity";
     private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 1001;
 
+    private FirebaseRemoteConfig remoteConfig;
+    private FirebaseCrashlytics crashlytics;
+    private FirebasePerformance performance;
+    private Trace startupTrace;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // A. Start Firebase Performance Monitoring startup trace
+        try {
+            performance = FirebasePerformance.getInstance();
+            performance.setPerformanceCollectionEnabled(true);
+            startupTrace = performance.newTrace("tiffin_app_startup");
+            startupTrace.start();
+        } catch (Exception e) {
+            Log.w(TAG, "Firebase Performance trace initialization warning: " + e.getMessage());
+        }
+
+        // B. Initialize Firebase Crashlytics
+        try {
+            crashlytics = FirebaseCrashlytics.getInstance();
+            crashlytics.setCrashlyticsCollectionEnabled(true);
+            crashlytics.setCustomKey("app_version", "5.3.7");
+            crashlytics.setCustomKey("build_type", "release");
+        } catch (Exception e) {
+            Log.w(TAG, "Firebase Crashlytics initialization warning: " + e.getMessage());
+        }
+
+        // C. Initialize Firebase Remote Config
+        initRemoteConfig();
 
         Window window = getWindow();
 
@@ -83,11 +117,15 @@ public class MainActivity extends BridgeActivity {
             return windowInsets;
         });
 
-        // 3. Register NativeAppInstaller Javascript Interface for direct in-app downloads
+        // 3. Register NativeAppInstaller & FirebaseBridge Javascript Interfaces
         if (bridge != null && bridge.getWebView() != null) {
             bridge.getWebView().addJavascriptInterface(
                 new NativeAppInstaller(this, bridge.getWebView()),
                 "NativeAppInstaller"
+            );
+            bridge.getWebView().addJavascriptInterface(
+                new FirebaseBridge(this, remoteConfig, crashlytics, performance),
+                "FirebaseBridge"
             );
         }
 
@@ -102,6 +140,13 @@ public class MainActivity extends BridgeActivity {
 
         // 7. Handle notification click if app was launched from an update alert
         handleUpdateNotificationIntent(getIntent());
+
+        // 8. Conclude app startup trace
+        if (startupTrace != null) {
+            try {
+                startupTrace.stop();
+            } catch (Exception ignored) {}
+        }
     }
 
     @Override
@@ -133,12 +178,33 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private void initRemoteConfig() {
+        try {
+            remoteConfig = FirebaseRemoteConfig.getInstance();
+            FirebaseRemoteConfigSettings configSettings = new FirebaseRemoteConfigSettings.Builder()
+                .setMinimumFetchIntervalInSeconds(60)
+                .build();
+            remoteConfig.setConfigSettingsAsync(configSettings);
+            remoteConfig.setDefaultsAsync(R.xml.remote_config_defaults);
+            remoteConfig.fetchAndActivate().addOnCompleteListener(this, task -> {
+                if (task.isSuccessful()) {
+                    Log.d(TAG, "Firebase Remote Config fetched and activated successfully.");
+                } else {
+                    Log.w(TAG, "Remote Config fetch failed: " + task.getException());
+                }
+            });
+        } catch (Exception e) {
+            Log.w(TAG, "Remote Config initialization warning: " + e.getMessage());
+        }
+    }
+
     private void scheduleBackgroundUpdateCheck() {
         try {
             Constraints constraints = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build();
 
+            // Periodic background check every 2 hours
             PeriodicWorkRequest updateRequest = new PeriodicWorkRequest.Builder(
                     UpdateCheckWorker.class,
                     2, TimeUnit.HOURS
@@ -152,6 +218,14 @@ public class MainActivity extends BridgeActivity {
                 ExistingPeriodicWorkPolicy.KEEP,
                 updateRequest
             );
+
+            // Immediate check on startup so user does not have to wait 2 hours
+            OneTimeWorkRequest immediateRequest = new OneTimeWorkRequest.Builder(UpdateCheckWorker.class)
+                .setConstraints(constraints)
+                .addTag("startup_update_check")
+                .build();
+            WorkManager.getInstance(getApplicationContext()).enqueue(immediateRequest);
+
             Log.d(TAG, "Scheduled background UpdateCheckWorker via Android WorkManager successfully.");
         } catch (Exception e) {
             Log.e(TAG, "Failed to schedule UpdateCheckWorker: " + e.getMessage(), e);
