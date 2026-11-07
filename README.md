@@ -165,12 +165,13 @@ Tiffin-Tracker/
 ├── sw.js             # Service worker for offline caching and fast loads
 ├── qr.js             # Client-side QR code generator
 ├── manifest.json     # PWA mobile installation manifest
+├── version.json      # Remote version metadata for in-app updates
 ├── vercel.json       # Clean URL routing and cache control configuration
 ├── icon.svg          # High-resolution vector app icon
-├── ARCHITECTURE.md   # Architectural design, sync model, and data schema
-├── DEPLOY.md         # Deployment instructions for Vercel, Cloudflare, etc.
-├── CONTRIBUTING.md   # Contribution guidelines and coding standards
-└── README.md         # Documentation
+├── docs/             # Architecture, deployment, contributing docs & promo screenshots
+├── android/          # Native Android Studio Capacitor project
+├── api/              # Serverless push notification endpoints
+└── scripts/          # Automation, icon generator, and build tools
 ```
 
 ---

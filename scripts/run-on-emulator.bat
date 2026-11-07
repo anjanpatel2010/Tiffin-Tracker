@@ -11,12 +11,13 @@ echo.
 set "SDK_DIR=%LOCALAPPDATA%\Android\Sdk"
 set "ADB=%SDK_DIR%\platform-tools\adb.exe"
 set "EMULATOR=%SDK_DIR%\emulator\emulator.exe"
-set "PROJECT_DIR=%~dp0"
-set "APK=%PROJECT_DIR%Tiffin-Tracker-v5.2.1-release.apk"
-
-if not exist "%APK%" (
-    set "APK=%PROJECT_DIR%Tiffin-Tracker-v5.2.1.apk"
+set "PROJECT_DIR=%~dp0..\"
+set "APK="
+for /f "delims=" %%F in ('dir /b /o-d "%PROJECT_DIR%Tiffin-Tracker-v*-release.apk" 2^>nul') do (
+    set "APK=%PROJECT_DIR%%%F"
+    goto :FoundApk
 )
+:FoundApk
 
 if not exist "%ADB%" (
     echo [ERROR] ADB not found at %ADB%
