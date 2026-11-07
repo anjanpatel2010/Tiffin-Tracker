@@ -2,7 +2,7 @@ const sharp = require('sharp');
 const path = require('path');
 const fs = require('fs');
 
-const svgSource = path.resolve(__dirname, '../icon.svg');
+const svgSource = path.resolve(__dirname, '../www/icon.svg');
 const resDir = path.resolve(__dirname, '../android/app/src/main/res');
 
 const sizes = [

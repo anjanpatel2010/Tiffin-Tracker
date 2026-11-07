@@ -1,18 +1,18 @@
 {
-  "version": "5.3.7",
-  "versionCode": 50307,
+  "version": "5.3.8",
+  "versionCode": 50308,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-07",
-  "message": "Direct APK install sharing, auto-filling room codes & streamlined interface!",
-  "apkFilename": "Tiffin-Tracker-v5.3.7-release.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.3.7-release.apk",
+  "message": "Streamlined UI, organized file structure, and standalone APK installer!",
+  "apkFilename": "Tiffin-Tracker-v5.3.8.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.3.8.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
+    "Clean, lightweight settings without developer clutter",
+    "Streamlined standalone APK naming without -release suffix",
+    "Instant update detection and popups across all connected devices",
     "Direct APK install link and 4-digit room code included in flat invites",
-    "Auto-fills room code from clipboard and URL links automatically",
-    "1-Tap paste button with intelligent 4-digit code extraction from full messages",
-    "Preserved room sessions - flat creators and members stay logged in across updates",
-    "Cleaned up interface and removed obsolete app guide"
+    "Auto-fills room code from clipboard and URL links automatically"
   ]
 }

@@ -8,8 +8,8 @@ if (-not (Test-Path $AdbPath)) {
 }
 
 $EmulatorPath = "$SdkPath\emulator\emulator.exe"
-$releaseApk = Get-ChildItem -Path (Join-Path $PSScriptRoot "..") -Filter "Tiffin-Tracker-v*-release.apk" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-$ApkPath = if ($releaseApk) { $releaseApk.FullName } else { Join-Path $PSScriptRoot "..\Tiffin-Tracker-v5.3.7-release.apk" }
+$releaseApk = Get-ChildItem -Path (Join-Path $PSScriptRoot "..") -Filter "Tiffin-Tracker-v*.apk" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$ApkPath = if ($releaseApk) { $releaseApk.FullName } else { Join-Path $PSScriptRoot "..\Tiffin-Tracker-v5.3.8.apk" }
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Tiffin Tracker Emulator Runner" -ForegroundColor Yellow

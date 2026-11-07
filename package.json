@@ -1,16 +1,16 @@
 {
   "name": "tiffin-tracker",
-  "version": "5.3.7",
+  "version": "5.3.8",
   "description": "Tiffin Tracker PWA with native real-time cloud sync and Web Push notifications",
-  "main": "index.html",
+  "main": "www/index.html",
   "scripts": {
-    "start": "serve -s .",
-    "test": "node -c app.js && node -c sw.js",
-    "build:www": "node scripts/build-www.js",
+    "start": "serve -s www",
+    "test": "node -c www/app.js && node -c www/sw.js && node -c www/updater.js",
+    "bump": "node scripts/bump-version.js",
     "build:icons": "node scripts/generate-icons.js",
-    "sync:android": "node scripts/build-www.js && npx cap sync android",
+    "sync:android": "npx cap sync android",
     "open:android": "npx cap open android",
-    "build:apk": "node scripts/build-www.js && npx cap sync android && cd android && .\\gradlew.bat assembleRelease && cd .. && powershell -Command \"Copy-Item 'android/app/build/outputs/apk/release/app-release.apk' 'Tiffin-Tracker-v5.3.7-release.apk' -Force\"",
+    "build:apk": "npx cap sync android && cd android && .\\gradlew.bat assembleRelease && cd .. && powershell -Command \"Copy-Item 'android/app/build/outputs/apk/release/app-release.apk' 'Tiffin-Tracker-v5.3.8.apk' -Force\"",
     "test:apk": "powershell -ExecutionPolicy Bypass -File scripts/test-apk.ps1",
     "run:emulator": "cmd /c scripts\\run-on-emulator.bat"
   },

@@ -13,7 +13,7 @@ set "ADB=%SDK_DIR%\platform-tools\adb.exe"
 set "EMULATOR=%SDK_DIR%\emulator\emulator.exe"
 set "PROJECT_DIR=%~dp0..\"
 set "APK="
-for /f "delims=" %%F in ('dir /b /o-d "%PROJECT_DIR%Tiffin-Tracker-v*-release.apk" 2^>nul') do (
+for /f "delims=" %%F in ('dir /b /o-d "%PROJECT_DIR%Tiffin-Tracker-v*.apk" 2^>nul') do (
     set "APK=%PROJECT_DIR%%%F"
     goto :FoundApk
 )
