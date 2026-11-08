@@ -126,10 +126,10 @@ const updateVersionManifest = (filePath) => {
     data.githubReleaseUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/releases';
     data.message = `Tiffin Tracker v${targetVersion} is now available!`;
     data.releaseNotes = [
-      `Pure Native Android: Removed deprecated web/PWA service workers and legacy web push code`,
-      `Custom Kotlin FirebaseMessagingService: Background alerts delivered directly to device lockscreen`,
-      `Automated token registration keyed by member ID with instant Firestore synchronization`,
-      `High-priority notification channel (tiffin_notifications) with chime sound and vibration`
+      `Rock-solid Room & User Lifecycle: Ground-up overhaul for flat creation, joining, approving, and kicking`,
+      `Zero Ghost Resurrection: Authoritative Firestore single source of truth ensures kicked users never re-add themselves`,
+      `Instant Kick & Logout: Kicked members are immediately logged out, local session purged, and returned to flat gate`,
+      `Live Waiting Screen: Real-time admission for pending join requests with Admin 1-tap approval`
     ];
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');
