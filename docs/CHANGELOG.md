@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.7.0] — 2026-11-08
+
+### Added
+- **Admin Approval Option**: Added room-level toggle option in Settings ➜ Room & Members (`Require Admin Approval`) and in flat creation. When enabled, new users require admin confirmation before joining the flat.
+- **Admin In-App Popup Notification**: Floating interactive alert banner that pops up on the Admin's screen when any new user knocks, with dual-tone chime, haptic feedback, and 1-tap Approve & Decline actions.
+- **Real-Time Waiting Screen**: Joining users view a live waiting screen with animated admission status and auto-entrance once approved by the Admin.
+- **Push Notification Integration**: Join requests dispatch high-priority notifications to the Admin's device via Firebase Cloud Functions and Cloud Messaging.
+
+---
+
+## [5.6.0] — 2026-11-07
+
+### Added
+- **Real-Time Member Auto-Sync**: Connected Firestore snapshot listener directly to app state and UI, automatically syncing new flatmates across all devices instantly without manual refresh.
+
+---
+
 ## [5.4.0] — 2026-11-07
 
 ### Added

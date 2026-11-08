@@ -1,6 +1,6 @@
 {
   "name": "tiffin-tracker",
-  "version": "5.6.0",
+  "version": "5.7.0",
   "description": "Tiffin Tracker PWA with native real-time cloud sync and Web Push notifications",
   "main": "www/index.html",
   "scripts": {

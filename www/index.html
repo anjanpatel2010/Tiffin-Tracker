@@ -24,7 +24,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css?v=5.6.0">
+  <link rel="stylesheet" href="styles.css?v=5.7.0">
 </head>
 <body>
   <!-- Luxury Startup Animation (Fast & Smooth Brand Reveal) -->
@@ -649,6 +649,32 @@
                 </div>
               </div>
 
+              <!-- Pending Requests Section (Admin view) -->
+              <div id="pendingRequestsContainer" class="pending-requests-section mt-3" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                  <strong style="font-size:0.88rem; color:var(--amber); display:flex; align-items:center; gap:6px;">
+                    <span>🔔</span> Join Requests (<span id="pendingSectionCount">0</span>)
+                  </strong>
+                </div>
+                <div id="pendingRoommatesList">
+                  <!-- Populated via JS -->
+                </div>
+              </div>
+
+              <!-- Admin Approval Setting Toggle -->
+              <div class="admin-approval-row mt-3" id="adminApprovalSettingsRow" style="display:none; padding:12px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+                  <div>
+                    <strong style="font-size:0.88rem; color:var(--text-primary); display:block;">Require Admin Approval</strong>
+                    <span class="helper-text" style="font-size:0.78rem;">When enabled, new users must be approved by the Admin before joining this flat.</span>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="requireApprovalToggle" checked>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
               <!-- Roommates List -->
               <div class="roommates-mgmt-section mt-3">
                 <div class="section-title-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -986,10 +1012,50 @@
             </div>
           </div>
 
+          <div class="gate-form-group">
+            <label class="gate-checkbox-label" style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.84rem; color:var(--text-secondary); margin-top:2px; margin-bottom:6px;">
+              <input type="checkbox" id="gateCreateRequireApproval" checked style="accent-color:var(--emerald); width:16px; height:16px; cursor:pointer;">
+              <span>Require Admin Approval for new members</span>
+            </label>
+          </div>
+
           <button type="submit" id="gateCreateSubmitBtn" class="gate-action-btn primary-btn glow-btn w-full">
             <span>Create Flat</span>
           </button>
         </form>
+
+        <!-- TAB 3 CONTENT: WAITING FOR ADMIN APPROVAL -->
+        <div id="gateWaitingApproval" class="gate-waiting-view" style="display:none;">
+          <div class="waiting-card-content">
+            <div class="waiting-icon-ring">
+              <span class="waiting-icon-emoji" id="waitingIconEmoji">⏳</span>
+            </div>
+            <h3 class="waiting-title" id="waitingTitle">Approval Request Sent</h3>
+            <p class="waiting-desc">
+              Your request to join <strong id="waitingGroupName">the flat</strong> (<span id="waitingRoomCode" class="waiting-code-tag">#ROOM</span>) was sent to the flat admin.
+            </p>
+
+            <div class="waiting-details-pill">
+              <div class="waiting-applicant-avatar" id="waitingAvatar">👤</div>
+              <div class="waiting-applicant-info">
+                <span class="waiting-label">Requesting to join as</span>
+                <strong class="waiting-name" id="waitingApplicantName">User</strong>
+                <span class="waiting-phone" id="waitingApplicantPhone"></span>
+              </div>
+            </div>
+
+            <div class="waiting-status-strip">
+              <span class="waiting-pulse-dot" id="waitingPulseDot"></span>
+              <span id="waitingStatusText">Waiting for Admin to approve...</span>
+            </div>
+
+            <p class="waiting-hint">The Flat Admin received a popup notification. You will enter automatically as soon as they approve.</p>
+
+            <button type="button" id="gateCancelRequestBtn" class="pill-btn-ghost btn-xs text-rose mt-2">
+              Cancel Request
+            </button>
+          </div>
+        </div>
 
       </div>
     </div>
@@ -1152,7 +1218,7 @@
         <div class="morphe-version-badge">
           <span id="updateCurrentVersionTag" class="morphe-chip-current">v5.3.6</span>
           <span class="morphe-version-arrow">➔</span>
-          <span id="updateVersionTag" class="morphe-chip-latest">v5.6.0</span>
+          <span id="updateVersionTag" class="morphe-chip-latest">v5.7.0</span>
           <span class="morphe-latest-pill">LATEST</span>
         </div>
 
@@ -1221,17 +1287,17 @@
   </div>
 
   <!-- Firebase Cloud Realtime Engine -->
-  <script src="firebase-app.js?v=5.6.0"></script>
-  <script src="firebase-firestore.js?v=5.6.0"></script>
+  <script src="firebase-app.js?v=5.7.0"></script>
+  <script src="firebase-firestore.js?v=5.7.0"></script>
   <!-- Native Device Bridge (Status bar, Insets, Back Button, Local Notifications, Push Notifications) -->
-  <script src="native-bridge.js?v=5.6.0"></script>
+  <script src="native-bridge.js?v=5.7.0"></script>
   <!-- QR Generator Script -->
-  <script src="qr.js?v=5.6.0"></script>
+  <script src="qr.js?v=5.7.0"></script>
   <!-- Firebase Cloud Sync Bridge -->
-  <script src="firebase-sync.js?v=5.6.0"></script>
+  <script src="firebase-sync.js?v=5.7.0"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=5.6.0"></script>
+  <script src="app.js?v=5.7.0"></script>
   <!-- In-App Auto Update Sentinel -->
-  <script src="updater.js?v=5.6.0"></script>
+  <script src="updater.js?v=5.7.0"></script>
 </body>
 </html>

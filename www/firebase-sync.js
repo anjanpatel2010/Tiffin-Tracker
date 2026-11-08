@@ -186,42 +186,132 @@
           ? RoomManager.findMatchingMember(members, newMember)
           : members.find(m => (m.name || '').toLowerCase() === (newMember.name || '').toLowerCase());
 
-        let finalMember = existing;
-        if (!existing) {
-          members.push(newMember);
-          finalMember = newMember;
-        } else {
-          if (!existing.phone && newMember.phone) existing.phone = newMember.phone;
-          if (adminPin) existing.role = 'admin';
+        // If this is an existing approved member or logging in with valid Admin PIN:
+        if (existing || adminPin) {
+          let finalMember = existing;
+          if (!existing) {
+            members.push(newMember);
+            finalMember = newMember;
+          } else {
+            if (!existing.phone && newMember.phone) existing.phone = newMember.phone;
+            if (adminPin) existing.role = 'admin';
+          }
+
+          const deduplicated = typeof RoomManager !== 'undefined'
+            ? RoomManager.deduplicateMembers(members, roomData.adminName)
+            : members;
+
+          roomData.members = deduplicated;
+
+          // Save updated room members to Firestore without overwriting ledger state
+          await roomRef.set({
+            roomData: roomData,
+            lastUpdated: Date.now()
+          }, { merge: true });
+
+          console.log(`[FirebaseSync] Successfully logged into room #${cleanCode} as ${finalMember.name}`);
+
+          this.sendRoomNotification({
+            title: 'Flatmate Joined! 🍱',
+            body: `${finalMember.name} joined room #${cleanCode}!`,
+            tag: `join-${finalMember.id || Date.now()}`,
+            data: { roomCode: cleanCode, memberName: finalMember.name, type: 'member_joined' }
+          });
+
+          return {
+            success: true,
+            roomData: roomData,
+            state: state,
+            member: finalMember
+          };
         }
 
+        // This is a NEW user joining without Admin PIN:
+        // Check if room requires Admin approval (default: true)
+        const requireApproval = roomData.requireApproval !== false;
+
+        if (requireApproval) {
+          if (!Array.isArray(roomData.pendingRequests)) {
+            roomData.pendingRequests = [];
+          }
+
+          // Check if request already pending for this person
+          let existingReq = roomData.pendingRequests.find(r =>
+            (r.name && (r.name || '').trim().toLowerCase() === (newMember.name || '').trim().toLowerCase()) ||
+            (r.phone && newMember.phone && r.phone === newMember.phone)
+          );
+
+          if (!existingReq) {
+            existingReq = {
+              id: 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+              name: newMember.name,
+              phone: newMember.phone || '',
+              roomCode: cleanCode,
+              requestedAt: Date.now()
+            };
+            roomData.pendingRequests.push(existingReq);
+          } else {
+            existingReq.requestedAt = Date.now();
+            if (newMember.phone && !existingReq.phone) existingReq.phone = newMember.phone;
+          }
+
+          await roomRef.set({
+            roomData: roomData,
+            lastUpdated: Date.now()
+          }, { merge: true });
+
+          console.log(`[FirebaseSync] Join request submitted for #${cleanCode}: ${newMember.name} (${existingReq.id})`);
+
+          // Queue real-time push notification to room Admin
+          this.sendRoomNotification({
+            title: `Join Request: ${newMember.name} 🔔`,
+            body: `${newMember.name} requested to join flat #${cleanCode}. Tap to review and approve!`,
+            tag: `req-${existingReq.id}`,
+            data: {
+              type: 'join_request',
+              reqId: existingReq.id,
+              name: newMember.name,
+              phone: newMember.phone || '',
+              roomCode: cleanCode
+            }
+          });
+
+          return {
+            success: true,
+            requiresApproval: true,
+            requestId: existingReq.id,
+            roomData: roomData,
+            member: newMember
+          };
+        }
+
+        // Direct join if requireApproval is explicitly false
+        members.push(newMember);
         const deduplicated = typeof RoomManager !== 'undefined'
           ? RoomManager.deduplicateMembers(members, roomData.adminName)
           : members;
 
         roomData.members = deduplicated;
 
-        // Save updated room members to Firestore without overwriting ledger state
         await roomRef.set({
           roomData: roomData,
           lastUpdated: Date.now()
         }, { merge: true });
 
-        console.log(`[FirebaseSync] Successfully joined room #${cleanCode} as ${finalMember.name}`);
+        console.log(`[FirebaseSync] Successfully joined room #${cleanCode} directly as ${newMember.name}`);
 
-        // Queue real-time push notification to all flatmates in the room
         this.sendRoomNotification({
           title: 'Flatmate Joined! 🍱',
-          body: `${finalMember.name} joined room #${cleanCode}!`,
-          tag: `join-${finalMember.id || Date.now()}`,
-          data: { roomCode: cleanCode, memberName: finalMember.name, type: 'member_joined' }
+          body: `${newMember.name} joined room #${cleanCode}!`,
+          tag: `join-${newMember.id || Date.now()}`,
+          data: { roomCode: cleanCode, memberName: newMember.name, type: 'member_joined' }
         });
 
         return {
           success: true,
           roomData: roomData,
           state: state,
-          member: finalMember
+          member: newMember
         };
       } catch (err) {
         console.error('[FirebaseSync] joinRoom error:', err);
@@ -239,6 +329,28 @@
         }, { merge: true });
       } catch (err) {
         console.warn('[FirebaseSync] saveRoomData error:', err);
+      }
+    },
+
+    async cancelJoinRequest(roomCode, requestId) {
+      if (!this.isAvailable || !db || !requestId) return;
+      const cleanCode = this.getCleanRoom(roomCode);
+      try {
+        const roomRef = db.collection('rooms').doc(cleanCode);
+        const doc = await roomRef.get();
+        if (doc.exists) {
+          const data = doc.data() || {};
+          if (data.roomData && Array.isArray(data.roomData.pendingRequests)) {
+            data.roomData.pendingRequests = data.roomData.pendingRequests.filter(r => r.id !== requestId);
+            await roomRef.set({
+              roomData: data.roomData,
+              lastUpdated: Date.now()
+            }, { merge: true });
+            console.log(`[FirebaseSync] Cancelled join request ${requestId} in #${cleanCode}`);
+          }
+        }
+      } catch (err) {
+        console.warn('[FirebaseSync] cancelJoinRequest error:', err);
       }
     },
 

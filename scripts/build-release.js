@@ -126,10 +126,10 @@ const updateVersionManifest = (filePath) => {
     data.githubReleaseUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/releases';
     data.message = `Tiffin Tracker v${targetVersion} is now available!`;
     data.releaseNotes = [
-      `Secure Firebase Cloud Messaging backend with lockscreen alerts`,
-      `Human-crafted UI design: clean emerald & deep slate theme`,
-      `Instant update routing directly to in-app installation modal`,
-      `Automated fail-safe version tracking across all devices`
+      `Admin Approval Option: Require approval before new members join flat`,
+      `Instant Admin Popup Alert: 1-Tap Approve/Decline notification banner with audio chime`,
+      `Live Waiting Screen: Real-time admission for new roommates once approved`,
+      `Secure Firebase Cloud Messaging & Firestore two-way real-time synchronization`
     ];
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');
