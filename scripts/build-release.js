@@ -126,10 +126,10 @@ const updateVersionManifest = (filePath) => {
     data.githubReleaseUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/releases';
     data.message = `Tiffin Tracker v${targetVersion} is now available!`;
     data.releaseNotes = [
-      `Rock-solid Room & User Lifecycle: Ground-up overhaul for flat creation, joining, approving, and kicking`,
-      `Zero Ghost Resurrection: Authoritative Firestore single source of truth ensures kicked users never re-add themselves`,
-      `Instant Kick & Logout: Kicked members are immediately logged out, local session purged, and returned to flat gate`,
-      `Live Waiting Screen: Real-time admission for pending join requests with Admin 1-tap approval`
+      `Admin Succession & PIN Generation: Automatic promotion of senior flatmate when admin leaves with popup to set new Admin PIN`,
+      `Manual Ownership Transfer: Flat Admins can transfer full authority to any flatmate via '👑 Make Admin'`,
+      `Rock-solid Room Lifecycle: Cloud Firestore authoritative source of truth with zero ghost resurrection`,
+      `Instant Kick & Logout: Kicked members are immediately purged, local session reset, and returned to gate`
     ];
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');

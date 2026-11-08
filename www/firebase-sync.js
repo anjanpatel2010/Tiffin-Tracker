@@ -444,20 +444,197 @@
     },
 
     /**
-     * Member / Admin: Leave Room cleanly
+     * Member / Admin: Leave Room cleanly with automatic Admin succession
      */
     async leaveRoom(roomCode, memberId) {
-      if (!this.isAvailable || !db || !roomCode) return;
-      const cleanCode = String(roomCode).trim().toUpperCase();
+      if (!this.isAvailable || !db || !roomCode) return { success: false };
+      const cleanCode = this.getCleanRoom(roomCode);
+      const roomRef = db.collection('rooms').doc(cleanCode);
+
       try {
-        if (memberId) {
-          const roomRef = db.collection('rooms').doc(cleanCode);
-          await roomRef.update({
-            [`fcmTokens.${memberId}`]: firebase.firestore.FieldValue.delete()
-          }).catch(() => {});
+        const result = await db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(roomRef);
+          if (!doc.exists) {
+            return { success: true };
+          }
+          const data = doc.data() || {};
+          const roomData = data.roomData || {};
+          let members = Array.isArray(roomData.members) ? [...roomData.members] : [];
+
+          // Find the member who is leaving
+          const leavingMember = members.find(m => m.id === memberId);
+          const remainingMembers = members.filter(m => m.id !== memberId);
+
+          const isLeavingAdmin = leavingMember && (
+            leavingMember.role === 'admin' ||
+            (roomData.adminName && leavingMember.name && roomData.adminName.toLowerCase() === leavingMember.name.toLowerCase())
+          );
+
+          // CASE 1: No members left in the room (Flat is abandoned)
+          if (remainingMembers.length === 0) {
+            transaction.delete(roomRef);
+            return { success: true, dissolved: true };
+          }
+
+          let newAdmin = null;
+
+          // CASE 2: The leaving member was the Admin, and other members remain
+          if (isLeavingAdmin) {
+            // Sort remaining members by joinedAt ascending (seniority)
+            remainingMembers.sort((a, b) => {
+              const tA = a.joinedAt ? new Date(a.joinedAt).getTime() : 0;
+              const tB = b.joinedAt ? new Date(b.joinedAt).getTime() : 0;
+              return tA - tB;
+            });
+
+            // Promote first remaining flatmate
+            newAdmin = remainingMembers[0];
+            newAdmin.role = 'admin';
+
+            roomData.adminName = newAdmin.name;
+            roomData.adminPhone = newAdmin.phone || '';
+            roomData.adminPinNeedsReset = true; // Signals client to prompt for new PIN
+            roomData.newAdminId = newAdmin.id;
+          }
+
+          roomData.members = remainingMembers;
+
+          const updatePayload = {
+            roomData: roomData,
+            lastUpdated: Date.now()
+          };
+          if (memberId) {
+            updatePayload[`fcmTokens.${memberId}`] = firebase.firestore.FieldValue.delete();
+          }
+
+          transaction.set(roomRef, updatePayload, { merge: true });
+
+          return {
+            success: true,
+            promotedAdmin: newAdmin,
+            remainingMembers: remainingMembers
+          };
+        });
+
+        // Broadcast notifications if admin was promoted
+        if (result.promotedAdmin) {
+          this.sendRoomNotification({
+            title: `👑 New Flat Admin: ${result.promotedAdmin.name}`,
+            body: `${result.promotedAdmin.name} is now the Flat Admin.`,
+            tag: `admin-promoted-${result.promotedAdmin.id}`,
+            data: {
+              roomCode: cleanCode,
+              newAdminId: result.promotedAdmin.id,
+              type: 'admin_promoted'
+            }
+          });
         }
-      } catch (e) {}
-      this.unsubscribeRoom();
+
+        this.unsubscribeRoom();
+        return result;
+      } catch (err) {
+        console.error('[FirebaseSync] leaveRoom error:', err);
+        this.unsubscribeRoom();
+        return { success: false, error: err.message };
+      }
+    },
+
+    /**
+     * Update Admin Security PIN (called by new admin on PIN generation)
+     */
+    async updateAdminPin(roomCode, newPin) {
+      if (!this.isAvailable || !db || !roomCode) return { success: false };
+      const cleanCode = this.getCleanRoom(roomCode);
+      const roomRef = db.collection('rooms').doc(cleanCode);
+
+      try {
+        await db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(roomRef);
+          if (!doc.exists) return;
+          const data = doc.data() || {};
+          const roomData = data.roomData || {};
+
+          roomData.adminPin = String(newPin).trim();
+          roomData.adminPinNeedsReset = false;
+          delete roomData.newAdminId;
+
+          transaction.update(roomRef, {
+            'roomData.adminPin': String(newPin).trim(),
+            'roomData.adminPinNeedsReset': false,
+            'roomData.newAdminId': firebase.firestore.FieldValue.delete(),
+            lastUpdated: Date.now()
+          });
+        });
+
+        return { success: true };
+      } catch (err) {
+        console.error('[FirebaseSync] updateAdminPin error:', err);
+        return { success: false, error: err.message };
+      }
+    },
+
+    /**
+     * Transfer Admin Role manually to another member
+     */
+    async transferAdminRole(roomCode, targetMemberId) {
+      if (!this.isAvailable || !db || !roomCode || !targetMemberId) return { success: false };
+      const cleanCode = this.getCleanRoom(roomCode);
+      const roomRef = db.collection('rooms').doc(cleanCode);
+
+      try {
+        let promotedMember = null;
+        await db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(roomRef);
+          if (!doc.exists) throw new Error('Room not found');
+          const data = doc.data() || {};
+          const roomData = data.roomData || {};
+          const members = Array.isArray(roomData.members) ? [...roomData.members] : [];
+
+          members.forEach(m => {
+            if (m.id === targetMemberId) {
+              m.role = 'admin';
+              promotedMember = m;
+            } else if (m.role === 'admin') {
+              m.role = 'member';
+            }
+          });
+
+          if (!promotedMember) throw new Error('Target member not found in flat');
+
+          roomData.adminName = promotedMember.name;
+          roomData.adminPhone = promotedMember.phone || '';
+          roomData.adminPinNeedsReset = true;
+          roomData.newAdminId = promotedMember.id;
+          roomData.members = members;
+
+          transaction.update(roomRef, {
+            'roomData.adminName': promotedMember.name,
+            'roomData.adminPhone': promotedMember.phone || '',
+            'roomData.adminPinNeedsReset': true,
+            'roomData.newAdminId': promotedMember.id,
+            'roomData.members': members,
+            lastUpdated: Date.now()
+          });
+        });
+
+        if (promotedMember) {
+          this.sendRoomNotification({
+            title: `👑 New Flat Admin: ${promotedMember.name}`,
+            body: `${promotedMember.name} has been appointed Flat Admin.`,
+            tag: `admin-promoted-${promotedMember.id}`,
+            data: {
+              roomCode: cleanCode,
+              newAdminId: promotedMember.id,
+              type: 'admin_promoted'
+            }
+          });
+        }
+
+        return { success: true, targetMember: promotedMember };
+      } catch (err) {
+        console.error('[FirebaseSync] transferAdminRole error:', err);
+        return { success: false, error: err.message };
+      }
     },
 
     async saveRoomData(roomCode, roomData) {

@@ -1,20 +1,31 @@
 {
-  "version": "5.7.3",
-  "versionCode": 50703,
+  "version": "5.7.4",
+  "versionCode": 50704,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-08",
-  "message": "Tiffin Tracker v5.7.3 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.7.3.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.3.apk",
+  "message": "Tiffin Tracker v5.7.4 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.7.4.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.4.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
-    "Rock-solid Room & User Lifecycle: Ground-up overhaul for flat creation, joining, approving, and kicking",
-    "Zero Ghost Resurrection: Authoritative Firestore single source of truth ensures kicked users never re-add themselves",
-    "Instant Kick & Logout: Kicked members are immediately logged out, local session purged, and returned to flat gate",
-    "Live Waiting Screen: Real-time admission for pending join requests with Admin 1-tap approval"
+    "Admin Succession & PIN Generation: Automatic promotion of senior flatmate when admin leaves with popup to set new Admin PIN",
+    "Manual Ownership Transfer: Flat Admins can transfer full authority to any flatmate via '👑 Make Admin'",
+    "Rock-solid Room Lifecycle: Cloud Firestore authoritative source of truth with zero ghost resurrection",
+    "Instant Kick & Logout: Kicked members are immediately purged, local session reset, and returned to gate"
   ],
   "history": [
+    {
+      "version": "5.7.3",
+      "versionCode": 50703,
+      "releaseDate": "2026-11-08",
+      "releaseNotes": [
+        "Rock-solid Room & User Lifecycle: Ground-up overhaul for flat creation, joining, approving, and kicking",
+        "Zero Ghost Resurrection: Authoritative Firestore single source of truth ensures kicked users never re-add themselves",
+        "Instant Kick & Logout: Kicked members are immediately logged out, local session purged, and returned to flat gate",
+        "Live Waiting Screen: Real-time admission for pending join requests with Admin 1-tap approval"
+      ]
+    },
     {
       "version": "5.7.2",
       "versionCode": 50702,

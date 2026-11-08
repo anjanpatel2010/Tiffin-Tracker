@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.7.3';
+  const APP_VERSION = '5.7.4';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -1505,11 +1505,23 @@
         members: cloudMembers,
         pendingRequests: cloudRequests
       };
+      const wasAdmin = RoomManager.session.role === 'admin';
       RoomManager.session.role = matchedMember.role || RoomManager.session.role || 'member';
       RoomManager.session.memberId = matchedMember.id;
       RoomManager.session.name = matchedMember.name;
       RoomManager.saveActiveRoom();
       ROOMMATES = cloudMembers;
+
+      // Check if current user was promoted to Admin and needs to generate a new PIN
+      const isPromotedAdmin = matchedMember.role === 'admin' && (
+        cloudRoom.newAdminId === matchedMember.id ||
+        (cloudRoom.adminPinNeedsReset && !RoomManager.pinPromptDismissed) ||
+        (!wasAdmin && cloudRoom.adminPinNeedsReset)
+      );
+
+      if (isPromotedAdmin && cloudRoom.adminPinNeedsReset) {
+        RoomManager.showNewAdminPinModal(cloudRoom.name || 'My Flat');
+      }
 
       // Update pending badge & banner
       RoomManager.updatePendingBadges();
@@ -3581,6 +3593,7 @@
   const RoomManager = {
     session: null,
     activeRoom: null,
+    pinPromptDismissed: false,
 
     isAdmin() {
       if (this.session?.role === 'admin') return true;
@@ -4368,9 +4381,8 @@
 
       const roomCode = this.activeRoom?.code || this.session?.roomCode;
       const memberId = this.session?.memberId;
-      const isRoomAdmin = this.isAdmin();
 
-      if (roomCode && memberId && !isRoomAdmin) {
+      if (roomCode && memberId) {
         if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable && FirebaseSync.leaveRoom) {
           try {
             await FirebaseSync.leaveRoom(roomCode, memberId);
@@ -4385,7 +4397,98 @@
       this.updateHeaderRoomUI();
       this.renderSettingsMembersTab();
       renderAll();
-      showToast('Switched flat. Enter a Room Code or create a new flat.');
+      showToast('You have left the flat. Enter a Room Code or create a new flat.');
+    },
+
+    showNewAdminPinModal(flatName) {
+      const modal = document.getElementById('newAdminPinModal');
+      const flatNameSpan = document.getElementById('newAdminFlatName');
+      const input = document.getElementById('newAdminPinInput');
+      const errorMsg = document.getElementById('newAdminPinError');
+
+      if (!modal) return;
+      if (flatNameSpan) flatNameSpan.textContent = flatName || this.activeRoom?.name || 'the flat';
+      if (input) input.value = '';
+      if (errorMsg) errorMsg.style.display = 'none';
+
+      modal.classList.add('active');
+      triggerHaptic();
+      playJoinAlertChime();
+      setTimeout(() => input?.focus(), 300);
+    },
+
+    async saveNewAdminPin() {
+      const input = document.getElementById('newAdminPinInput');
+      const errorMsg = document.getElementById('newAdminPinError');
+      const modal = document.getElementById('newAdminPinModal');
+      const pin = (input?.value || '').trim();
+
+      if (!pin || pin.length < 4) {
+        if (errorMsg) {
+          errorMsg.textContent = 'Please enter a PIN with at least 4 digits.';
+          errorMsg.style.display = 'block';
+        }
+        return false;
+      }
+
+      CONFIG.adminPassword = pin;
+      if (this.activeRoom) {
+        this.activeRoom.adminPin = pin;
+        this.activeRoom.adminPinNeedsReset = false;
+        this.saveActiveRoom();
+      }
+
+      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable && FirebaseSync.updateAdminPin) {
+        await FirebaseSync.updateAdminPin(this.activeRoom?.code || this.session?.roomCode, pin);
+      }
+
+      if (modal) modal.classList.remove('active');
+      this.pinPromptDismissed = true;
+      triggerHaptic();
+      showToast('👑 Admin Security PIN set! You have full Admin authority.', 'success', 4000);
+      this.renderSettingsMembersTab();
+      return true;
+    },
+
+    async transferAdmin(targetMemberId) {
+      if (!this.activeRoom || !this.isAdmin()) return;
+      const target = (this.activeRoom.members || []).find(m => m.id === targetMemberId);
+      if (!target) return;
+
+      if (!confirm(`Transfer Flat Admin rights to ${target.name}? You will step down to regular member status.`)) {
+        return;
+      }
+
+      let res = null;
+      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable && FirebaseSync.transferAdminRole) {
+        res = await FirebaseSync.transferAdminRole(this.activeRoom.code, targetMemberId);
+      }
+
+      if (res && !res.success) {
+        showToast(res.error || 'Failed to transfer admin role.', 'warning');
+        return;
+      }
+
+      if (this.session) {
+        this.session.role = 'member';
+        localStorage.setItem('tiffin_session', JSON.stringify(this.session));
+        localStorage.setItem('tiffin_user_session', JSON.stringify(this.session));
+      }
+
+      if (this.activeRoom) {
+        (this.activeRoom.members || []).forEach(m => {
+          if (m.id === targetMemberId) m.role = 'admin';
+          else if (m.role === 'admin') m.role = 'member';
+        });
+        this.activeRoom.adminName = target.name;
+        this.saveActiveRoom();
+      }
+
+      this.renderSettingsMembersTab();
+      populateHeaderIdentityDropdown();
+      updateIdentityUI(RoomManager.session?.name);
+      renderAll();
+      showToast(`👑 ${target.name} is now the Flat Admin.`, 'success');
     },
 
     async approveRequest(reqId) {
@@ -4748,9 +4851,21 @@
                 ${r.phone ? `<span style="display:block; font-size:0.75rem; color:var(--text-muted);">${escapeHtml(r.phone)}</span>` : ''}
               </div>
             </div>
-            ${canDelete ? `<button class="kick-member-btn remove-member-btn" data-id="${r.id}" title="Kick member from flat">Kick</button>` : ''}
+            ${canDelete ? `
+              <div style="display:flex; gap:6px; align-items:center;">
+                <button class="pill-btn-ghost btn-xs make-admin-btn" data-id="${r.id}" title="Make Flat Admin" style="font-size:0.75rem; padding:4px 8px; color:var(--amber); border-color:rgba(245,158,11,0.35);">👑 Make Admin</button>
+                <button class="kick-member-btn remove-member-btn" data-id="${r.id}" title="Kick member from flat">Kick</button>
+              </div>
+            ` : ''}
           `;
           listContainer.appendChild(card);
+        });
+
+        listContainer.querySelectorAll('.make-admin-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            triggerHaptic();
+            this.transferAdmin(btn.getAttribute('data-id'));
+          });
         });
 
         listContainer.querySelectorAll('.remove-member-btn').forEach(btn => {
@@ -4938,7 +5053,7 @@
     triggerHaptic();
     const roomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || 'ROOM';
     const roomName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'our flat';
-    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.3.apk';
+    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.4.apk';
     const webUrl = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
 
     const message = `🏠 Join "${roomName}" on Tiffin Tracker!\n` +
@@ -5188,8 +5303,33 @@
     if (switchRoomBtn) {
       switchRoomBtn.addEventListener('click', () => {
         triggerHaptic();
-        if (confirm('Switch flat or log out? You can rejoin anytime with your Room Code.')) {
+        const isAdmin = RoomManager.isAdmin();
+        const otherMembers = (RoomManager.activeRoom?.members || []).filter(m => m.id !== RoomManager.session?.memberId);
+        let msg = 'Switch flat or log out? You can rejoin anytime with your Room Code.';
+        if (isAdmin && otherMembers.length > 0) {
+          msg = `You are the Flat Admin. If you leave, admin ownership will automatically pass to ${otherMembers[0].name}. Are you sure you want to leave?`;
+        }
+        if (confirm(msg)) {
           RoomManager.leaveRoom();
+        }
+      });
+    }
+
+    const saveNewAdminPinBtn = document.getElementById('saveNewAdminPinBtn');
+    if (saveNewAdminPinBtn) {
+      saveNewAdminPinBtn.addEventListener('click', async () => {
+        triggerHaptic();
+        await RoomManager.saveNewAdminPin();
+      });
+    }
+
+    const newAdminPinInput = document.getElementById('newAdminPinInput');
+    if (newAdminPinInput) {
+      newAdminPinInput.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          triggerHaptic();
+          await RoomManager.saveNewAdminPin();
         }
       });
     }

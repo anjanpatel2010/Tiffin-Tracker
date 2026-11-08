@@ -20,7 +20,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css?v=5.7.3">
+  <link rel="stylesheet" href="styles.css?v=5.7.4">
 </head>
 <body>
   <!-- Luxury Startup Animation (Fast & Smooth Brand Reveal) -->
@@ -1107,6 +1107,33 @@
       </div>
     </div>
 
+    <!-- ========================================== -->
+    <!-- MODAL: NEW ADMIN PIN GENERATION           -->
+    <!-- ========================================== -->
+    <div id="newAdminPinModal" class="modal-backdrop">
+      <div class="modal-box modal-sm" style="text-align:center;">
+        <div style="margin: 8px auto 14px; width:56px; height:56px; border-radius:50%; background:rgba(255, 184, 0, 0.15); display:flex; align-items:center; justify-content:center; font-size:28px;">
+          👑
+        </div>
+        <h3 class="modal-title" style="margin-bottom:6px; font-weight:800; font-size:1.25rem;">You are the New Admin!</h3>
+        <p style="font-size:0.84rem; color:var(--text-secondary); line-height:1.45; margin-bottom:16px;">
+          The previous admin stepped down. You have been promoted to <strong>Flat Admin</strong> for <span id="newAdminFlatName" style="color:var(--text-primary); font-weight:700;">the flat</span>.
+        </p>
+        <div style="background:var(--bg-elevated); border:1px solid var(--border-color); border-radius:10px; padding:12px; margin-bottom:16px; text-align:left;">
+          <label for="newAdminPinInput" class="input-label" style="font-size:0.8rem; font-weight:700; margin-bottom:6px; display:block;">
+            Create Your New Admin Security PIN:
+          </label>
+          <input type="password" id="newAdminPinInput" class="text-input" placeholder="e.g. 4-digit PIN" maxlength="12" style="font-size:1.05rem; letter-spacing:3px; text-align:center; font-weight:800;">
+          <span id="newAdminPinError" class="helper-text text-rose" style="display:none; font-weight:600; font-size:0.75rem; margin-top:4px;">Please enter a PIN with at least 4 digits.</span>
+        </div>
+        <div class="modal-footer" style="padding:0;">
+          <button id="saveNewAdminPinBtn" class="pill-btn-primary w-full" style="padding:12px; font-weight:700; font-size:0.95rem;">
+            Save &amp; Activate Admin Rights
+          </button>
+        </div>
+      </div>
+    </div>
+
 
 
 
@@ -1214,7 +1241,7 @@
         <div class="morphe-version-badge">
           <span id="updateCurrentVersionTag" class="morphe-chip-current">v5.3.6</span>
           <span class="morphe-version-arrow">➔</span>
-          <span id="updateVersionTag" class="morphe-chip-latest">v5.7.3</span>
+          <span id="updateVersionTag" class="morphe-chip-latest">v5.7.4</span>
           <span class="morphe-latest-pill">LATEST</span>
         </div>
 
@@ -1283,17 +1310,17 @@
   </div>
 
   <!-- Firebase Cloud Realtime Engine -->
-  <script src="firebase-app.js?v=5.7.3"></script>
-  <script src="firebase-firestore.js?v=5.7.3"></script>
+  <script src="firebase-app.js?v=5.7.4"></script>
+  <script src="firebase-firestore.js?v=5.7.4"></script>
   <!-- Native Device Bridge (Status bar, Insets, Back Button, Local Notifications, Push Notifications) -->
-  <script src="native-bridge.js?v=5.7.3"></script>
+  <script src="native-bridge.js?v=5.7.4"></script>
   <!-- QR Generator Script -->
-  <script src="qr.js?v=5.7.3"></script>
+  <script src="qr.js?v=5.7.4"></script>
   <!-- Firebase Cloud Sync Bridge -->
-  <script src="firebase-sync.js?v=5.7.3"></script>
+  <script src="firebase-sync.js?v=5.7.4"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=5.7.3"></script>
+  <script src="app.js?v=5.7.4"></script>
   <!-- In-App Auto Update Sentinel -->
-  <script src="updater.js?v=5.7.3"></script>
+  <script src="updater.js?v=5.7.4"></script>
 </body>
 </html>
