@@ -46,7 +46,7 @@ function extractTokens(roomData, senderId = '') {
   // 1. Nested map: roomData.fcmTokens
   if (roomData.fcmTokens && typeof roomData.fcmTokens === 'object') {
     for (const [key, val] of Object.entries(roomData.fcmTokens)) {
-      if (key && senderId && key.toLowerCase() === senderId.toLowerCase()) continue;
+      if (key && senderId && senderId !== 'member' && key.toLowerCase() === senderId.toLowerCase()) continue;
       const t = typeof val === 'string' ? val : val?.token;
       if (t && typeof t === 'string' && t.trim().length > 10) {
         result.push({ token: t.trim(), key: `fcmTokens.${key}` });
@@ -58,7 +58,7 @@ function extractTokens(roomData, senderId = '') {
   for (const [key, val] of Object.entries(roomData)) {
     if (key.startsWith('fcmTokens.')) {
       const memberKey = key.slice('fcmTokens.'.length);
-      if (memberKey && senderId && memberKey.toLowerCase() === senderId.toLowerCase()) continue;
+      if (memberKey && senderId && senderId !== 'member' && memberKey.toLowerCase() === senderId.toLowerCase()) continue;
       const t = typeof val === 'string' ? val : val?.token;
       if (t && typeof t === 'string' && t.trim().length > 10) {
         if (!result.some(r => r.token === t.trim())) {

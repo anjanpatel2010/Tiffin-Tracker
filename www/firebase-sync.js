@@ -371,26 +371,45 @@
     async registerFcmToken(token) {
       if (!this.isAvailable || !db || !token) return;
       const roomCode = this.getCleanRoom();
-      const myId = (typeof RoomManager !== 'undefined' && RoomManager.session?.name)
-        ? RoomManager.sanitizeId(RoomManager.session.name)
-        : 'member';
+      if (!roomCode) {
+        console.log('[FirebaseSync] FCM token cached, waiting for active room to register.');
+        return;
+      }
+
+      let myId = 'member';
+      if (typeof RoomManager !== 'undefined' && RoomManager.session?.name) {
+        myId = RoomManager.sanitizeId(RoomManager.session.name);
+      } else {
+        try {
+          const raw = localStorage.getItem('tiffin_user_session');
+          if (raw) {
+            const p = JSON.parse(raw);
+            if (p && p.name) myId = p.name.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+          }
+        } catch (e) {}
+      }
+
+      if (myId === 'member') {
+        const storedId = localStorage.getItem('tiffin_my_identity');
+        if (storedId) myId = storedId.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+      }
+
+      const isNative = (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+      const platform = isNative ? 'android' : 'web';
 
       try {
-        const updatePayload = {
-          fcmTokens: {
-            [myId]: {
-              token: token,
-              updatedAt: Date.now()
-            }
-          }
-        };
-        // Also support flattened key for direct queries
-        updatePayload[`fcmTokens.${myId}`] = {
-          token: token,
+        const tokenObj = {
+          token: token.trim(),
+          platform: platform,
           updatedAt: Date.now()
         };
+
+        const updatePayload = {
+          [`fcmTokens.${myId}`]: tokenObj
+        };
+
         await db.collection('rooms').doc(roomCode).set(updatePayload, { merge: true });
-        console.log(`[FirebaseSync] FCM push token registered in Firestore for ${myId}`);
+        console.log(`[FirebaseSync] FCM push token registered in Firestore for ${myId} (platform: ${platform}) in room #${roomCode}`);
       } catch (err) {
         console.warn('[FirebaseSync] registerFcmToken error:', err);
       }

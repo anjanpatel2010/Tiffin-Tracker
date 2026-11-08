@@ -1,10 +1,10 @@
-const CACHE_NAME = 'tiffin-tracker-v5.7.0';
+const CACHE_NAME = 'tiffin-tracker-v5.7.1';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=5.7.0',
-  './app.js?v=5.7.0',
-  './qr.js?v=5.7.0',
+  './styles.css?v=5.7.1',
+  './app.js?v=5.7.1',
+  './qr.js?v=5.7.1',
   './manifest.json',
   './icon.svg'
 ];
@@ -44,14 +44,15 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  const title = payload.title || 'Tiffin Tracker 🍲';
+  const title = (payload.notification && payload.notification.title) || payload.title || 'Tiffin Tracker 🍲';
   const options = {
-    body: payload.body || payload.message || 'Tap to view meal updates.',
+    body: (payload.notification && payload.notification.body) || payload.body || payload.message || 'Tap to view meal updates.',
     icon: './icon.svg',
     badge: './icon.svg',
-    tag: payload.tag || 'tiffin-alert',
+    tag: payload.tag || (payload.data && payload.data.tag) || 'tiffin-alert',
     renotify: true,
-    data: { url: payload.click || payload.url || './#view-logger' }
+    vibrate: [200, 100, 200],
+    data: payload.data || { url: payload.click || payload.url || './#view-logger' }
   };
 
   event.waitUntil(

@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.7.0';
+  const APP_VERSION = '5.7.1';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -4019,6 +4019,10 @@
       SyncEngine.setRoomCode(codeKey);
       if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
         FirebaseSync.subscribeRoom(codeKey);
+        const cachedFcm = localStorage.getItem('tiffin_fcm_token');
+        if (cachedFcm) {
+          FirebaseSync.registerFcmToken(cachedFcm);
+        }
         if (FirebaseSync.latestSnapshot) {
           handleCloudSyncUpdate(FirebaseSync.latestSnapshot);
         }
@@ -4068,6 +4072,12 @@
       if (!this.activeRoom) return;
       try {
         localStorage.setItem(`tiffin_room_${this.activeRoom.code}`, JSON.stringify(this.activeRoom));
+        if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
+          const cachedFcm = localStorage.getItem('tiffin_fcm_token');
+          if (cachedFcm) {
+            FirebaseSync.registerFcmToken(cachedFcm);
+          }
+        }
       } catch (e) {}
     },
 
@@ -5000,7 +5010,7 @@
     triggerHaptic();
     const roomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || 'ROOM';
     const roomName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'our flat';
-    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.0.apk';
+    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.1.apk';
     const webUrl = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
 
     const message = `🏠 Join "${roomName}" on Tiffin Tracker!\n` +

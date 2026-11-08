@@ -126,10 +126,10 @@ const updateVersionManifest = (filePath) => {
     data.githubReleaseUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/releases';
     data.message = `Tiffin Tracker v${targetVersion} is now available!`;
     data.releaseNotes = [
-      `Admin Approval Option: Require approval before new members join flat`,
-      `Instant Admin Popup Alert: 1-Tap Approve/Decline notification banner with audio chime`,
-      `Live Waiting Screen: Real-time admission for new roommates once approved`,
-      `Secure Firebase Cloud Messaging & Firestore two-way real-time synchronization`
+      `Custom Kotlin FirebaseMessagingService: Delivers notifications when app is closed, terminated, or locked`,
+      `Web Push & FCM Service Worker (firebase-messaging-sw.js) for desktop & mobile web push`,
+      `Fixed token registration timing and sender self-exclusion filter for reliable delivery`,
+      `High-priority notification channel (tiffin_notifications) with lockscreen visibility and chime sound`
     ];
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');
