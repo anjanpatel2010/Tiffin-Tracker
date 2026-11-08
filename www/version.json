@@ -1,20 +1,31 @@
 {
-  "version": "5.7.1",
-  "versionCode": 50701,
+  "version": "5.7.2",
+  "versionCode": 50702,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-08",
-  "message": "Tiffin Tracker v5.7.1 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.7.1.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.1.apk",
+  "message": "Tiffin Tracker v5.7.2 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.7.2.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.2.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
-    "Custom Kotlin FirebaseMessagingService: Delivers notifications when app is closed, terminated, or locked",
-    "Web Push & FCM Service Worker (firebase-messaging-sw.js) for desktop & mobile web push",
-    "Fixed token registration timing and sender self-exclusion filter for reliable delivery",
-    "High-priority notification channel (tiffin_notifications) with lockscreen visibility and chime sound"
+    "Pure Native Android: Removed deprecated web/PWA service workers and legacy web push code",
+    "Custom Kotlin FirebaseMessagingService: Background alerts delivered directly to device lockscreen",
+    "Automated token registration keyed by member ID with instant Firestore synchronization",
+    "High-priority notification channel (tiffin_notifications) with chime sound and vibration"
   ],
   "history": [
+    {
+      "version": "5.7.1",
+      "versionCode": 50701,
+      "releaseDate": "2026-11-08",
+      "releaseNotes": [
+        "Custom Kotlin FirebaseMessagingService: Delivers notifications when app is closed, terminated, or locked",
+        "Web Push & FCM Service Worker (firebase-messaging-sw.js) for desktop & mobile web push",
+        "Fixed token registration timing and sender self-exclusion filter for reliable delivery",
+        "High-priority notification channel (tiffin_notifications) with lockscreen visibility and chime sound"
+      ]
+    },
     {
       "version": "5.7.0",
       "versionCode": 50700,

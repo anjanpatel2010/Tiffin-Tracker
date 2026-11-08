@@ -1,11 +1,11 @@
 {
   "name": "tiffin-tracker",
-  "version": "5.7.1",
-  "description": "Tiffin Tracker PWA with native real-time cloud sync and Web Push notifications",
+  "version": "5.7.2",
+  "description": "Tiffin Tracker Android Native App with Firebase Cloud Messaging and real-time cloud sync",
   "main": "www/index.html",
   "scripts": {
     "start": "serve -s www",
-    "test": "node -c www/app.js && node -c www/sw.js && node -c www/updater.js",
+    "test": "node -c www/app.js && node -c www/updater.js && node -c www/firebase-sync.js",
     "build:apk": "node scripts/build-release.js",
     "build:patch": "node scripts/build-release.js patch",
     "build:minor": "node scripts/build-release.js minor",
@@ -25,8 +25,7 @@
     "@capacitor/status-bar": "^8.0.4",
     "firebase": "^13.2.0",
     "firebase-admin": "^14.5.0",
-    "sharp": "^0.35.5",
-    "web-push": "^3.6.7"
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@capacitor/android": "^8.5.3",

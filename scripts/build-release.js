@@ -87,7 +87,7 @@ console.log('===================================================================
 
 // 3. Step: Syntax Checks
 console.log('[1/7] Running pre-build syntax checks...');
-execSync('node -c www/app.js && node -c www/sw.js && node -c www/updater.js && node -c functions/index.js', {
+execSync('node -c www/app.js && node -c www/updater.js && node -c www/firebase-sync.js && node -c functions/index.js', {
   cwd: rootDir,
   stdio: 'inherit'
 });
@@ -126,10 +126,10 @@ const updateVersionManifest = (filePath) => {
     data.githubReleaseUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/releases';
     data.message = `Tiffin Tracker v${targetVersion} is now available!`;
     data.releaseNotes = [
-      `Custom Kotlin FirebaseMessagingService: Delivers notifications when app is closed, terminated, or locked`,
-      `Web Push & FCM Service Worker (firebase-messaging-sw.js) for desktop & mobile web push`,
-      `Fixed token registration timing and sender self-exclusion filter for reliable delivery`,
-      `High-priority notification channel (tiffin_notifications) with lockscreen visibility and chime sound`
+      `Pure Native Android: Removed deprecated web/PWA service workers and legacy web push code`,
+      `Custom Kotlin FirebaseMessagingService: Background alerts delivered directly to device lockscreen`,
+      `Automated token registration keyed by member ID with instant Firestore synchronization`,
+      `High-priority notification channel (tiffin_notifications) with chime sound and vibration`
     ];
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');
@@ -182,23 +182,14 @@ if (fs.existsSync(indexHtmlPath)) {
   fs.writeFileSync(indexHtmlPath, indexHtml, 'utf8');
 }
 
-// H. www/sw.js
-const swPath = path.join(rootDir, 'www/sw.js');
-if (fs.existsSync(swPath)) {
-  let sw = fs.readFileSync(swPath, 'utf8');
-  sw = sw.replace(/const CACHE_NAME = 'tiffin-tracker-v[\d\.]+';/, `const CACHE_NAME = 'tiffin-tracker-v${targetVersion}';`);
-  sw = sw.replace(/\?v=[\d\.]+/g, `?v=${targetVersion}`);
-  fs.writeFileSync(swPath, sw, 'utf8');
-}
-
-// I. scripts/test-apk.ps1 & run-on-emulator.bat
+// H. scripts/test-apk.ps1 & run-on-emulator.bat
 const testApkPath = path.join(rootDir, 'scripts/test-apk.ps1');
 if (fs.existsSync(testApkPath)) {
   let testApk = fs.readFileSync(testApkPath, 'utf8');
   testApk = testApk.replace(/Tiffin-Tracker-v[\d\.]+\.apk/g, apkFilename);
   fs.writeFileSync(testApkPath, testApk, 'utf8');
 }
-console.log('  ✓ Updated all 11 version references.');
+console.log('  ✓ Updated all 10 version references.');
 
 // 5. Step: Sync Capacitor Web Assets
 console.log('[3/7] Syncing web assets to Android via Capacitor...');

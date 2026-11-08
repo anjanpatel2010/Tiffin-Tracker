@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.7.1';
+  const APP_VERSION = '5.7.2';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -410,113 +410,19 @@
     fillSelect(daySelect);
   }
 
-  // Convert base64 VAPID public key to Uint8Array for PushManager
-  function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-  }
-
   // ==========================================================================
-  // NATIVE PHONE NOTIFICATION BAR SYSTEM (PWA / Web Push / Android / iOS)
+  // NATIVE ANDROID NOTIFICATION SYSTEM (Status Bar & Firebase Cloud Messaging)
   // ==========================================================================
   const NotificationManager = {
-    VAPID_PUBLIC: 'BKdzxa4We0gIQMuW9gJedEKnTecB-PxOIS24zjIK4EFpScY5hXUsZu6n7rfKBnP_V-TMYO9NjxJlh8VnjWyoITM',
-    currentSubscription: null,
-
     isSupported() {
-      if (window.NativeBridge && window.NativeBridge.isNative) return true;
-      return ('Notification' in window);
+      return true;
     },
 
     getPermission() {
       if (window.NativeBridge && window.NativeBridge.isNative) {
         return localStorage.getItem('tiffin_native_notif_granted') === 'true' ? 'granted' : 'default';
       }
-      return this.isSupported() ? Notification.permission : 'unsupported';
-    },
-
-    async getVapidPublicKey() {
-      try {
-        const res = await fetch('/api/vapid-public-key');
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.publicKey) return data.publicKey;
-        }
-      } catch (e) {}
-      return this.VAPID_PUBLIC;
-    },
-
-    async subscribeWebPush() {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
-      if (Notification.permission !== 'granted') return null;
-
-      try {
-        const reg = await navigator.serviceWorker.ready;
-        if (!reg || !reg.pushManager) return null;
-
-        let sub = await reg.pushManager.getSubscription();
-        if (!sub) {
-          const publicKey = await this.getVapidPublicKey();
-          if (!publicKey) return null;
-          const convertedKey = urlBase64ToUint8Array(publicKey);
-          sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: convertedKey
-          });
-        }
-
-        if (sub) {
-          this.currentSubscription = sub;
-          localStorage.setItem('tiffin_push_sub', JSON.stringify(sub));
-
-          const activeRoom = (typeof SyncEngine !== 'undefined' && SyncEngine.roomCode) || 'default';
-          const memberId = (typeof SyncEngine !== 'undefined' && SyncEngine.identity ? SyncEngine.identity : 'Anjan').toLowerCase();
-          const memberName = (typeof SyncEngine !== 'undefined' && SyncEngine.identity) || 'Flatmate';
-
-          fetch('/api/subscribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              roomCode: activeRoom,
-              subscription: sub,
-              memberId: memberId,
-              memberName: memberName
-            })
-          }).catch(err => console.warn('[WebPush] Registration sync failed:', err));
-
-          // Also exchange push subscription with room peers via sync broadcast
-          if (typeof SyncEngine !== 'undefined' && typeof SyncEngine.broadcast === 'function') {
-            SyncEngine.broadcast({
-              type: 'push_sub_registered',
-              roomCode: activeRoom,
-              subscription: sub,
-              memberId: memberId,
-              memberName: memberName
-            }).catch(() => {});
-          }
-
-          return sub;
-        }
-      } catch (err) {
-        console.warn('[WebPush] Registration error:', err);
-      }
-      return null;
-    },
-
-    async sendWebPush(payload = {}) {
-      if (window.FirebaseSync && typeof window.FirebaseSync.sendRoomNotification === 'function') {
-        window.FirebaseSync.sendRoomNotification({
-          title: payload.title || 'Tiffin Tracker',
-          body: payload.body || 'New update from flatmates',
-          tag: payload.tag || 'tiffin-alert'
-        });
-      }
+      return ('Notification' in window) ? Notification.permission : 'granted';
     },
 
     updateUI() {
@@ -528,7 +434,7 @@
     },
 
     async requestPermission(showFeedback = true) {
-      if (window.NativeBridge && window.NativeBridge.isNative) {
+      if (window.NativeBridge) {
         try {
           const granted = await window.NativeBridge.requestNotificationPermission();
           if (granted) {
@@ -549,29 +455,12 @@
         }
       }
 
-      if (!this.isSupported()) {
-        if (showFeedback) showToast('Notifications not supported by this browser.');
-        return false;
-      }
-
-      try {
-        const result = await Notification.requestPermission();
-        this.updateUI();
-        if (result === 'granted') {
-          if (showFeedback) showToast('Phone alerts enabled! Sending test notification...');
-          await this.send('Alerts Active', {
-            body: 'You will receive phone alerts for mess expenses and updates.',
-            tag: 'tiffin-welcome',
-            localOnly: true
-          });
-          // Register native Web Push subscription on backend
-          await this.subscribeWebPush();
-          return true;
-        } else if (result === 'denied' && showFeedback) {
-          showToast('Notification permission was denied in browser settings.');
-        }
-      } catch (e) {
-        console.warn('Error requesting notification permission', e);
+      if ('Notification' in window) {
+        try {
+          const res = await Notification.requestPermission();
+          this.updateUI();
+          return res === 'granted';
+        } catch (e) {}
       }
       return false;
     },
@@ -587,45 +476,17 @@
         });
       }
 
-      // 2. Dispatch Local Notification if native
+      // 2. Dispatch Native Android Status Bar Notification
       if (window.NativeBridge && window.NativeBridge.isNative) {
         await window.NativeBridge.sendNotification(title, options.body || '', options.tag || 'tiffin-alert');
-        return;
-      }
-
-      if (!this.isSupported() || Notification.permission !== 'granted') return;
-
-      const defaultOpts = {
-        icon: './icon.svg',
-        badge: './icon.svg',
-        tag: 'tiffin-alert',
-        renotify: true,
-        data: { url: window.location.href.split('#')[0] + '#view-logger' },
-        ...options
-      };
-
-      // 1. Service Worker Notification (Primary for mobile Chrome / PWA / Android)
-      // Wrapped in Promise.race with 1200ms timeout so it never hangs if SW is unready
-      if ('serviceWorker' in navigator) {
+      } else if ('Notification' in window && Notification.permission === 'granted') {
         try {
-          const reg = await Promise.race([
-            navigator.serviceWorker.ready,
-            new Promise((_, reject) => setTimeout(() => reject(new Error('SW ready timeout')), 1200))
-          ]);
-          if (reg && typeof reg.showNotification === 'function') {
-            await reg.showNotification(title, defaultOpts);
-            return;
-          }
-        } catch (swErr) {
-          // SW timed out or not available, fallback to Desktop Notification constructor
-        }
-      }
-
-      // 2. Desktop Browser Notification Fallback
-      try {
-        new Notification(title, defaultOpts);
-      } catch (err) {
-        console.warn('Desktop Notification constructor failed (expected on some mobile browsers):', err);
+          new Notification(title, {
+            body: options.body || '',
+            icon: './icon.png',
+            tag: options.tag || 'tiffin-alert'
+          });
+        } catch (e) {}
       }
     }
   };
@@ -843,13 +704,6 @@
           this.catchUp();
         }
       }, 8000);
-
-      
-
-      // 7. Auto-ensure native Web Push subscription with Vercel backend
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        NotificationManager.subscribeWebPush();
-      }
     },
 
     setRoomCode(newRoom) {
@@ -870,7 +724,6 @@
       if (typeof FirebaseSync !== 'undefined' && FirebaseSync.subscribeRoom) {
         FirebaseSync.subscribeRoom(this.roomCode);
       }
-      NotificationManager.subscribeWebPush();
       showToast(`Switched to room #${this.roomCode}`);
     },
 
@@ -5010,7 +4863,7 @@
     triggerHaptic();
     const roomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || 'ROOM';
     const roomName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'our flat';
-    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.1.apk';
+    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.2.apk';
     const webUrl = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
 
     const message = `🏠 Join "${roomName}" on Tiffin Tracker!\n` +
@@ -5777,52 +5630,13 @@
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
-  function registerServiceWorker() {
+  function purgeServiceWorkers() {
     if ('serviceWorker' in navigator) {
-      let refreshing = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing) {
-          refreshing = true;
-          window.location.reload();
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (const reg of registrations) {
+          reg.unregister();
         }
-      });
-
-      navigator.serviceWorker.register('sw.js?v=' + APP_VERSION)
-        .then((reg) => {
-          // Immediately query server for sw.js byte-difference
-          reg.update().catch(() => {});
-
-          reg.addEventListener('updatefound', () => {
-            const newWorker = reg.installing;
-            if (newWorker) {
-              newWorker.addEventListener('statechange', () => {
-                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  showToast('App updated to latest version! Reloading...', 'success');
-                  setTimeout(() => {
-                    if (!refreshing) {
-                      refreshing = true;
-                      window.location.reload();
-                    }
-                  }, 800);
-                }
-              });
-            }
-          });
-        })
-        .catch(err => console.log('Service Worker registration skipped:', err));
-
-      navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data && event.data.type === 'NAVIGATE_TAB' && event.data.tab) {
-          const target = event.data.tab;
-          document.querySelectorAll('.nav-tab, .m-nav-tab').forEach(t => {
-            t.classList.toggle('active', t.getAttribute('data-tab') === target);
-          });
-          document.querySelectorAll('.view-panel').forEach(panel => {
-            panel.classList.toggle('active', panel.id === `view-${target}`);
-          });
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      });
+      }).catch(() => {});
     }
   }
 
@@ -5860,7 +5674,7 @@
       setupExportAndSharing();
       setupRoomAccessControls();
       setupInvoiceModalControls();
-      registerServiceWorker();
+      purgeServiceWorkers();
 
       // Initialize Room & Multi-Tenant Access Gate
       RoomManager.init();

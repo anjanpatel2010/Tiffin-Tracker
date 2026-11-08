@@ -394,8 +394,7 @@
         if (storedId) myId = storedId.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
       }
 
-      const isNative = (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
-      const platform = isNative ? 'android' : 'web';
+      const platform = 'android';
 
       try {
         const tokenObj = {
