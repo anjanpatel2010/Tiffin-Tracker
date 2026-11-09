@@ -126,10 +126,10 @@ const updateVersionManifest = (filePath) => {
     data.githubReleaseUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/releases';
     data.message = `Tiffin Tracker v${targetVersion} is now available!`;
     data.releaseNotes = [
-      `Admin Succession & PIN Generation: Automatic promotion of senior flatmate when admin leaves with popup to set new Admin PIN`,
-      `Manual Ownership Transfer: Flat Admins can transfer full authority to any flatmate via '👑 Make Admin'`,
-      `Rock-solid Room Lifecycle: Cloud Firestore authoritative source of truth with zero ghost resurrection`,
-      `Instant Kick & Logout: Kicked members are immediately purged, local session reset, and returned to gate`
+      `FCM Push Notifications: Ground-up rebuild using Google FCM HTTP v1 API with high-priority background delivery`,
+      `Smart Flatmate Alerts: Real-time status bar notifications when meals, dishes, expenses, or deposits are logged`,
+      `Dedicated Notification Channel: High importance 'tiffin_notifications' with heads-up display, sound, and vibration`,
+      `Automatic Token Lifecycle: Robust device token binding and room sync in Cloud Firestore with sender exclusion`
     ];
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');

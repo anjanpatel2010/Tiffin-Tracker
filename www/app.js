@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.7.4';
+  const APP_VERSION = '5.7.6';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -443,7 +443,8 @@
             if (showFeedback) showToast('🔔 Phone alerts enabled! Sending test notification...');
             await this.send('Alerts Active', {
               body: 'You will receive phone alerts for mess expenses and updates.',
-              tag: 'tiffin-welcome'
+              tag: 'tiffin-welcome',
+              localNotify: true
             });
             return true;
           } else {
@@ -476,17 +477,19 @@
         });
       }
 
-      // 2. Dispatch Native Android Status Bar Notification
-      if (window.NativeBridge && window.NativeBridge.isNative) {
-        await window.NativeBridge.sendNotification(title, options.body || '', options.tag || 'tiffin-alert');
-      } else if ('Notification' in window && Notification.permission === 'granted') {
-        try {
-          new Notification(title, {
-            body: options.body || '',
-            icon: './icon.png',
-            tag: options.tag || 'tiffin-alert'
-          });
-        } catch (e) {}
+      // 2. Local status bar alert only if explicitly requested for self (e.g. test or reminder)
+      if (options.localNotify || options.localOnly) {
+        if (window.NativeBridge && window.NativeBridge.isNative) {
+          await window.NativeBridge.sendNotification(title, options.body || '', options.tag || 'tiffin-alert');
+        } else if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification(title, {
+              body: options.body || '',
+              icon: './icon.png',
+              tag: options.tag || 'tiffin-alert'
+            });
+          } catch (e) {}
+        }
       }
     }
   };
@@ -5053,7 +5056,7 @@
     triggerHaptic();
     const roomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || 'ROOM';
     const roomName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'our flat';
-    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.4.apk';
+    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.6.apk';
     const webUrl = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
 
     const message = `🏠 Join "${roomName}" on Tiffin Tracker!\n` +

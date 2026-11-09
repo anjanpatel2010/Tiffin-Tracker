@@ -37,9 +37,29 @@
 
       const { StatusBar, SplashScreen, App, LocalNotifications, PushNotifications } = getPlugins();
 
-      // Configure Native Firebase Cloud Messaging (FCM) Push Notifications
+      // Configure Official Native Firebase Cloud Messaging (FCM) via Capacitor
       if (PushNotifications) {
         try {
+          // 1. Create high-importance notification channel for Android 8.0+
+          if (typeof PushNotifications.createChannel === 'function') {
+            PushNotifications.createChannel({
+              id: 'tiffin_notifications',
+              name: 'Tiffin Tracker Notifications',
+              description: 'Real-time flat notifications, meal alerts, and ledger updates',
+              importance: 5, // IMPORTANCE_HIGH (Heads-up popups on screen)
+              visibility: 1, // VISIBILITY_PUBLIC (Visible on lock screen)
+              sound: 'default',
+              vibration: true,
+              lights: true,
+              lightColor: '#00f5a0'
+            }).then(() => {
+              console.log('[NativeBridge] FCM Notification Channel "tiffin_notifications" confirmed.');
+            }).catch(chErr => {
+              console.warn('[NativeBridge] Notification channel creation warning:', chErr);
+            });
+          }
+
+          // 2. Listen for FCM Device Registration Token
           PushNotifications.addListener('registration', (token) => {
             console.log('[NativeBridge] FCM Token registered:', token.value);
             localStorage.setItem('tiffin_fcm_token', token.value);
@@ -48,35 +68,50 @@
             }
           });
 
+          // 3. Listen for Registration Errors
           PushNotifications.addListener('registrationError', (error) => {
             console.warn('[NativeBridge] FCM registration error:', error);
           });
 
-          // Incoming notification when app is in foreground
+          // 4. Foreground push notification received (app is active on screen)
           PushNotifications.addListener('pushNotificationReceived', (notification) => {
-            console.log('[NativeBridge] Foreground Push received:', notification);
-            if (typeof showToast === 'function') {
-              showToast(notification.title || 'New flatmate alert!');
+            console.log('[NativeBridge] Foreground FCM Push received:', notification);
+            const title = notification.title || 'Tiffin Tracker Alert 🍱';
+            const body = notification.body || '';
+            if (typeof window.showToast === 'function') {
+              window.showToast(body ? `${title}: ${body}` : title);
             }
-            if (typeof playJoinAlertChime === 'function') {
-              playJoinAlertChime();
+            if (typeof window.playJoinAlertChime === 'function') {
+              window.playJoinAlertChime();
             }
           });
 
-          // User tapped notification in system tray (even if app was closed!)
+          // 5. User tapped notification in system tray / notification bar (even if app was closed)
           PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-            console.log('[NativeBridge] Push action performed:', action);
-            const data = action.notification.data || {};
-            const targetUrl = data.url || data.click_action || '#view-logger';
-            window.location.hash = targetUrl;
+            console.log('[NativeBridge] FCM Push Action performed:', action);
+            const data = action.notification?.data || {};
+            const targetUrl = data.actionUrl || data.url || data.click_action || '';
+            if (targetUrl) {
+              window.location.hash = targetUrl;
+            }
+            if (data.roomCode && window.FirebaseSync) {
+              console.log('[NativeBridge] Notification arrived for room #' + data.roomCode);
+            }
           });
 
-          // Auto-register if permission was already granted
-          PushNotifications.checkPermissions().then(perm => {
-            if (perm.receive === 'granted') {
-              PushNotifications.register();
+          // 6. Check runtime permission and register with FCM
+          PushNotifications.checkPermissions().then(async (perm) => {
+            if (perm.receive !== 'granted') {
+              perm = await PushNotifications.requestPermissions();
             }
-          }).catch(() => {});
+            if (perm.receive === 'granted') {
+              localStorage.setItem('tiffin_native_notif_granted', 'true');
+              await PushNotifications.register();
+              console.log('[NativeBridge] FCM PushNotifications registered with Google Play Services.');
+            }
+          }).catch((e) => {
+            console.warn('[NativeBridge] FCM Auto-permission check warning:', e);
+          });
         } catch (pushErr) {
           console.warn('[NativeBridge] PushNotifications setup warning:', pushErr);
         }
@@ -161,6 +196,11 @@
     // Native Haptic Engine (Disabled per user request)
     async haptic(style = 'light') {
       return;
+    },
+
+    // Retrieve cached or registered FCM device token
+    getFcmToken() {
+      return localStorage.getItem('tiffin_fcm_token') || null;
     },
 
     // Request Android System Notification & Push Permission

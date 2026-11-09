@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.7.5] — 2026-11-09
+
+### Added
+- **Ground-Up FCM Push Notifications Rebuild**: Clean native Firebase Cloud Messaging HTTP v1 architecture matching modern Google Play Services guidelines.
+- **Dedicated Notification Channel**: Created `tiffin_notifications` with `IMPORTANCE_HIGH`, lockscreen visibility, vibration, and green notification light.
+- **Smart Flatmate Dispatching**: Instant background alerts to all flatmates when meals, dishes, expenses, or deposits are logged, while cleanly filtering out the sender.
+- **Standalone FCM Dispatcher & REST API**: Full backend server (`scripts/send-fcm-server.js`) with `/send`, `/broadcast`, `/health`, and Firestore queue listener.
+
+---
+
 ## [5.7.0] — 2026-11-08
 
 ### Added

@@ -665,7 +665,8 @@
     },
 
     async registerFcmToken(token) {
-      if (!this.isAvailable || !db || !token) return;
+      const cleanToken = (token || localStorage.getItem('tiffin_fcm_token') || '').trim();
+      if (!this.isAvailable || !db || !cleanToken) return;
       const roomCode = this.getCleanRoom();
       if (!roomCode) {
         console.log('[FirebaseSync] FCM token cached, waiting for active flat to bind.');
@@ -673,27 +674,38 @@
       }
 
       let myId = 'member';
+      let myName = 'Flatmate';
       try {
         const sessionRaw = localStorage.getItem('tiffin_session') || localStorage.getItem('tiffin_user_session');
         if (sessionRaw) {
           const s = JSON.parse(sessionRaw);
-          if (s && s.memberId) myId = s.memberId;
-          else if (s && s.name) myId = s.name.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+          if (s) {
+            myId = s.memberId || s.id || (s.name ? s.name.toLowerCase().replace(/[^a-z0-9_-]/g, '_') : 'member');
+            myName = s.name || 'Flatmate';
+          }
+        }
+        if (typeof SyncEngine !== 'undefined' && SyncEngine.identity && myName === 'Flatmate') {
+          myName = SyncEngine.identity;
+          if (myId === 'member') myId = SyncEngine.identity.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
         }
       } catch (e) {}
 
       try {
         const tokenObj = {
-          token: token.trim(),
+          token: cleanToken,
           platform: 'android',
+          memberId: myId,
+          memberName: myName,
           updatedAt: Date.now()
         };
 
         await db.collection('rooms').doc(roomCode).set({
-          [`fcmTokens.${myId}`]: tokenObj
+          fcmTokens: {
+            [myId]: tokenObj
+          }
         }, { merge: true });
 
-        console.log(`[FirebaseSync] FCM push token registered for ${myId} in #${roomCode}`);
+        console.log(`[FirebaseSync] FCM push token registered for ${myName} (${myId}) in #${roomCode}`);
       } catch (err) {
         console.warn('[FirebaseSync] registerFcmToken error:', err);
       }
@@ -714,23 +726,42 @@
         const sessionRaw = localStorage.getItem('tiffin_session') || localStorage.getItem('tiffin_user_session');
         if (sessionRaw) {
           const s = JSON.parse(sessionRaw);
-          if (s && s.memberId) myId = s.memberId;
-          if (s && s.name) myName = s.name;
+          if (s) {
+            myId = s.memberId || s.id || (s.name ? s.name.toLowerCase().replace(/[^a-z0-9_-]/g, '_') : 'member');
+            myName = s.name || 'Flatmate';
+          }
+        }
+        if (typeof SyncEngine !== 'undefined' && SyncEngine.identity && myName === 'Flatmate') {
+          myName = SyncEngine.identity;
+          if (myId === 'member') myId = SyncEngine.identity.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
         }
       } catch (e) {}
 
       try {
-        await db.collection('rooms').doc(roomCode).collection('notifications').add({
-          title: title || 'Tiffin Tracker',
+        const notifData = {
+          title: title || 'Tiffin Tracker 🍲',
           body: body || 'New update in your flat mess',
           tag: tag,
           senderId: myId,
           senderName: myName,
-          data: data,
+          roomCode: String(roomCode),
+          data: {
+            title: title || 'Tiffin Tracker 🍲',
+            body: body || 'New update in your flat mess',
+            roomCode: String(roomCode),
+            senderId: myId,
+            senderName: myName,
+            timestamp: String(Date.now()),
+            ...Object.fromEntries(
+              Object.entries(data || {}).map(([k, v]) => [k, String(v)])
+            )
+          },
           dispatched: false,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        console.log(`[FirebaseSync] Enqueued notification for room #${roomCode}: "${title}"`);
+        };
+
+        await db.collection('rooms').doc(roomCode).collection('notifications').add(notifData);
+        console.log(`[FirebaseSync] Enqueued FCM push notification for room #${roomCode}: "${title}"`);
         return true;
       } catch (err) {
         console.warn('[FirebaseSync] sendRoomNotification error:', err);

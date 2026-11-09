@@ -1,6 +1,8 @@
 package com.tiffin.tracker;
 
 import android.Manifest;
+import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
@@ -65,7 +67,7 @@ public class MainActivity extends BridgeActivity {
         try {
             crashlytics = FirebaseCrashlytics.getInstance();
             crashlytics.setCrashlyticsCollectionEnabled(true);
-            crashlytics.setCustomKey("app_version", "5.7.4");
+            crashlytics.setCustomKey("app_version", "5.7.6");
             crashlytics.setCustomKey("build_type", "release");
         } catch (Exception e) {
             Log.w(TAG, "Firebase Crashlytics initialization warning: " + e.getMessage());
@@ -255,11 +257,31 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    public static final String DEFAULT_CHANNEL_ID = "tiffin_notifications";
+    public static final String DEFAULT_CHANNEL_NAME = "Tiffin Tracker Notifications";
+
     private void createDefaultNotificationChannel() {
-        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (notificationManager != null) {
-            TiffinFirebaseMessagingService.createDefaultChannel(notificationManager);
-            Log.d(TAG, "Registered default notification channel on startup: " + TiffinFirebaseMessagingService.DEFAULT_CHANNEL_ID);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (notificationManager != null) {
+                NotificationChannel channel = notificationManager.getNotificationChannel(DEFAULT_CHANNEL_ID);
+                if (channel == null) {
+                    channel = new NotificationChannel(
+                        DEFAULT_CHANNEL_ID,
+                        DEFAULT_CHANNEL_NAME,
+                        NotificationManager.IMPORTANCE_HIGH
+                    );
+                    channel.setDescription("Real-time mess ledger updates, meal notifications, and flat reminders");
+                    channel.enableLights(true);
+                    channel.setLightColor(Color.GREEN);
+                    channel.enableVibration(true);
+                    channel.setVibrationPattern(new long[]{0, 250, 250, 250});
+                    channel.setShowBadge(true);
+                    channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+                    notificationManager.createNotificationChannel(channel);
+                    Log.d(TAG, "Created notification channel: " + DEFAULT_CHANNEL_ID + " with IMPORTANCE_HIGH");
+                }
+            }
         }
     }
 

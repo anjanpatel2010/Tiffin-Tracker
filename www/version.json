@@ -1,20 +1,42 @@
 {
-  "version": "5.7.4",
-  "versionCode": 50704,
+  "version": "5.7.6",
+  "versionCode": 50706,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
-  "releaseDate": "2026-11-08",
-  "message": "Tiffin Tracker v5.7.4 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.7.4.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.4.apk",
+  "releaseDate": "2026-11-09",
+  "message": "Tiffin Tracker v5.7.6 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.7.6.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.6.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
-    "Admin Succession & PIN Generation: Automatic promotion of senior flatmate when admin leaves with popup to set new Admin PIN",
-    "Manual Ownership Transfer: Flat Admins can transfer full authority to any flatmate via '👑 Make Admin'",
-    "Rock-solid Room Lifecycle: Cloud Firestore authoritative source of truth with zero ghost resurrection",
-    "Instant Kick & Logout: Kicked members are immediately purged, local session reset, and returned to gate"
+    "FCM Push Notifications: Ground-up rebuild using Google FCM HTTP v1 API with high-priority background delivery",
+    "Smart Flatmate Alerts: Real-time status bar notifications when meals, dishes, expenses, or deposits are logged",
+    "Dedicated Notification Channel: High importance 'tiffin_notifications' with heads-up display, sound, and vibration",
+    "Automatic Token Lifecycle: Robust device token binding and room sync in Cloud Firestore with sender exclusion"
   ],
   "history": [
+    {
+      "version": "5.7.5",
+      "versionCode": 50705,
+      "releaseDate": "2026-11-09",
+      "releaseNotes": [
+        "FCM Push Notifications: Ground-up rebuild using Google FCM HTTP v1 API with high-priority background delivery",
+        "Smart Flatmate Alerts: Real-time status bar notifications when meals, dishes, expenses, or deposits are logged",
+        "Dedicated Notification Channel: High importance 'tiffin_notifications' with heads-up display, sound, and vibration",
+        "Automatic Token Lifecycle: Robust device token binding and room sync in Cloud Firestore with sender exclusion"
+      ]
+    },
+    {
+      "version": "5.7.4",
+      "versionCode": 50704,
+      "releaseDate": "2026-11-08",
+      "releaseNotes": [
+        "Admin Succession & PIN Generation: Automatic promotion of senior flatmate when admin leaves with popup to set new Admin PIN",
+        "Manual Ownership Transfer: Flat Admins can transfer full authority to any flatmate via '👑 Make Admin'",
+        "Rock-solid Room Lifecycle: Cloud Firestore authoritative source of truth with zero ghost resurrection",
+        "Instant Kick & Logout: Kicked members are immediately purged, local session reset, and returned to gate"
+      ]
+    },
     {
       "version": "5.7.3",
       "versionCode": 50703,

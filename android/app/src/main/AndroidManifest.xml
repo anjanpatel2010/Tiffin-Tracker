@@ -48,20 +48,6 @@
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/colorPrimary" />
 
-        <!-- Custom Firebase Cloud Messaging Service (Handles background & lockscreen reception) -->
-        <service
-            android:name=".TiffinFirebaseMessagingService"
-            android:exported="false">
-            <intent-filter android:priority="100">
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
-        <!-- Override and remove default Capacitor MessagingService so our custom service handles all push events -->
-        <service
-            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
-            tools:node="remove" />
-
     </application>
 
     <!-- Permissions -->
