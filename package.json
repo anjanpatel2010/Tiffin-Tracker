@@ -1,11 +1,11 @@
 {
   "name": "tiffin-tracker",
-  "version": "5.7.6",
+  "version": "5.7.8",
   "description": "Tiffin Tracker Android Native App with Firebase Cloud Messaging and real-time cloud sync",
   "main": "www/index.html",
   "scripts": {
     "start": "serve -s www",
-    "test": "node -c www/app.js && node -c www/updater.js && node -c www/firebase-sync.js",
+    "test": "node -c www/app.js && node -c www/updater.js && node -c www/firebase-sync.js && node -c www/fcm-dispatcher.js",
     "build:apk": "node scripts/build-release.js",
     "build:patch": "node scripts/build-release.js patch",
     "build:minor": "node scripts/build-release.js minor",

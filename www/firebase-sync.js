@@ -256,6 +256,7 @@
 
           // Alert Admin via FCM
           this.sendRoomNotification({
+            roomCode: cleanCode,
             title: `Knock Knock! 🔔 ${candidate.name}`,
             body: `${candidate.name} requested to join flat #${cleanCode}. Tap to review and approve!`,
             tag: `req-${existingReq.id}`,
@@ -289,6 +290,7 @@
         console.log(`[FirebaseSync] Direct join to #${cleanCode}: ${candidate.name}`);
 
         this.sendRoomNotification({
+          roomCode: cleanCode,
           title: 'Flatmate Joined! 🍱',
           body: `${candidate.name} joined room #${cleanCode}!`,
           tag: `join-${candidate.id || Date.now()}`,
@@ -352,6 +354,7 @@
 
         // Send celebration FCM alert
         this.sendRoomNotification({
+          roomCode: cleanCode,
           title: `Welcome ${newMember.name}! 🍱`,
           body: `${newMember.name} joined the flat mess!`,
           tag: `join-${newMember.id}`,
@@ -422,6 +425,18 @@
         }
 
         roomData.members = members.filter(m => m.id !== memberId);
+
+        // Record explicitly in kickedMembers list to prevent ghost resurrection
+        roomData.kickedMembers = Array.isArray(roomData.kickedMembers) ? roomData.kickedMembers : [];
+        roomData.kickedMembers = roomData.kickedMembers.filter(km => km.id !== memberId);
+        if (target) {
+          roomData.kickedMembers.push({
+            id: memberId,
+            name: target.name || 'Member',
+            phone: target.phone || '',
+            kickedAt: Date.now()
+          });
+        }
 
         const updatePayload = {
           roomData: roomData,
@@ -519,6 +534,7 @@
         // Broadcast notifications if admin was promoted
         if (result.promotedAdmin) {
           this.sendRoomNotification({
+            roomCode: cleanCode,
             title: `👑 New Flat Admin: ${result.promotedAdmin.name}`,
             body: `${result.promotedAdmin.name} is now the Flat Admin.`,
             tag: `admin-promoted-${result.promotedAdmin.id}`,
@@ -619,6 +635,7 @@
 
         if (promotedMember) {
           this.sendRoomNotification({
+            roomCode: cleanCode,
             title: `👑 New Flat Admin: ${promotedMember.name}`,
             body: `${promotedMember.name} has been appointed Flat Admin.`,
             tag: `admin-promoted-${promotedMember.id}`,
@@ -712,13 +729,20 @@
     },
 
     /**
-     * Enqueue a push notification in Firestore for this flat.
-     * Firebase Cloud Messaging background dispatchers pick this up automatically.
+     * Dispatch an autonomous FCM HTTP v1 push notification to all flatmates in this room.
+     * Uses FcmDispatcher to deliver directly via Google Play Services (even when recipients are killed/closed).
+     * Also records in Firestore collection rooms/{roomCode}/notifications for auditing.
      */
-    async sendRoomNotification({ title, body, tag = 'tiffin-alert', data = {} }) {
-      if (!this.isAvailable || !db) return false;
-      const roomCode = this.getCleanRoom();
-      if (!roomCode) return false;
+    async sendRoomNotification({ title, body, tag = 'tiffin-alert', data = {}, roomCode = null }) {
+      const targetRoom = this.getCleanRoom(roomCode) ||
+                         (data && data.roomCode ? String(data.roomCode).trim().toUpperCase() : null) ||
+                         currentRoomCode ||
+                         (localStorage.getItem('tiffin_sync_room') ? String(localStorage.getItem('tiffin_sync_room')).trim().toUpperCase() : null);
+
+      if (!targetRoom) {
+        console.warn('[FirebaseSync] sendRoomNotification aborted: No room code specified.');
+        return false;
+      }
 
       let myId = 'member';
       let myName = 'Flatmate';
@@ -737,36 +761,50 @@
         }
       } catch (e) {}
 
-      try {
-        const notifData = {
-          title: title || 'Tiffin Tracker 🍲',
-          body: body || 'New update in your flat mess',
-          tag: tag,
-          senderId: myId,
-          senderName: myName,
-          roomCode: String(roomCode),
-          data: {
+      const ownToken = localStorage.getItem('tiffin_fcm_token');
+      const payloadData = {
+        title: title || 'Tiffin Tracker 🍲',
+        body: body || 'New update in your flat mess',
+        roomCode: String(targetRoom),
+        tag: tag,
+        senderId: myId,
+        senderName: myName,
+        timestamp: String(Date.now()),
+        ...Object.fromEntries(
+          Object.entries(data || {}).map(([k, v]) => [k, String(v)])
+        )
+      };
+
+      // 1. Autonomous Direct FCM Dispatch to Google FCM Servers
+      if (typeof FcmDispatcher !== 'undefined' && typeof FcmDispatcher.sendToRoom === 'function') {
+        FcmDispatcher.sendToRoom(targetRoom, title, body, payloadData, ownToken).catch(dispErr => {
+          console.warn('[FirebaseSync] FcmDispatcher error:', dispErr);
+        });
+      }
+
+      // 2. Persist in Firestore notifications collection (audit trail + server fallback)
+      if (this.isAvailable && db) {
+        try {
+          const notifDoc = {
             title: title || 'Tiffin Tracker 🍲',
             body: body || 'New update in your flat mess',
-            roomCode: String(roomCode),
+            tag: tag,
             senderId: myId,
             senderName: myName,
-            timestamp: String(Date.now()),
-            ...Object.fromEntries(
-              Object.entries(data || {}).map(([k, v]) => [k, String(v)])
-            )
-          },
-          dispatched: false,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-
-        await db.collection('rooms').doc(roomCode).collection('notifications').add(notifData);
-        console.log(`[FirebaseSync] Enqueued FCM push notification for room #${roomCode}: "${title}"`);
-        return true;
-      } catch (err) {
-        console.warn('[FirebaseSync] sendRoomNotification error:', err);
-        return false;
+            roomCode: String(targetRoom),
+            data: payloadData,
+            dispatched: true,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          };
+          await db.collection('rooms').doc(targetRoom).collection('notifications').add(notifDoc);
+          console.log(`[FirebaseSync] Dispatched FCM push & recorded in Firestore for #${targetRoom}: "${title}"`);
+          return true;
+        } catch (dbErr) {
+          console.warn('[FirebaseSync] Firestore notification write warning:', dbErr);
+        }
       }
+
+      return true;
     }
   };
 

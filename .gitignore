@@ -17,6 +17,13 @@ build/
 .env.test.local
 .env.production.local
 service-account*.json
+*service-account*.json
+fcm-config.js
+www/fcm-config.js
+scripts/create-fcm-config.js
+*.pem
+*.key
+*.p12
 *.jks
 
 # Editor / IDE directories

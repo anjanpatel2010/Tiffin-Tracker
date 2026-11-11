@@ -1,20 +1,42 @@
 {
-  "version": "5.7.6",
-  "versionCode": 50706,
+  "version": "5.7.8",
+  "versionCode": 50708,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
-  "releaseDate": "2026-11-09",
-  "message": "Tiffin Tracker v5.7.6 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.7.6.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.6.apk",
+  "releaseDate": "2026-11-11",
+  "message": "Tiffin Tracker v5.7.8 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.7.8.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.8.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
-    "FCM Push Notifications: Ground-up rebuild using Google FCM HTTP v1 API with high-priority background delivery",
-    "Smart Flatmate Alerts: Real-time status bar notifications when meals, dishes, expenses, or deposits are logged",
-    "Dedicated Notification Channel: High importance 'tiffin_notifications' with heads-up display, sound, and vibration",
-    "Automatic Token Lifecycle: Robust device token binding and room sync in Cloud Firestore with sender exclusion"
+    "Security Hardening: Completely removed all service account private keys from client codebase and assets",
+    "Kick Fix: Permanent and immediate member removal with explicit kickedMembers registry preventing ghost resurrection",
+    "Admin Immunity: Protects flat admin from accidental disconnection during peer synchronization or multi-device joins",
+    "Firestore Queue Sync: Clean background notification queuing without client-side credential exposure"
   ],
   "history": [
+    {
+      "version": "5.7.7",
+      "versionCode": 50707,
+      "releaseDate": "2026-11-09",
+      "releaseNotes": [
+        "Admin Protection Fix: Prevents flat admin from ever being disconnected or removed when peers join",
+        "Autonomous FCM v1 Push: Direct Google Play Services notification dispatch working even when app is killed/closed",
+        "Safe Peer Synchronization: Automatically merges flat members without destructive ghost-kicks",
+        "Multi-Device Test Button: Send instant test push notifications directly from Settings to check all phones"
+      ]
+    },
+    {
+      "version": "5.7.6",
+      "versionCode": 50706,
+      "releaseDate": "2026-11-09",
+      "releaseNotes": [
+        "FCM Push Notifications: Ground-up rebuild using Google FCM HTTP v1 API with high-priority background delivery",
+        "Smart Flatmate Alerts: Real-time status bar notifications when meals, dishes, expenses, or deposits are logged",
+        "Dedicated Notification Channel: High importance 'tiffin_notifications' with heads-up display, sound, and vibration",
+        "Automatic Token Lifecycle: Robust device token binding and room sync in Cloud Firestore with sender exclusion"
+      ]
+    },
     {
       "version": "5.7.5",
       "versionCode": 50705,
@@ -101,29 +123,6 @@
         "Human-crafted UI design: clean emerald & deep slate theme",
         "Instant update routing directly to in-app installation modal",
         "Automated fail-safe version tracking across all devices"
-      ]
-    },
-    {
-      "version": "5.4.0",
-      "versionCode": 50400,
-      "releaseDate": "2026-11-07",
-      "releaseNotes": [
-        "Secure Firebase Cloud Messaging backend with lockscreen alerts",
-        "Human-crafted UI design: clean emerald & deep slate theme",
-        "Instant update routing directly to in-app installation modal",
-        "Automated fail-safe version tracking across all devices"
-      ]
-    },
-    {
-      "version": "5.3.8",
-      "versionCode": 50308,
-      "releaseDate": "2026-11-07",
-      "releaseNotes": [
-        "Clean, lightweight settings without developer clutter",
-        "Streamlined standalone APK naming without -release suffix",
-        "Instant update detection and popups across all connected devices",
-        "Direct APK install link and 4-digit room code included in flat invites",
-        "Auto-fills room code from clipboard and URL links automatically"
       ]
     }
   ]

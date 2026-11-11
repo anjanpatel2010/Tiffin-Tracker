@@ -87,7 +87,7 @@ console.log('===================================================================
 
 // 3. Step: Syntax Checks
 console.log('[1/7] Running pre-build syntax checks...');
-execSync('node -c www/app.js && node -c www/updater.js && node -c www/firebase-sync.js && node -c functions/index.js', {
+execSync('node -c www/app.js && node -c www/updater.js && node -c www/firebase-sync.js && node -c www/fcm-dispatcher.js && node -c functions/index.js', {
   cwd: rootDir,
   stdio: 'inherit'
 });
@@ -126,10 +126,10 @@ const updateVersionManifest = (filePath) => {
     data.githubReleaseUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/releases';
     data.message = `Tiffin Tracker v${targetVersion} is now available!`;
     data.releaseNotes = [
-      `FCM Push Notifications: Ground-up rebuild using Google FCM HTTP v1 API with high-priority background delivery`,
-      `Smart Flatmate Alerts: Real-time status bar notifications when meals, dishes, expenses, or deposits are logged`,
-      `Dedicated Notification Channel: High importance 'tiffin_notifications' with heads-up display, sound, and vibration`,
-      `Automatic Token Lifecycle: Robust device token binding and room sync in Cloud Firestore with sender exclusion`
+      `Security Hardening: Completely removed all service account private keys from client codebase and assets`,
+      `Kick Fix: Permanent and immediate member removal with explicit kickedMembers registry preventing ghost resurrection`,
+      `Admin Immunity: Protects flat admin from accidental disconnection during peer synchronization or multi-device joins`,
+      `Firestore Queue Sync: Clean background notification queuing without client-side credential exposure`
     ];
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');

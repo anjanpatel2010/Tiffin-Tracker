@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.7.6';
+  const APP_VERSION = '5.7.8';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -469,7 +469,9 @@
     async send(title, options = {}) {
       // 1. Broadcast FCM push to all other flatmates in this room via secure Firebase queue
       if (!options.localOnly && options.broadcast !== false && window.FirebaseSync && typeof window.FirebaseSync.sendRoomNotification === 'function') {
+        const curRoom = options.roomCode || RoomManager.activeRoom?.code || (typeof SyncEngine !== 'undefined' ? SyncEngine.roomCode : '');
         window.FirebaseSync.sendRoomNotification({
+          roomCode: curRoom,
           title: title,
           body: options.body || '',
           tag: options.tag || 'tiffin-alert',
@@ -1229,6 +1231,11 @@
           const isMe = action.memberId === myId ||
                        (RoomManager.session && RoomManager.session.name.toLowerCase() === (action.memberName || '').toLowerCase());
           if (isMe) {
+            // ADMIN CAN NEVER BE KICKED!
+            if (RoomManager.isAdmin() || RoomManager.session?.role === 'admin') {
+              console.warn('[SyncEngine] Received member_kicked targeting Admin. Admin cannot be kicked.');
+              return;
+            }
             alert('You have been removed from this flat by the Admin.');
             RoomManager.hardResetLocalSession();
             RoomManager.showGateModal('join');
@@ -1239,6 +1246,10 @@
           }
           if (RoomManager.activeRoom) {
             RoomManager.activeRoom.members = (RoomManager.activeRoom.members || []).filter(m => m.id !== action.memberId);
+            RoomManager.activeRoom.kickedMembers = Array.isArray(RoomManager.activeRoom.kickedMembers) ? RoomManager.activeRoom.kickedMembers : [];
+            if (!RoomManager.activeRoom.kickedMembers.some(km => km.id === action.memberId)) {
+              RoomManager.activeRoom.kickedMembers.push({ id: action.memberId, name: action.memberName || '', kickedAt: Date.now() });
+            }
             RoomManager.saveActiveRoom();
             ROOMMATES = RoomManager.activeRoom.members;
             RoomManager.renderSettingsMembersTab();
@@ -1265,11 +1276,53 @@
         if (actionCode === myRoomCode || !myRoomCode || !actionCode) {
           if (action.roomData) {
             const current = RoomManager.activeRoom || {};
-            // Incoming room members are authoritative (prevents ghost resurrection of kicked members)
             const incomingMembers = Array.isArray(action.roomData.members) ? action.roomData.members : [];
-            const deduplicated = RoomManager.deduplicateMembers(incomingMembers, action.roomData.adminName || current.adminName);
+            const currentMembers = Array.isArray(current.members) ? current.members : [];
 
-            // Check if active user was kicked
+            // Combine and preserve kickedMembers
+            const kickedList = [
+              ...(Array.isArray(current.kickedMembers) ? current.kickedMembers : []),
+              ...(Array.isArray(action.roomData.kickedMembers) ? action.roomData.kickedMembers : [])
+            ];
+
+            const isMemberKicked = (m) => {
+              if (!m) return true;
+              return kickedList.some(km =>
+                (km.id && m.id && km.id === m.id) ||
+                (km.phone && m.phone && km.phone.slice(-10) === m.phone.slice(-10)) ||
+                (km.name && m.name && km.name.trim().toLowerCase() === m.name.trim().toLowerCase())
+              );
+            };
+
+            // Check if active session user was kicked
+            if (RoomManager.session && RoomManager.session.roomCode && !RoomManager.isAdmin()) {
+              const myId = RoomManager.session.memberId;
+              const myName = (RoomManager.session.name || '').trim().toLowerCase();
+              const myPhone = RoomManager.session.phone ? RoomManager.session.phone.slice(-10) : '';
+              const amIKicked = kickedList.some(km =>
+                (myId && km.id === myId) ||
+                (myPhone && km.phone && km.phone.slice(-10) === myPhone) ||
+                (myName && km.name && km.name.trim().toLowerCase() === myName)
+              );
+              if (amIKicked) {
+                console.warn('[SyncEngine] Active user is in kickedList. Removing user.');
+                alert('You have been removed from this flat by the Admin.');
+                RoomManager.hardResetLocalSession();
+                RoomManager.showGateModal('join');
+                RoomManager.updateHeaderRoomUI();
+                RoomManager.renderSettingsMembersTab();
+                renderAll();
+                return;
+              }
+            }
+
+            // Union members excluding any kicked members
+            const memberMap = new Map();
+            currentMembers.forEach(m => { if (m && (m.id || m.name) && !isMemberKicked(m)) memberMap.set(m.id || m.name.toLowerCase(), m); });
+            incomingMembers.forEach(m => { if (m && (m.id || m.name) && !isMemberKicked(m)) memberMap.set(m.id || m.name.toLowerCase(), m); });
+            const deduplicated = RoomManager.deduplicateMembers(Array.from(memberMap.values()), action.roomData.adminName || current.adminName);
+
+            // Synchronize active session if matched in merged members
             if (RoomManager.session && RoomManager.session.roomCode) {
               const myId = RoomManager.session.memberId;
               const myName = (RoomManager.session.name || '').trim().toLowerCase();
@@ -1279,30 +1332,23 @@
                 (myPhone && m.phone && m.phone.slice(-10) === myPhone) ||
                 (myName && m.name && m.name.trim().toLowerCase() === myName)
               );
-              if (!matchedSessionMember) {
-                console.warn('[SyncEngine] Current member is missing from room_meta_sync members! User was kicked.');
-                alert('You have been removed from this flat by the Admin.');
-                RoomManager.hardResetLocalSession();
-                RoomManager.showGateModal('join');
-                RoomManager.updateHeaderRoomUI();
-                RoomManager.renderSettingsMembersTab();
-                renderAll();
-                return;
+              if (matchedSessionMember) {
+                RoomManager.session.role = matchedSessionMember.role || RoomManager.session.role || 'member';
+                RoomManager.session.name = matchedSessionMember.name;
+                RoomManager.session.memberId = matchedSessionMember.id;
+                if (matchedSessionMember.phone && !RoomManager.session.phone) {
+                  RoomManager.session.phone = matchedSessionMember.phone;
+                }
+                localStorage.setItem('tiffin_user_session', JSON.stringify(RoomManager.session));
+                localStorage.setItem('tiffin_session', JSON.stringify(RoomManager.session));
               }
-              RoomManager.session.role = matchedSessionMember.role || RoomManager.session.role || 'member';
-              RoomManager.session.name = matchedSessionMember.name;
-              RoomManager.session.memberId = matchedSessionMember.id;
-              if (matchedSessionMember.phone && !RoomManager.session.phone) {
-                RoomManager.session.phone = matchedSessionMember.phone;
-              }
-              localStorage.setItem('tiffin_user_session', JSON.stringify(RoomManager.session));
-              localStorage.setItem('tiffin_session', JSON.stringify(RoomManager.session));
             }
 
             RoomManager.activeRoom = {
               ...current,
               ...action.roomData,
-              members: deduplicated
+              members: deduplicated,
+              kickedMembers: kickedList
             };
             RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
             RoomManager.saveActiveRoom();
@@ -1476,19 +1522,20 @@
       }
 
       // Check if current user is still in the room's members list
+      const isAdmin = RoomManager.isAdmin() || RoomManager.session.role === 'admin';
       const myId = RoomManager.session.memberId;
       const myName = (RoomManager.session.name || '').trim().toLowerCase();
       const myPhone = RoomManager.session.phone ? RoomManager.session.phone.slice(-10) : '';
 
-      const matchedMember = cloudMembers.find(m =>
-        (myId && m.id === myId) ||
-        (myPhone && m.phone && m.phone.slice(-10) === myPhone) ||
-        (myName && m.name && m.name.trim().toLowerCase() === myName)
+      // 1. First: Check if user is in kickedMembers list (Admin cannot be kicked)
+      const isExplicitlyKicked = !isAdmin && Array.isArray(cloudRoom.kickedMembers) && cloudRoom.kickedMembers.some(km =>
+        (myId && km.id === myId) ||
+        (myPhone && km.phone && km.phone.slice(-10) === myPhone) ||
+        (myName && km.name && km.name.trim().toLowerCase() === myName)
       );
 
-      // CRITICAL FIX: If user is NO LONGER in members, they were KICKED or flat was reset!
-      if (!matchedMember) {
-        console.warn('[RoomManager] Current user is no longer in cloud members! User was kicked.');
+      if (isExplicitlyKicked) {
+        console.warn('[RoomManager] Current user was kicked from flat by Admin.');
         alert(`You have been removed from flat #${cloudRoom.code} by the admin.`);
         RoomManager.hardResetLocalSession();
         RoomManager.showGateModal('join');
@@ -1496,6 +1543,42 @@
         RoomManager.renderSettingsMembersTab();
         renderAll();
         return;
+      }
+
+      let matchedMember = cloudMembers.find(m =>
+        (myId && m.id === myId) ||
+        (myPhone && m.phone && m.phone.slice(-10) === myPhone) ||
+        (myName && m.name && m.name.trim().toLowerCase() === myName)
+      );
+
+      if (!matchedMember) {
+        if (isAdmin) {
+          // ADMIN CAN NEVER BE KICKED! Re-assert admin in cloudMembers
+          console.log('[RoomManager] Admin session active; preserving admin membership in cloud snapshot.');
+          matchedMember = {
+            id: myId || ('m_' + (myName ? RoomManager.sanitizeId(myName) : 'admin')),
+            name: RoomManager.session.name || 'Admin',
+            phone: RoomManager.session.phone || '',
+            role: 'admin',
+            avatarColor: '#00d26a',
+            joinedAt: new Date().toISOString()
+          };
+          cloudMembers.unshift(matchedMember);
+          cloudRoom.members = cloudMembers;
+          if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
+            FirebaseSync.saveRoomData(cloudRoom.code, cloudRoom);
+          }
+        } else {
+          // Regular member is no longer in cloud members!
+          console.warn('[RoomManager] Current user is no longer in cloud members! User was removed.');
+          alert(`You have been removed from flat #${cloudRoom.code} by the admin.`);
+          RoomManager.hardResetLocalSession();
+          RoomManager.showGateModal('join');
+          RoomManager.updateHeaderRoomUI();
+          RoomManager.renderSettingsMembersTab();
+          renderAll();
+          return;
+        }
       }
 
       // Detect new flatmates that joined
@@ -1847,7 +1930,7 @@
   let pendingMealUpdates = [];
 
   function queueMealPushNotification(person, slot, val, day) {
-    if (typeof FirebaseSync === 'undefined' || !FirebaseSync.isAvailable) return;
+    if (typeof FirebaseSync === 'undefined') return;
     const author = (typeof SyncEngine !== 'undefined' && SyncEngine.identity) ? SyncEngine.identity : 'Flatmate';
     pendingMealUpdates.push({ person, slot, val, day });
 
@@ -1858,29 +1941,33 @@
       pendingMealUpdates = [];
 
       const summary = updates.map(u => `${capitalize(u.person)} ${u.slot}: ${u.val || 'Off'}`).join(', ');
+      const curRoom = RoomManager.activeRoom?.code || (typeof SyncEngine !== 'undefined' ? SyncEngine.roomCode : '');
       FirebaseSync.sendRoomNotification({
+        roomCode: curRoom,
         title: 'Meal Updated 🍱',
         body: `${capitalize(author)} updated: ${summary}`,
         tag: 'tiffin-meal-update'
       });
-    }, 3500);
+    }, 2000);
   }
 
   let sabziNotifyTimer = null;
   function queueSabziPushNotification(sabzi, day) {
-    if (typeof FirebaseSync === 'undefined' || !FirebaseSync.isAvailable) return;
+    if (typeof FirebaseSync === 'undefined') return;
     const author = (typeof SyncEngine !== 'undefined' && SyncEngine.identity) ? SyncEngine.identity : 'Flatmate';
     if (sabziNotifyTimer) clearTimeout(sabziNotifyTimer);
     sabziNotifyTimer = setTimeout(() => {
       const dish = (sabzi || '').trim();
       if (dish) {
+        const curRoom = RoomManager.activeRoom?.code || (typeof SyncEngine !== 'undefined' ? SyncEngine.roomCode : '');
         FirebaseSync.sendRoomNotification({
+          roomCode: curRoom,
           title: 'Dish Updated 🍲',
           body: `${capitalize(author)} set Day ${day} dish: "${dish}"`,
           tag: 'tiffin-sabzi'
         });
       }
-    }, 3000);
+    }, 1500);
   }
 
   // 1. Daily Logger Render
@@ -4670,26 +4757,39 @@
 
       if (!confirm(`Are you sure you want to kick ${getFirstName(target.name)} from this flat? They will be removed immediately.`)) return;
 
-      let res = null;
-      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable && FirebaseSync.removeMemberFromRoom) {
-        res = await FirebaseSync.removeMemberFromRoom(this.activeRoom.code, memberId);
-      }
-
-      if (res && res.roomData) {
-        this.activeRoom = res.roomData;
-      } else {
-        this.activeRoom.members = (this.activeRoom.members || []).filter(m => m.id !== memberId);
-      }
+      // 1. Remove from local activeRoom immediately and add to kickedMembers
+      this.activeRoom.members = (this.activeRoom.members || []).filter(m => m.id !== memberId);
+      this.activeRoom.kickedMembers = Array.isArray(this.activeRoom.kickedMembers) ? this.activeRoom.kickedMembers : [];
+      this.activeRoom.kickedMembers = this.activeRoom.kickedMembers.filter(km => km.id !== memberId);
+      this.activeRoom.kickedMembers.push({
+        id: memberId,
+        name: target.name || 'Member',
+        phone: target.phone || '',
+        kickedAt: Date.now()
+      });
       this.cleanupAdminDuplicates(this.activeRoom);
       this.saveActiveRoom();
       ROOMMATES = this.activeRoom.members;
 
-      // Broadcast kick to all connected devices in the room
+      // 2. Persist removal to Cloud Firestore
+      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable && FirebaseSync.removeMemberFromRoom) {
+        await FirebaseSync.removeMemberFromRoom(this.activeRoom.code, memberId);
+      }
+
+      // 3. Broadcast kick to all connected devices in the room
       SyncEngine.broadcast({
         type: 'member_kicked',
         roomCode: this.activeRoom.code,
         memberId: memberId,
         memberName: target.name
+      });
+
+      // 4. Also broadcast authoritative room_meta_sync so peers purge the member immediately
+      SyncEngine.broadcast({
+        type: 'room_meta_sync',
+        roomCode: this.activeRoom.code,
+        roomData: this.activeRoom,
+        state: getCompactSyncState(appState)
       });
 
       this.renderSettingsMembersTab();
@@ -5056,7 +5156,7 @@
     triggerHaptic();
     const roomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || 'ROOM';
     const roomName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'our flat';
-    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.6.apk';
+    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.8.apk';
     const webUrl = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
 
     const message = `🏠 Join "${roomName}" on Tiffin Tracker!\n` +
@@ -5299,6 +5399,26 @@
     if (shareWhatsAppBtn) {
       shareWhatsAppBtn.addEventListener('click', () => {
         shareFlatInvite();
+      });
+    }
+
+    const testPushBtn = document.getElementById('testPushNotificationBtn');
+    if (testPushBtn) {
+      testPushBtn.addEventListener('click', async () => {
+        triggerHaptic();
+        const myName = RoomManager.session?.name || (typeof SyncEngine !== 'undefined' ? SyncEngine.identity : 'Flatmate');
+        const myRoom = RoomManager.activeRoom?.code || (typeof SyncEngine !== 'undefined' ? SyncEngine.roomCode : '');
+        if (!myRoom) {
+          showToast('No active flat room connected.', 'warning');
+          return;
+        }
+        showToast('Sending test FCM push notification...');
+        await NotificationManager.send(`FCM Alert 🔔 ${myName}`, {
+          body: `Test notification from ${myName} in Flat #${myRoom}! Heads-up delivery working!`,
+          tag: 'fcm-test',
+          roomCode: myRoom
+        });
+        showToast('Dispatched test push to all flatmates! Check other phone.', 'success');
       });
     }
 
