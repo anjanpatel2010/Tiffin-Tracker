@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.8.2] — 2026-11-14
+
+### Fixed
+- **Flicker-Free Master Sheet**: Completely resolved table glitching by introducing signature caching, single-pass atomic DOM assignment, and delegating click handlers to the table container instead of rebuilding hundreds of element listeners on each render.
+- **Strict Admin Privilege Protection**: New devices and members joining a room are strictly assigned the `member` role unless the valid Admin Security PIN is provided. Prevented accidental admin profile takeover when names or phones collide.
+- **Permanent Kick Enforcement & Anti-Resurrection**: Removed recursive snapshot writes from the real-time cloud listener that were reviving kicked members. Kicked users are permanently blocked from rejoining and purged from all views immediately.
+- **Silky Smooth 60fps UI**: Debounced `renderAll()` with `requestAnimationFrame` to coalesce rapid successive sync payloads into a single fluid frame.
+
+---
+
 ## [5.8.1] — 2026-11-14
 
 ### Changed

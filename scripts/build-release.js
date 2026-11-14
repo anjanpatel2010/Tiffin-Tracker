@@ -126,10 +126,10 @@ const updateVersionManifest = (filePath) => {
     data.githubReleaseUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/releases';
     data.message = `Tiffin Tracker v${targetVersion} is now available!`;
     data.releaseNotes = [
-      `Brand Identity Overhaul: Modern, high-precision minimalist app logo featuring the iconic 3-tiered Sovereign 'T' Dabba`,
-      `Universal Asset Refresh: High-DPI Android adaptive launcher icons (mdpi to xxxhdpi), native splash screens, and vector branding`,
-      `Luxury Startup Experience: Sleek in-app splash reveal with the new obsidian-emerald vector monogram`,
-      `Scrollable Update Modal: Compact collapsible patch details optimized for smaller phone displays`
+      `Zero-Flicker Master Sheet: Eliminated table flickering and DOM thrashing with signature caching, atomic updates, and single-delegate event handling`,
+      `Strict Admin Privilege Guard: Required verified Admin Security PIN before granting admin access; new devices and joining members join strictly as members`,
+      `Permanent Kick Enforcement: Neutralized resurrection loops by eliminating recursive snapshot writes and enforcing kickedMembers blacklist across all sync layers`,
+      `Rock-Solid Real-Time Sync: Single authoritative Firestore source of truth with debounced 60fps renderAll pipeline`
     ];
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');

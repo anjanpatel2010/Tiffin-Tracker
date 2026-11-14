@@ -196,9 +196,11 @@
             if (roomData.adminPin && String(roomData.adminPin).trim() !== String(adminPin).trim()) {
               return { success: false, error: 'Incorrect Admin Security PIN for this flat.' };
             }
-            let adminMember = members.find(m => m.role === 'admin') ||
-                              members.find(m => (m.name || '').toLowerCase() === (candidate.name || '').toLowerCase());
-            if (!adminMember) {
+            let adminMember = members.find(m => m.role === 'admin');
+            if (adminMember) {
+              if (candidate.phone && !adminMember.phone) adminMember.phone = candidate.phone;
+              joinedMember = adminMember;
+            } else {
               adminMember = {
                 id: candidate.id || ('m_' + Date.now()),
                 name: candidate.name || roomData.adminName || 'Admin',
@@ -208,20 +210,44 @@
                 joinedAt: new Date().toISOString()
               };
               members.unshift(adminMember);
+              joinedMember = adminMember;
             }
-            joinedMember = adminMember;
           } else {
-            // 2. Member join: check if already in members by ID, phone, or name
+            // 2. Member join (WITHOUT Admin PIN):
+            // A. Explicit Kicked Blacklist Check (Permanently blocked from re-entering)
+            if (Array.isArray(roomData.kickedMembers)) {
+              const isKicked = roomData.kickedMembers.some(km =>
+                (candidate.id && km.id === candidate.id) ||
+                (candidate.phone && km.phone && candidate.phone.slice(-10) === km.phone.slice(-10)) ||
+                (candidate.name && km.name && candidate.name.trim().toLowerCase() === km.name.trim().toLowerCase())
+              );
+              if (isKicked) {
+                return { success: false, error: 'You have been removed from this flat by the Admin. You cannot rejoin.' };
+              }
+            }
+
+            // B. Prevent regular member from taking over Admin's profile without the PIN
+            const currentAdmin = members.find(m => m.role === 'admin');
+            if (currentAdmin && candidate.name && currentAdmin.name && candidate.name.trim().toLowerCase() === currentAdmin.name.trim().toLowerCase()) {
+              return {
+                success: false,
+                error: `The name "${candidate.name}" belongs to the Flat Admin. If you are the admin, enter your Admin PIN to log in. Otherwise, please enter your own name.`
+              };
+            }
+
+            // C. Match only NON-ADMIN existing members
             let existingMember = members.find(m => {
+              if (m.role === 'admin') return false; // STRICT: Never match admin without PIN
               if (candidate.id && m.id === candidate.id) return true;
               if (candidate.phone && m.phone && candidate.phone.slice(-10) === m.phone.slice(-10)) return true;
-              if (candidate.name && m.name && candidate.name.trim().toLowerCase() === candidate.name.trim().toLowerCase()) return true;
+              if (candidate.name && m.name && candidate.name.trim().toLowerCase() === m.name.trim().toLowerCase()) return true;
               return false;
             });
 
             if (existingMember) {
-              // Returning member
+              // Returning regular member
               if (candidate.phone && !existingMember.phone) existingMember.phone = candidate.phone;
+              existingMember.role = 'member'; // GUARANTEED role
               joinedMember = existingMember;
             } else {
               // 3. Brand New Member - Instant Direct Entry!
@@ -231,22 +257,13 @@
                 id: candidate.id || ('m_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4)),
                 name: candidate.name,
                 phone: candidate.phone || '',
-                role: 'member',
+                role: 'member', // GUARANTEED role
                 avatarColor: avatarColor,
                 joinedAt: new Date().toISOString()
               };
               members.push(newMember);
               joinedMember = newMember;
             }
-          }
-
-          // Un-kick member if they were previously in kickedMembers
-          if (Array.isArray(roomData.kickedMembers)) {
-            roomData.kickedMembers = roomData.kickedMembers.filter(km =>
-              km.id !== joinedMember.id &&
-              (!km.name || km.name.trim().toLowerCase() !== joinedMember.name.trim().toLowerCase()) &&
-              (!km.phone || !joinedMember.phone || km.phone.slice(-10) !== joinedMember.phone.slice(-10))
-            );
           }
 
           roomData.members = members;

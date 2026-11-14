@@ -1,20 +1,31 @@
 {
-  "version": "5.8.1",
-  "versionCode": 50801,
+  "version": "5.8.2",
+  "versionCode": 50802,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-14",
-  "message": "Tiffin Tracker v5.8.1 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.8.1.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.1.apk",
+  "message": "Tiffin Tracker v5.8.2 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.8.2.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.2.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
-    "Brand Identity Overhaul: Modern, high-precision minimalist app logo featuring the iconic 3-tiered Sovereign 'T' Dabba",
-    "Universal Asset Refresh: High-DPI Android adaptive launcher icons (mdpi to xxxhdpi), native splash screens, and vector branding",
-    "Luxury Startup Experience: Sleek in-app splash reveal with the new obsidian-emerald vector monogram",
-    "Scrollable Update Modal: Compact collapsible patch details optimized for smaller phone displays"
+    "Zero-Flicker Master Sheet: Eliminated table flickering and DOM thrashing with signature caching, atomic updates, and single-delegate event handling",
+    "Strict Admin Privilege Guard: Required verified Admin Security PIN before granting admin access; new devices and joining members join strictly as members",
+    "Permanent Kick Enforcement: Neutralized resurrection loops by eliminating recursive snapshot writes and enforcing kickedMembers blacklist across all sync layers",
+    "Rock-Solid Real-Time Sync: Single authoritative Firestore source of truth with debounced 60fps renderAll pipeline"
   ],
   "history": [
+    {
+      "version": "5.8.1",
+      "versionCode": 50801,
+      "releaseDate": "2026-11-14",
+      "releaseNotes": [
+        "Brand Identity Overhaul: Modern, high-precision minimalist app logo featuring the iconic 3-tiered Sovereign 'T' Dabba",
+        "Universal Asset Refresh: High-DPI Android adaptive launcher icons (mdpi to xxxhdpi), native splash screens, and vector branding",
+        "Luxury Startup Experience: Sleek in-app splash reveal with the new obsidian-emerald vector monogram",
+        "Scrollable Update Modal: Compact collapsible patch details optimized for smaller phone displays"
+      ]
+    },
     {
       "version": "5.8.0",
       "versionCode": 50800,
@@ -112,17 +123,6 @@
         "Custom Kotlin FirebaseMessagingService: Background alerts delivered directly to device lockscreen",
         "Automated token registration keyed by member ID with instant Firestore synchronization",
         "High-priority notification channel (tiffin_notifications) with chime sound and vibration"
-      ]
-    },
-    {
-      "version": "5.7.1",
-      "versionCode": 50701,
-      "releaseDate": "2026-11-08",
-      "releaseNotes": [
-        "Custom Kotlin FirebaseMessagingService: Delivers notifications when app is closed, terminated, or locked",
-        "Web Push & FCM Service Worker (firebase-messaging-sw.js) for desktop & mobile web push",
-        "Fixed token registration timing and sender self-exclusion filter for reliable delivery",
-        "High-priority notification channel (tiffin_notifications) with lockscreen visibility and chime sound"
       ]
     }
   ]

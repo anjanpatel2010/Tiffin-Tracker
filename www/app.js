@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.8.1';
+  const APP_VERSION = '5.8.2';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -696,7 +696,7 @@
       }
 
       // 2. Roommate Identity
-      this.identity = localStorage.getItem('tiffin_my_identity') || RoomManager.session?.name || 'Anjan';
+      this.identity = localStorage.getItem('tiffin_my_identity') || RoomManager.session?.name || '';
       updateIdentityUI(this.identity);
 
       // 3. Connect EventSource
@@ -1203,6 +1203,7 @@
           }
         }
       } else if (action.type === 'room_meta_sync') {
+        if (isCatchUp) return; // Do not replay old 12h room membership states during catch-up
         const myRoomCode = (RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
         const actionCode = (action.roomCode || '').toString().toUpperCase().trim();
         if (actionCode === myRoomCode || !myRoomCode || !actionCode) {
@@ -1421,7 +1422,7 @@
         return; // Snapshot is from another room
       }
 
-      const isAdmin = RoomManager.isAdmin() || RoomManager.session.role === 'admin';
+      const isAdmin = RoomManager.isAdmin();
       const myId = RoomManager.session.memberId;
       const myName = (RoomManager.session.name || '').trim().toLowerCase();
       const myPhone = RoomManager.session.phone ? RoomManager.session.phone.slice(-10) : '';
@@ -1452,8 +1453,8 @@
 
       if (!matchedMember) {
         if (isAdmin) {
-          // ADMIN CAN NEVER BE KICKED! Re-assert admin in cloudMembers
-          console.log('[RoomManager] Admin session active; preserving admin membership in cloud snapshot.');
+          // Admin session active; retain local admin representation without ping-pong writes
+          console.log('[RoomManager] Admin session active; preserving admin representation.');
           matchedMember = {
             id: myId || ('m_' + (myName ? RoomManager.sanitizeId(myName) : 'admin')),
             name: RoomManager.session.name || 'Admin',
@@ -1463,10 +1464,6 @@
             joinedAt: new Date().toISOString()
           };
           cloudMembers.unshift(matchedMember);
-          cloudRoom.members = cloudMembers;
-          if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
-            FirebaseSync.saveRoomData(cloudRoom.code, cloudRoom);
-          }
         } else {
           // Regular member was removed from flat!
           console.warn('[RoomManager] Current user is no longer in cloud members! User was removed.');
@@ -1480,22 +1477,35 @@
         }
       }
 
+      // Filter out any kicked members from cloudMembers so they NEVER appear in UI
+      const kickedList = Array.isArray(cloudRoom.kickedMembers) ? cloudRoom.kickedMembers : [];
+      const sanitizedMembers = cloudMembers.filter(m => {
+        if (!m) return false;
+        if (m.role === 'admin') return true;
+        return !kickedList.some(km =>
+          (km.id && m.id && km.id === m.id) ||
+          (km.phone && m.phone && km.phone.slice(-10) === m.phone.slice(-10)) ||
+          (km.name && m.name && km.name.trim().toLowerCase() === m.name.trim().toLowerCase())
+        );
+      });
+
       // Detect new flatmates that joined and flatmates that left
       const previousMembers = Array.isArray(RoomManager.activeRoom?.members) ? RoomManager.activeRoom.members : [];
-      const newMembers = cloudMembers.filter(cm => !previousMembers.some(pm => pm.id === cm.id));
-      const leftMembers = previousMembers.filter(pm => !cloudMembers.some(cm => cm.id === pm.id));
+      const newMembers = sanitizedMembers.filter(cm => !previousMembers.some(pm => pm.id === cm.id));
+      const leftMembers = previousMembers.filter(pm => !sanitizedMembers.some(cm => cm.id === pm.id));
 
       // Update local room data directly from authoritative cloud
       RoomManager.activeRoom = {
         ...cloudRoom,
-        members: cloudMembers
+        members: sanitizedMembers,
+        kickedMembers: kickedList
       };
       const wasAdmin = RoomManager.session.role === 'admin';
       RoomManager.session.role = matchedMember.role || RoomManager.session.role || 'member';
       RoomManager.session.memberId = matchedMember.id;
       RoomManager.session.name = matchedMember.name;
       RoomManager.saveActiveRoom();
-      ROOMMATES = cloudMembers;
+      ROOMMATES = sanitizedMembers;
 
       // Check if current user was promoted to Admin and needs to generate a new PIN
       const isPromotedAdmin = matchedMember.role === 'admin' && (
@@ -2057,7 +2067,8 @@
     });
   }
 
-  // 2. Master Sheet Matrix Render
+  // 2. Master Sheet Matrix Render (Optimized: Zero-Flicker & Atomic Render)
+  let lastMasterSheetSignature = '';
   function renderMasterSheet() {
     const thead = document.getElementById('masterSheetHead');
     const tbody = document.getElementById('masterSheetBody');
@@ -2065,12 +2076,22 @@
     if (!tbody || !tfoot) return;
 
     const searchTerm = (document.getElementById('sheetSearchInput')?.value || '').toLowerCase().trim();
-    tbody.innerHTML = '';
     const rates = getRates();
     const grandFlatTotal = getFlatTotals().tiffinTotal;
 
     const isAll = (activeSheetFilter === 'all');
     const activePerson = !isAll ? ROOMMATES.find(x => x.id === activeSheetFilter) : null;
+
+    // Fast signature cache to eliminate visual redraw flickering when data hasn't changed
+    const currentSignature = `${currentYear}_${currentMonth}_${activeSheetFilter}_${searchTerm}_${ROOMMATES.map(r => r.id + r.name + r.role).join('|')}_${CONFIG.daysInMonth}_${rates.half}_${rates.full}_${rates.special}_${grandFlatTotal}`;
+    const daysDataSig = Object.keys(appState.days || {}).map(d => `${d}:${appState.days[d]?.sabzi || ''}:${JSON.stringify(appState.days[d]?.meals || {})}`).join(';');
+    const fullSig = `${currentSignature}__${daysDataSig}`;
+
+    if (fullSig === lastMasterSheetSignature && tbody.children.length > 0) {
+      return; // Data has not changed; preserve existing DOM with zero flicker
+    }
+    lastMasterSheetSignature = fullSig;
+
     // Render Table Header dynamically
     if (thead) {
       if (isAll) {
@@ -2138,6 +2159,8 @@
       return;
     }
 
+    // Build all rows in memory first, then set innerHTML in one atomic paint
+    let rowsHtml = '';
     for (let d = 1; d <= CONFIG.daysInMonth; d++) {
       const dayData = appState.days[d];
       if (!dayData) continue;
@@ -2149,9 +2172,6 @@
       }
 
       const isToday = (now.getFullYear() === currentYear && (now.getMonth() + 1) === currentMonth && d === now.getDate());
-      const tr = document.createElement('tr');
-      if (isToday) tr.classList.add('row-today');
-
       const dayTotal = getDayTotalCost(d);
 
       // Helper to generate interactive cell (Lunch / Dinner with Half, Full, Special, Off)
@@ -2172,100 +2192,108 @@
           memberCells += makeCell(r.id, 'lunch') + makeCell(r.id, 'dinner');
         });
 
-        tr.innerHTML = `
-          <td class="td-sticky-date" title="${dayData.dateFormatted}">
-            <div class="td-sticky-cell-content">${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}</div>
-          </td>
-          <td class="td-sticky-menu" data-day="${d}" title="${dayData.sabzi ? escapeHtml(dayData.sabzi) : 'Click to edit sabzi'}">
-            <div class="td-sticky-cell-content">${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}</div>
-          </td>
-          ${memberCells}
-          <td style="font-weight:700; font-family:var(--font-mono); color:${dayTotal > 0 ? 'var(--emerald)' : 'var(--text-dim)'}">
-            ₹${dayTotal}
-          </td>
+        rowsHtml += `
+          <tr class="${isToday ? 'row-today' : ''}">
+            <td class="td-sticky-date" title="${dayData.dateFormatted}">
+              <div class="td-sticky-cell-content">${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}</div>
+            </td>
+            <td class="td-sticky-menu" data-day="${d}" title="${dayData.sabzi ? escapeHtml(dayData.sabzi) : 'Click to edit sabzi'}">
+              <div class="td-sticky-cell-content">${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}</div>
+            </td>
+            ${memberCells}
+            <td style="font-weight:700; font-family:var(--font-mono); color:${dayTotal > 0 ? 'var(--emerald)' : 'var(--text-dim)'}">
+              ₹${dayTotal}
+            </td>
+          </tr>
         `;
       } else if (activePerson) {
-        tr.innerHTML = `
-          <td class="td-sticky-date" title="${dayData.dateFormatted}">
-            <div class="td-sticky-cell-content">${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}</div>
-          </td>
-          <td class="td-sticky-menu" data-day="${d}" title="${dayData.sabzi ? escapeHtml(dayData.sabzi) : 'Click to edit sabzi'}">
-            <div class="td-sticky-cell-content">${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}</div>
-          </td>
-          ${makeCell(activePerson.id, 'lunch')}
-          ${makeCell(activePerson.id, 'dinner')}
-          <td style="font-weight:700; font-family:var(--font-mono); color:${dayTotal > 0 ? 'var(--emerald)' : 'var(--text-dim)'}">
-            ₹${dayTotal}
-          </td>
+        rowsHtml += `
+          <tr class="${isToday ? 'row-today' : ''}">
+            <td class="td-sticky-date" title="${dayData.dateFormatted}">
+              <div class="td-sticky-cell-content">${dayData.dayOfWeek.slice(0, 3)}, ${d} ${MONTH_SHORTS[currentMonth - 1]}</div>
+            </td>
+            <td class="td-sticky-menu" data-day="${d}" title="${dayData.sabzi ? escapeHtml(dayData.sabzi) : 'Click to edit sabzi'}">
+              <div class="td-sticky-cell-content">${dayData.sabzi ? escapeHtml(dayData.sabzi) : '<span style="opacity:0.35">+ Edit</span>'}</div>
+            </td>
+            ${makeCell(activePerson.id, 'lunch')}
+            ${makeCell(activePerson.id, 'dinner')}
+            <td style="font-weight:700; font-family:var(--font-mono); color:${dayTotal > 0 ? 'var(--emerald)' : 'var(--text-dim)'}">
+              ₹${dayTotal}
+            </td>
+          </tr>
         `;
       }
-
-      tbody.appendChild(tr);
     }
 
-    // Attach Cell Click Event to Cycle Meal: Off -> Half -> Full -> Special -> Off
-    tbody.querySelectorAll('.cell-interactive').forEach(cell => {
-      cell.addEventListener('click', () => {
-        triggerHaptic();
-        const d = parseInt(cell.getAttribute('data-day'));
-        const person = cell.getAttribute('data-person');
-        const slot = cell.getAttribute('data-slot');
+    // Atomic DOM replacement - Zero blank frame / zero flicker
+    tbody.innerHTML = rowsHtml;
 
-        if (!appState.days[d].meals) appState.days[d].meals = {};
-        if (!appState.days[d].meals[person]) appState.days[d].meals[person] = { lunch: '', dinner: '' };
+    // Attach Event Delegation on tbody ONCE (Never re-bind hundreds of listeners per render)
+    if (!tbody.dataset.eventsBound) {
+      tbody.dataset.eventsBound = 'true';
+      tbody.addEventListener('click', (e) => {
+        const cell = e.target.closest('.cell-interactive');
+        if (cell) {
+          triggerHaptic();
+          const d = parseInt(cell.getAttribute('data-day'));
+          const person = cell.getAttribute('data-person');
+          const slot = cell.getAttribute('data-slot');
 
-        const curVal = appState.days[d].meals[person][slot] || '';
-        let nextVal = '';
-        if (!curVal) nextVal = 'Half';
-        else if (curVal === 'Half') nextVal = 'Full';
-        else if (curVal === 'Full') nextVal = 'Special';
-        else nextVal = '';
+          if (!appState.days[d].meals) appState.days[d].meals = {};
+          if (!appState.days[d].meals[person]) appState.days[d].meals[person] = { lunch: '', dinner: '' };
 
-        const timestamp = Date.now();
-        if (!appState.days[d].mealTimestamps) {
-          appState.days[d].mealTimestamps = {};
-        }
-        appState.days[d].mealTimestamps[`${person}_${slot}`] = timestamp;
-        appState.days[d].meals[person][slot] = nextVal;
+          const curVal = appState.days[d].meals[person][slot] || '';
+          let nextVal = '';
+          if (!curVal) nextVal = 'Half';
+          else if (curVal === 'Half') nextVal = 'Full';
+          else if (curVal === 'Full') nextVal = 'Special';
+          else nextVal = '';
 
-        logActivity(SyncEngine.identity, 'Meal Update', `${capitalize(person)} ${slot}: ${nextVal || 'Off'} (Day ${d})`);
-        persistAndBroadcast({
-          type: 'meal_update',
-          year: currentYear,
-          month: currentMonth,
-          day: d,
-          person: person,
-          slot: slot,
-          value: nextVal,
-          timestamp: timestamp
-        });
-      });
-    });
-
-    // Editable Sabzi in Sheet Tab
-    tbody.querySelectorAll('.td-sticky-menu').forEach(menuCell => {
-      menuCell.addEventListener('click', () => {
-        triggerHaptic();
-        const d = parseInt(menuCell.getAttribute('data-day'));
-        const currentSabzi = appState.days[d].sabzi || '';
-        const newDish = prompt(`Enter Sabzi / Dish for ${d} ${MONTH_NAMES[currentMonth - 1]}:`, currentSabzi);
-        if (newDish !== null) {
           const timestamp = Date.now();
-          appState.days[d].sabzi = newDish.trim();
-          appState.days[d].sabziUpdatedAt = timestamp;
-          logActivity(SyncEngine.identity, 'Updated Sabzi from Sheet', `Day ${d}: "${newDish.trim()}"`);
+          if (!appState.days[d].mealTimestamps) {
+            appState.days[d].mealTimestamps = {};
+          }
+          appState.days[d].mealTimestamps[`${person}_${slot}`] = timestamp;
+          appState.days[d].meals[person][slot] = nextVal;
+
+          logActivity(SyncEngine.identity, 'Meal Update', `${capitalize(person)} ${slot}: ${nextVal || 'Off'} (Day ${d})`);
           persistAndBroadcast({
-            type: 'sabzi_update',
+            type: 'meal_update',
             year: currentYear,
             month: currentMonth,
             day: d,
-            sabzi: newDish.trim(),
+            person: person,
+            slot: slot,
+            value: nextVal,
             timestamp: timestamp
           });
-          showToast(`Updated dish for ${d} ${MONTH_SHORTS[currentMonth - 1]}`);
+          return;
+        }
+
+        const menuCell = e.target.closest('.td-sticky-menu');
+        if (menuCell) {
+          triggerHaptic();
+          const d = parseInt(menuCell.getAttribute('data-day'));
+          const currentSabzi = appState.days[d].sabzi || '';
+          const newDish = prompt(`Enter Sabzi / Dish for ${d} ${MONTH_NAMES[currentMonth - 1]}:`, currentSabzi);
+          if (newDish !== null) {
+            const timestamp = Date.now();
+            appState.days[d].sabzi = newDish.trim();
+            appState.days[d].sabziUpdatedAt = timestamp;
+            logActivity(SyncEngine.identity, 'Updated Sabzi from Sheet', `Day ${d}: "${newDish.trim()}"`);
+            persistAndBroadcast({
+              type: 'sabzi_update',
+              year: currentYear,
+              month: currentMonth,
+              day: d,
+              sabzi: newDish.trim(),
+              timestamp: timestamp
+            });
+            showToast(`Updated dish for ${d} ${MONTH_SHORTS[currentMonth - 1]}`);
+          }
         }
       });
-    });
+    }
 
     // Master Sheet Footer Totals
     if (isAll) {
@@ -2722,15 +2750,21 @@
     });
   }
 
-  // Master Render Coordinator
+  // Master Render Coordinator (Debounced with requestAnimationFrame for Zero-Flicker)
+  let renderAllPending = false;
   function renderAll() {
-    renderDailyLogger();
-    renderMasterSheet();
-    renderAnalytics();
-    renderUpiSettlement();
-    renderAmulTracker();
-    renderExportView();
-    renderAuditLog();
+    if (renderAllPending) return;
+    renderAllPending = true;
+    requestAnimationFrame(() => {
+      renderAllPending = false;
+      renderDailyLogger();
+      renderMasterSheet();
+      renderAnalytics();
+      renderUpiSettlement();
+      renderAmulTracker();
+      renderExportView();
+      renderAuditLog();
+    });
   }
 
   // ==========================================================================
@@ -3584,30 +3618,17 @@
     pinPromptDismissed: false,
 
     isAdmin() {
-      if (this.session?.role === 'admin') return true;
-      if (this.activeRoom) {
-        if (this.session?.memberId && Array.isArray(this.activeRoom.members)) {
-          const m = this.activeRoom.members.find(x => x && x.id === this.session.memberId);
-          if (m && m.role === 'admin') return true;
+      if (!this.session) return false;
+      if (this.session.role !== 'admin') return false;
+      // If session claims admin, double check with activeRoom if members are loaded
+      if (this.activeRoom && Array.isArray(this.activeRoom.members) && this.session.memberId) {
+        const m = this.activeRoom.members.find(x => x && x.id === this.session.memberId);
+        if (m && m.role !== 'admin') {
+          this.session.role = 'member';
+          return false;
         }
-        if (this.session && this.activeRoom.adminPhone && this.session.phone && this.activeRoom.adminPhone === this.session.phone) return true;
-        if (this.session && this.activeRoom.adminName && this.session.name) {
-          const sFirst = getFirstName(this.session.name).toLowerCase();
-          const aFirst = getFirstName(this.activeRoom.adminName).toLowerCase();
-          if (sFirst === aFirst || this.session.name.toLowerCase() === this.activeRoom.adminName.toLowerCase()) return true;
-        }
-        const currentName = (SyncEngine.identity || this.session?.name || '').trim().toLowerCase();
-        if (currentName) {
-          const m = (ROOMMATES || []).find(r =>
-            r.name.toLowerCase() === currentName ||
-            getFirstName(r.name).toLowerCase() === currentName ||
-            r.id.toLowerCase() === currentName
-          );
-          if (m && m.role === 'admin') return true;
-        }
-        if (!this.session && (!this.activeRoom.members || this.activeRoom.members.length <= 1)) return true;
       }
-      return false;
+      return true;
     },
 
     hardResetLocalSession() {
@@ -3784,6 +3805,18 @@
       if (adminMember && (!roomData.adminName || roomData.adminName.toLowerCase() === 'admin')) {
         roomData.adminName = adminMember.name;
       }
+
+      // 5. Strictly purge any kicked members from active members list
+      if (Array.isArray(roomData.kickedMembers) && roomData.kickedMembers.length > 0) {
+        roomData.members = roomData.members.filter(m => {
+          if (!m || m.role === 'admin') return true;
+          return !roomData.kickedMembers.some(km =>
+            (km.id && m.id && km.id === m.id) ||
+            (km.phone && m.phone && km.phone.slice(-10) === m.phone.slice(-10)) ||
+            (km.name && m.name && km.name.trim().toLowerCase() === m.name.trim().toLowerCase())
+          );
+        });
+      }
     },
 
     showInAppJoinBanner(memberName, roomCode) {
@@ -3919,7 +3952,7 @@
           id: this.session.memberId || ('m_' + this.sanitizeId(this.session.name)),
           name: this.session.name,
           phone: this.session.phone || '',
-          role: this.session.role || 'admin',
+          role: this.session.role === 'admin' ? 'admin' : 'member',
           avatarColor: '#00d26a',
           joinedAt: new Date().toISOString()
         };
@@ -4112,8 +4145,8 @@
         localStorage.removeItem('tiffin_pending_join_req');
 
         const finalMember = result?.member || newMemberCandidate;
-        const actualRole = cleanPin ? 'admin' : (finalMember.role || 'member');
-        const actualName = cleanName || finalMember.name || targetRoom.adminName || 'Admin';
+        const actualRole = cleanPin ? 'admin' : 'member';
+        const actualName = cleanName || finalMember.name || 'Flatmate';
 
         this.session = {
           memberId: finalMember.id,
@@ -4641,7 +4674,16 @@
       if (!confirm(`Are you sure you want to kick ${getFirstName(target.name)} from this flat? They will be removed immediately.`)) return;
 
       // 1. Remove from local activeRoom immediately and add to kickedMembers
-      this.activeRoom.members = (this.activeRoom.members || []).filter(m => m.id !== memberId);
+      const targetPhone = target.phone ? target.phone.slice(-10) : '';
+      const targetName = (target.name || '').trim().toLowerCase();
+
+      this.activeRoom.members = (this.activeRoom.members || []).filter(m => {
+        if (m.id === memberId) return false;
+        if (targetPhone && m.phone && m.phone.slice(-10) === targetPhone) return false;
+        if (targetName && m.name && m.name.trim().toLowerCase() === targetName) return false;
+        return true;
+      });
+
       this.activeRoom.kickedMembers = Array.isArray(this.activeRoom.kickedMembers) ? this.activeRoom.kickedMembers : [];
       this.activeRoom.kickedMembers = this.activeRoom.kickedMembers.filter(km => km.id !== memberId);
       this.activeRoom.kickedMembers.push({
@@ -4650,7 +4692,6 @@
         phone: target.phone || '',
         kickedAt: Date.now()
       });
-      this.cleanupAdminDuplicates(this.activeRoom);
       this.saveActiveRoom();
       ROOMMATES = this.activeRoom.members;
 
@@ -4665,14 +4706,6 @@
         roomCode: this.activeRoom.code,
         memberId: memberId,
         memberName: target.name
-      });
-
-      // 4. Also broadcast authoritative room_meta_sync so peers purge the member immediately
-      SyncEngine.broadcast({
-        type: 'room_meta_sync',
-        roomCode: this.activeRoom.code,
-        roomData: this.activeRoom,
-        state: getCompactSyncState(appState)
       });
 
       this.renderSettingsMembersTab();
@@ -4995,7 +5028,7 @@
     triggerHaptic();
     const roomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || 'ROOM';
     const roomName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'our flat';
-    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.1.apk';
+    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.2.apk';
     const webUrl = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
 
     const message = `🏠 Join "${roomName}" on Tiffin Tracker!\n` +
