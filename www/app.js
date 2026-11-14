@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.7.8';
+  const APP_VERSION = '5.7.9';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -1064,8 +1064,7 @@
               code: targetRoom || myRoom,
               name: 'My Flat',
               adminName: 'Admin',
-              members: [],
-              pendingRequests: []
+              members: []
             };
           }
 
@@ -1094,16 +1093,14 @@
             populateHeaderIdentityDropdown();
             renderAll();
 
-            // Notify Admin ONLY ONCE when a new member joins, then forget it
+            // Alert ALL roommates instantly when a new flatmate joins
             const joinNotifKey = 'tiffin_notified_join_' + (targetRoom || myRoom).toLowerCase() + '_' + (action.member.id || action.member.name).toLowerCase();
             const alreadyReminded = localStorage.getItem(joinNotifKey);
-            const isAdmin = RoomManager.isAdmin() || RoomManager.session?.role === 'admin';
 
-            if (!isCatchUp && !alreadyReminded && isAdmin) {
+            if (!isCatchUp && !alreadyReminded) {
               localStorage.setItem(joinNotifKey, 'true');
               playJoinAlertChime();
-              showToast(`${action.member.name} joined the flat`);
-              RoomManager.showInAppJoinBanner(action.member.name, targetRoom || myRoom);
+              showToast(`${action.member.name} joined the flat! 👥`);
 
               NotificationManager.send('Flatmate Joined! 🍱', {
                 body: `${action.member.name} joined #${targetRoom || myRoom}!`,
@@ -1119,7 +1116,7 @@
             }
           }
 
-          // Reply with full room metadata & ledger state so the new member gets everything
+          // Reply with authoritative room metadata & ledger state so new member receives full history
           if (RoomManager.session?.status === 'approved' || RoomManager.isAdmin()) {
             SyncEngine.broadcast({
               type: 'room_meta_sync',
@@ -1129,101 +1126,36 @@
             });
           }
         }
-      } else if (action.type === 'join_request') {
+      } else if (action.type === 'member_left') {
         const targetRoom = (action.roomCode || '').toString().toUpperCase().trim();
         const myRoom = (RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
-        if (targetRoom === myRoom || !targetRoom || !myRoom) {
-          const req = action.request || {
-            id: action.requestId || ('req_' + Date.now()),
-            name: action.author || action.name || 'New Member',
-            phone: action.phone || '',
-            roomCode: targetRoom || myRoom,
-            requestedAt: action.timestamp || Date.now()
-          };
-
-          if (RoomManager.activeRoom) {
-            if (!Array.isArray(RoomManager.activeRoom.pendingRequests)) {
-              RoomManager.activeRoom.pendingRequests = [];
-            }
-            if (!RoomManager.activeRoom.pendingRequests.some(p => p.id === req.id || (p.name && p.name.toLowerCase() === req.name.toLowerCase()))) {
-              RoomManager.activeRoom.pendingRequests.push(req);
-              RoomManager.saveActiveRoom();
-            }
-          }
-
-          RoomManager.updatePendingBadges();
-          RoomManager.renderSettingsMembersTab();
-
-          if (RoomManager.isAdmin()) {
-            showJoinRequestBanner(req);
-            playJoinAlertChime();
-            triggerHaptic();
-            NotificationManager.send('Flatmate Request: ' + req.name + ' 🔔', {
-              body: `${req.name} requested to join flat #${targetRoom || myRoom}! Tap to approve.`,
-              tag: `req-${req.id}`
-            });
-          }
-        }
-      } else if (action.type === 'member_approved') {
-        const targetRoom = (action.roomCode || '').toString().toUpperCase().trim();
-        const pendingRaw = localStorage.getItem('tiffin_pending_join_req');
-        if (pendingRaw) {
-          try {
-            const pending = JSON.parse(pendingRaw);
-            if (pending && pending.roomCode && pending.roomCode.toUpperCase() === targetRoom) {
-              const isMatch = (action.requestId && action.requestId === pending.requestId) ||
-                              (action.member && (
-                                (action.member.name || '').toLowerCase() === (pending.name || '').toLowerCase() ||
-                                (action.member.phone && pending.phone && RoomManager.normalizePhone(action.member.phone) === RoomManager.normalizePhone(pending.phone))
-                              ));
-              if (isMatch) {
-                RoomManager.handleJoinApproved(targetRoom, action.member, action.roomData, action.state);
-                return;
-              }
-            }
-          } catch (e) {}
-        }
-      } else if (action.type === 'request_declined') {
-        const pendingRaw = localStorage.getItem('tiffin_pending_join_req');
-        if (pendingRaw) {
-          try {
-            const pending = JSON.parse(pendingRaw);
-            if (pending && pending.requestId === action.requestId) {
-              RoomManager.handleJoinDeclined();
-              return;
-            }
-          } catch (e) {}
-        }
-      } else if (action.type === 'join_request_cancelled') {
-        if (RoomManager.activeRoom && Array.isArray(RoomManager.activeRoom.pendingRequests)) {
-          RoomManager.activeRoom.pendingRequests = RoomManager.activeRoom.pendingRequests.filter(p => p.id !== action.requestId);
+        if ((targetRoom === myRoom || !targetRoom || !myRoom) && RoomManager.activeRoom) {
+          const leftId = action.memberId;
+          const leftName = action.memberName || 'A roommate';
+          RoomManager.activeRoom.members = (RoomManager.activeRoom.members || []).filter(m => m.id !== leftId);
           RoomManager.saveActiveRoom();
-          RoomManager.updatePendingBadges();
+          ROOMMATES = RoomManager.activeRoom.members;
           RoomManager.renderSettingsMembersTab();
-          const banner = document.getElementById('joinRequestBanner');
-          if (banner) banner.classList.remove('active');
+          populateHeaderIdentityDropdown();
+          renderAll();
+          showToast(`${leftName} left the flat 👋`, 'info');
         }
       } else if (action.type === 'member_added') {
         const targetRoom = (action.roomCode || '').toString().toUpperCase().trim();
         const myRoom = (RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
-        if (targetRoom === myRoom || !targetRoom || !myRoom) {
-          if (!RoomManager.activeRoom) {
-            RoomManager.activeRoom = { code: targetRoom || myRoom, name: 'My Flat', adminName: 'Admin', members: [] };
-          }
-          if (action.member) {
-            const exists = RoomManager.findMatchingMember(RoomManager.activeRoom.members, action.member);
-            if (!exists) {
-              RoomManager.activeRoom.members.push(action.member);
-              RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
-              RoomManager.saveActiveRoom();
-              ROOMMATES = RoomManager.activeRoom.members;
-              RoomManager.renderSettingsMembersTab();
-              populateHeaderIdentityDropdown();
-              modified = true;
-            }
+        if ((targetRoom === myRoom || !targetRoom || !myRoom) && RoomManager.activeRoom && action.member) {
+          const exists = RoomManager.findMatchingMember(RoomManager.activeRoom.members, action.member);
+          if (!exists) {
+            RoomManager.activeRoom.members.push(action.member);
+            RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
+            RoomManager.saveActiveRoom();
+            ROOMMATES = RoomManager.activeRoom.members;
+            RoomManager.renderSettingsMembersTab();
+            populateHeaderIdentityDropdown();
+            renderAll();
           }
         }
-      } else if (action.type === 'member_kicked') {
+} else if (action.type === 'member_kicked') {
         const targetRoom = (action.roomCode || '').toString().toUpperCase().trim();
         const myRoom = (RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
         if (targetRoom === myRoom) {
@@ -1482,46 +1414,13 @@
     if (!cloudData || !cloudData.roomData) return;
     const cloudRoom = cloudData.roomData;
     const cloudMembers = Array.isArray(cloudRoom.members) ? cloudRoom.members : [];
-    const cloudRequests = Array.isArray(cloudRoom.pendingRequests) ? cloudRoom.pendingRequests : [];
 
-    // CASE 1: Device is an APPLICANT WAITING FOR APPROVAL
-    const pendingRaw = localStorage.getItem('tiffin_applicant') || localStorage.getItem('tiffin_pending_join_req');
-    if (pendingRaw) {
-      try {
-        const pending = JSON.parse(pendingRaw);
-        if (pending && String(cloudRoom.code).toUpperCase() === String(pending.roomCode).toUpperCase()) {
-          // Check if applicant has been approved
-          const approvedMember = cloudMembers.find(m =>
-            (m.name && pending.name && m.name.trim().toLowerCase() === pending.name.trim().toLowerCase()) ||
-            (m.phone && pending.phone && m.phone.slice(-10) === pending.phone.slice(-10))
-          );
-          if (approvedMember) {
-            RoomManager.handleJoinApproved(cloudRoom.code, approvedMember, cloudRoom, cloudData.state);
-            return;
-          }
-
-          // Check if request is still in pendingRequests
-          const stillPending = cloudRequests.some(p =>
-            p.id === pending.requestId ||
-            (p.name && pending.name && p.name.trim().toLowerCase() === pending.name.trim().toLowerCase())
-          );
-
-          if (!stillPending && pending.requestedAt && (Date.now() - pending.requestedAt > 2000)) {
-            // Request was declined by Admin!
-            RoomManager.handleJoinDeclined();
-            return;
-          }
-        }
-      } catch (e) {}
-    }
-
-    // CASE 2: Device is an ACTIVE LOGGED-IN MEMBER / ADMIN
+    // Active logged-in member or admin
     if (RoomManager.session && RoomManager.session.roomCode) {
       if (String(cloudRoom.code).toUpperCase() !== String(RoomManager.session.roomCode).toUpperCase()) {
         return; // Snapshot is from another room
       }
 
-      // Check if current user is still in the room's members list
       const isAdmin = RoomManager.isAdmin() || RoomManager.session.role === 'admin';
       const myId = RoomManager.session.memberId;
       const myName = (RoomManager.session.name || '').trim().toLowerCase();
@@ -1569,7 +1468,7 @@
             FirebaseSync.saveRoomData(cloudRoom.code, cloudRoom);
           }
         } else {
-          // Regular member is no longer in cloud members!
+          // Regular member was removed from flat!
           console.warn('[RoomManager] Current user is no longer in cloud members! User was removed.');
           alert(`You have been removed from flat #${cloudRoom.code} by the admin.`);
           RoomManager.hardResetLocalSession();
@@ -1581,15 +1480,15 @@
         }
       }
 
-      // Detect new flatmates that joined
+      // Detect new flatmates that joined and flatmates that left
       const previousMembers = Array.isArray(RoomManager.activeRoom?.members) ? RoomManager.activeRoom.members : [];
       const newMembers = cloudMembers.filter(cm => !previousMembers.some(pm => pm.id === cm.id));
+      const leftMembers = previousMembers.filter(pm => !cloudMembers.some(cm => cm.id === pm.id));
 
       // Update local room data directly from authoritative cloud
       RoomManager.activeRoom = {
         ...cloudRoom,
-        members: cloudMembers,
-        pendingRequests: cloudRequests
+        members: cloudMembers
       };
       const wasAdmin = RoomManager.session.role === 'admin';
       RoomManager.session.role = matchedMember.role || RoomManager.session.role || 'member';
@@ -1607,15 +1506,6 @@
 
       if (isPromotedAdmin && cloudRoom.adminPinNeedsReset) {
         RoomManager.showNewAdminPinModal(cloudRoom.name || 'My Flat');
-      }
-
-      // Update pending badge & banner
-      RoomManager.updatePendingBadges();
-      if (RoomManager.isAdmin() && cloudRequests.length > 0) {
-        cloudRequests.forEach(req => showJoinRequestBanner(req));
-      } else {
-        const banner = document.getElementById('joinRequestBanner');
-        if (banner) banner.classList.remove('active');
       }
 
       // Ensure meal slots exist in appState for all roommates
@@ -1638,12 +1528,20 @@
       if (typeof updateIdentityUI === 'function') {
         updateIdentityUI(RoomManager.session?.name || '');
       }
+      renderAll();
 
       // Alert when new members join
       if (newMembers.length > 0 && previousMembers.length > 0) {
         newMembers.forEach(nm => {
           playJoinAlertChime();
           showToast(`${nm.name} joined the flat! 👥`, 'success', 3500);
+        });
+      }
+
+      // Alert when members leave
+      if (leftMembers.length > 0 && previousMembers.length > 0) {
+        leftMembers.forEach(lm => {
+          showToast(`${lm.name} left the flat 👋`, 'info', 3500);
         });
       }
     }
@@ -3950,7 +3848,7 @@
         SyncEngine.setRoomCode(cleanCode);
       }
 
-      // 3. Load active room data or check pending request or show Gate
+      // 3. Load active room data or show Gate
       if (this.session && this.session.roomCode && this.session.name) {
         this.session.status = 'approved';
         localStorage.setItem('tiffin_session', JSON.stringify(this.session));
@@ -3959,18 +3857,6 @@
         this.hideGateModal();
         setTimeout(() => showStartupWelcomePrompt(), 600);
       } else {
-        const pendingRaw = localStorage.getItem('tiffin_applicant') || localStorage.getItem('tiffin_pending_join_req');
-        if (pendingRaw) {
-          try {
-            const pending = JSON.parse(pendingRaw);
-            if (pending && pending.roomCode) {
-              this.showGateModal('join');
-              this.showWaitingApprovalView(pending.roomCode, { name: pending.name, phone: pending.phone }, pending.requestId, { name: pending.groupName });
-              return;
-            }
-          } catch (e) {}
-        }
-        // Show normal Gate Modal for new installs to create or join flat
         this.showGateModal('join');
       }
 
@@ -4104,10 +3990,8 @@
         adminName: cleanName,
         adminPhone: cleanPhone,
         adminPin: cleanPin,
-        requireApproval: requireApproval,
         createdAt: new Date().toISOString(),
-        members: [adminMember],
-        pendingRequests: []
+        members: [adminMember]
       };
 
       this.cleanupAdminDuplicates(this.activeRoom);
@@ -4208,22 +4092,6 @@
           return false;
         }
 
-        if (result && result.requiresApproval) {
-          this.showWaitingApprovalView(cleanCode, newMemberCandidate, result.requestId, result.roomData);
-          SyncEngine.broadcast({
-            type: 'join_request',
-            roomCode: cleanCode,
-            request: {
-              id: result.requestId,
-              name: newMemberCandidate.name,
-              phone: newMemberCandidate.phone || '',
-              roomCode: cleanCode,
-              requestedAt: Date.now()
-            }
-          });
-          return true;
-        }
-
         let targetRoom = result?.roomData;
         let serverState = result?.state;
 
@@ -4298,16 +4166,21 @@
         SyncEngine.setRoomCode(cleanCode);
         SyncEngine.setIdentity(actualName);
 
-        // Broadcast to flatmates
+        // Broadcast to flatmates immediately
         SyncEngine.broadcast({
           type: 'member_joined',
           roomCode: cleanCode,
           member: finalMember
         });
+        SyncEngine.broadcast({
+          type: 'room_meta_sync',
+          roomCode: cleanCode,
+          roomData: this.activeRoom,
+          state: getCompactSyncState(appState)
+        });
 
         this.hideGateModal();
         this.updateHeaderRoomUI();
-        this.updatePendingBadges();
         this.renderSettingsMembersTab();
         updateIdentityUI(actualName);
 
@@ -4471,8 +4344,18 @@
 
       const roomCode = this.activeRoom?.code || this.session?.roomCode;
       const memberId = this.session?.memberId;
+      const memberName = this.session?.name;
 
       if (roomCode && memberId) {
+        // 1. Broadcast member_left immediately via peer sync
+        SyncEngine.broadcast({
+          type: 'member_left',
+          roomCode: roomCode,
+          memberId: memberId,
+          memberName: memberName
+        });
+
+        // 2. Remove member from cloud Firestore (handles admin succession if admin leaves)
         if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable && FirebaseSync.leaveRoom) {
           try {
             await FirebaseSync.leaveRoom(roomCode, memberId);
@@ -4860,7 +4743,6 @@
     renderSettingsMembersTab() {
       const listContainer = document.getElementById('settingsMembersList');
       const countDisplay = document.getElementById('roommatesCountDisplay');
-      const pendingList = document.getElementById('pendingRoommatesList');
       const addRoommateBtn = document.getElementById('addRoommateBtn');
       const adminPinRow = document.querySelector('.admin-pin-row');
       const dangerTab = document.querySelector('.sub-tab[data-subtab="danger"]');
@@ -4878,55 +4760,12 @@
         dangerTab.style.display = isAdmin ? 'flex' : 'none';
       }
 
+      const pendingContainer = document.getElementById('pendingRequestsContainer');
+      if (pendingContainer) pendingContainer.style.display = 'none';
       const approvalRow = document.getElementById('adminApprovalSettingsRow');
-      const approvalToggle = document.getElementById('requireApprovalToggle');
-      if (approvalRow) {
-        approvalRow.style.display = isAdmin ? 'block' : 'none';
-      }
-      if (approvalToggle && this.activeRoom) {
-        approvalToggle.checked = this.activeRoom.requireApproval !== false;
-      }
+      if (approvalRow) approvalRow.style.display = 'none';
 
       if (countDisplay) countDisplay.textContent = ROOMMATES.length;
-
-      // 1. Pending Requests (Admin view)
-      if (pendingList && this.activeRoom) {
-        pendingList.innerHTML = '';
-        const requests = this.activeRoom.pendingRequests || [];
-        if (requests.length === 0) {
-          pendingList.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); padding:6px 0;">No pending requests.</div>`;
-        } else {
-          requests.forEach(req => {
-            const card = document.createElement('div');
-            card.className = 'pending-roommate-card';
-            card.innerHTML = `
-              <div>
-                <strong style="font-size:0.88rem; color:var(--text-primary);">${escapeHtml(req.name || 'Member')}</strong>
-                ${req.phone ? `<span style="font-size:0.78rem; color:var(--text-muted); display:block;">${escapeHtml(req.phone)}</span>` : '<span style="font-size:0.75rem; color:var(--text-dim); display:block;">No phone</span>'}
-              </div>
-              <div class="pending-roommate-actions">
-                <button class="btn-approve" data-id="${req.id}">Approve</button>
-                <button class="btn-decline" data-id="${req.id}">Decline</button>
-              </div>
-            `;
-            pendingList.appendChild(card);
-          });
-
-          pendingList.querySelectorAll('.btn-approve').forEach(btn => {
-            btn.addEventListener('click', () => {
-              triggerHaptic();
-              this.approveRequest(btn.getAttribute('data-id'));
-            });
-          });
-
-          pendingList.querySelectorAll('.btn-decline').forEach(btn => {
-            btn.addEventListener('click', () => {
-              triggerHaptic();
-              this.declineRequest(btn.getAttribute('data-id'));
-            });
-          });
-        }
-      }
 
       // 2. Active Roommates
       if (listContainer) {
@@ -5156,7 +4995,7 @@
     triggerHaptic();
     const roomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || 'ROOM';
     const roomName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'our flat';
-    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.8.apk';
+    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.9.apk';
     const webUrl = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
 
     const message = `🏠 Join "${roomName}" on Tiffin Tracker!\n` +

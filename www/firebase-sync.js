@@ -165,7 +165,7 @@
     },
 
     /**
-     * Join Room Workflow (Atomic & Error-Tolerant)
+     * Join Room Workflow (Instant Direct Entry - No Approval Gates)
      */
     async joinRoom(roomCode, candidate, adminPin) {
       if (!this.isAvailable || !db) {
@@ -176,132 +176,115 @@
 
       try {
         const roomRef = db.collection('rooms').doc(cleanCode);
-        const doc = await roomRef.get();
-        if (!doc.exists) {
-          return { success: false, notFound: true, error: `Flat #${cleanCode} was not found. Please verify the 4-digit code.` };
-        }
+        let joinedMember = null;
+        let roomState = null;
+        let finalRoomData = null;
 
-        const data = doc.data() || {};
-        const roomData = data.roomData || { code: cleanCode, name: 'My Flat', members: [], pendingRequests: [] };
-        const state = data.state || null;
-        const members = Array.isArray(roomData.members) ? roomData.members : [];
-
-        // 1. Admin PIN Login (Super-user bypass)
-        if (adminPin) {
-          if (roomData.adminPin && String(roomData.adminPin).trim() !== String(adminPin).trim()) {
-            return { success: false, error: 'Incorrect Admin Security PIN for this flat.' };
+        const result = await db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(roomRef);
+          if (!doc.exists) {
+            return { success: false, notFound: true, error: `Flat #${cleanCode} was not found. Please verify the 4-digit code.` };
           }
-          // Find existing member or create admin member
-          let adminMember = members.find(m => m.role === 'admin') ||
-                            members.find(m => (m.name || '').toLowerCase() === (candidate.name || '').toLowerCase());
-          if (!adminMember) {
-            adminMember = {
-              id: candidate.id || ('m_' + Date.now()),
-              name: candidate.name || roomData.adminName || 'Admin',
-              phone: candidate.phone || roomData.adminPhone || '',
-              role: 'admin',
-              avatarColor: '#00d26a',
-              joinedAt: new Date().toISOString()
-            };
-            members.unshift(adminMember);
-            roomData.members = members;
-            await roomRef.set({ roomData, lastUpdated: Date.now() }, { merge: true });
-          }
-          return { success: true, roomData, state, member: adminMember };
-        }
 
-        // 2. Existing Member Login (Recognize returning user by phone or sanitized name)
-        const existingMember = members.find(m => {
-          if (candidate.phone && m.phone && candidate.phone.slice(-10) === m.phone.slice(-10)) return true;
-          if (candidate.name && m.name && candidate.name.trim().toLowerCase() === m.name.trim().toLowerCase()) return true;
-          return false;
-        });
+          const data = doc.data() || {};
+          const roomData = data.roomData || { code: cleanCode, name: 'My Flat', members: [] };
+          roomState = data.state || null;
+          let members = Array.isArray(roomData.members) ? [...roomData.members] : [];
 
-        if (existingMember) {
-          console.log(`[FirebaseSync] Returning member logged into #${cleanCode}: ${existingMember.name}`);
-          return { success: true, roomData, state, member: existingMember };
-        }
-
-        // 3. New User: Check if Room Requires Approval
-        const requireApproval = roomData.requireApproval !== false;
-        if (requireApproval) {
-          roomData.pendingRequests = Array.isArray(roomData.pendingRequests) ? roomData.pendingRequests : [];
-
-          // Deduplicate request if already pending
-          let existingReq = roomData.pendingRequests.find(r =>
-            (r.phone && candidate.phone && r.phone.slice(-10) === candidate.phone.slice(-10)) ||
-            (r.name && candidate.name && r.name.trim().toLowerCase() === candidate.name.trim().toLowerCase())
-          );
-
-          if (!existingReq) {
-            existingReq = {
-              id: 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-              name: candidate.name,
-              phone: candidate.phone || '',
-              roomCode: cleanCode,
-              requestedAt: Date.now()
-            };
-            roomData.pendingRequests.push(existingReq);
+          // 1. Admin PIN Verification (if PIN provided)
+          if (adminPin) {
+            if (roomData.adminPin && String(roomData.adminPin).trim() !== String(adminPin).trim()) {
+              return { success: false, error: 'Incorrect Admin Security PIN for this flat.' };
+            }
+            let adminMember = members.find(m => m.role === 'admin') ||
+                              members.find(m => (m.name || '').toLowerCase() === (candidate.name || '').toLowerCase());
+            if (!adminMember) {
+              adminMember = {
+                id: candidate.id || ('m_' + Date.now()),
+                name: candidate.name || roomData.adminName || 'Admin',
+                phone: candidate.phone || roomData.adminPhone || '',
+                role: 'admin',
+                avatarColor: '#00d26a',
+                joinedAt: new Date().toISOString()
+              };
+              members.unshift(adminMember);
+            }
+            joinedMember = adminMember;
           } else {
-            existingReq.requestedAt = Date.now();
-            if (candidate.phone) existingReq.phone = candidate.phone;
+            // 2. Member join: check if already in members by ID, phone, or name
+            let existingMember = members.find(m => {
+              if (candidate.id && m.id === candidate.id) return true;
+              if (candidate.phone && m.phone && candidate.phone.slice(-10) === m.phone.slice(-10)) return true;
+              if (candidate.name && m.name && candidate.name.trim().toLowerCase() === candidate.name.trim().toLowerCase()) return true;
+              return false;
+            });
+
+            if (existingMember) {
+              // Returning member
+              if (candidate.phone && !existingMember.phone) existingMember.phone = candidate.phone;
+              joinedMember = existingMember;
+            } else {
+              // 3. Brand New Member - Instant Direct Entry!
+              const avatarColors = ['#00d4ff', '#a78bfa', '#ff3b5c', '#ffb800', '#10b981', '#38bdf8', '#f43f5e', '#ec4899'];
+              const avatarColor = candidate.avatarColor || avatarColors[members.length % avatarColors.length];
+              const newMember = {
+                id: candidate.id || ('m_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4)),
+                name: candidate.name,
+                phone: candidate.phone || '',
+                role: 'member',
+                avatarColor: avatarColor,
+                joinedAt: new Date().toISOString()
+              };
+              members.push(newMember);
+              joinedMember = newMember;
+            }
           }
 
-          await roomRef.set({
+          // Un-kick member if they were previously in kickedMembers
+          if (Array.isArray(roomData.kickedMembers)) {
+            roomData.kickedMembers = roomData.kickedMembers.filter(km =>
+              km.id !== joinedMember.id &&
+              (!km.name || km.name.trim().toLowerCase() !== joinedMember.name.trim().toLowerCase()) &&
+              (!km.phone || !joinedMember.phone || km.phone.slice(-10) !== joinedMember.phone.slice(-10))
+            );
+          }
+
+          roomData.members = members;
+          finalRoomData = roomData;
+
+          transaction.set(roomRef, {
             roomData: roomData,
             lastUpdated: Date.now()
           }, { merge: true });
 
-          console.log(`[FirebaseSync] Join request submitted for #${cleanCode}: ${candidate.name} (${existingReq.id})`);
+          return { success: true };
+        });
 
-          // Alert Admin via FCM
-          this.sendRoomNotification({
-            roomCode: cleanCode,
-            title: `Knock Knock! 🔔 ${candidate.name}`,
-            body: `${candidate.name} requested to join flat #${cleanCode}. Tap to review and approve!`,
-            tag: `req-${existingReq.id}`,
-            data: {
-              type: 'join_request',
-              reqId: existingReq.id,
-              name: candidate.name,
-              phone: candidate.phone || '',
-              roomCode: cleanCode
-            }
-          });
-
-          return {
-            success: true,
-            requiresApproval: true,
-            requestId: existingReq.id,
-            roomData: roomData,
-            member: candidate
-          };
+        if (result && !result.success) {
+          return result;
         }
 
-        // 4. Direct Entry (Approval Disabled)
-        members.push(candidate);
-        roomData.members = members;
+        console.log(`[FirebaseSync] Instant direct join to #${cleanCode}: ${joinedMember.name}`);
 
-        await roomRef.set({
-          roomData: roomData,
-          lastUpdated: Date.now()
-        }, { merge: true });
-
-        console.log(`[FirebaseSync] Direct join to #${cleanCode}: ${candidate.name}`);
-
+        // Dispatch instant push notification to all other roommates
         this.sendRoomNotification({
           roomCode: cleanCode,
           title: 'Flatmate Joined! 🍱',
-          body: `${candidate.name} joined room #${cleanCode}!`,
-          tag: `join-${candidate.id || Date.now()}`,
-          data: { roomCode: cleanCode, memberName: candidate.name, type: 'member_joined' }
+          body: `${joinedMember.name} joined room #${cleanCode}!`,
+          tag: `join-${joinedMember.id}`,
+          data: {
+            roomCode: cleanCode,
+            memberName: joinedMember.name,
+            memberId: joinedMember.id,
+            type: 'member_joined'
+          }
         });
 
         return {
           success: true,
-          roomData: roomData,
-          state: state,
-          member: candidate
+          roomData: finalRoomData,
+          state: roomState,
+          member: joinedMember
         };
       } catch (err) {
         console.error('[FirebaseSync] joinRoom error:', err);
@@ -310,98 +293,11 @@
     },
 
     /**
-     * Admin: Approve Pending Request (Atomic)
+     * Stubs for legacy approval calls (no-ops for backwards compatibility)
      */
-    async approvePendingRequest(roomCode, requestId) {
-      if (!this.isAvailable || !db) return { success: false, error: 'Database offline.' };
-      const cleanCode = String(roomCode).trim().toUpperCase();
-
-      try {
-        const roomRef = db.collection('rooms').doc(cleanCode);
-        const doc = await roomRef.get();
-        if (!doc.exists) return { success: false, error: 'Flat not found.' };
-
-        const roomData = doc.data()?.roomData || {};
-        const pending = Array.isArray(roomData.pendingRequests) ? roomData.pendingRequests : [];
-        const req = pending.find(p => p.id === requestId);
-        if (!req) return { success: false, error: 'Request not found or already processed.' };
-
-        // Remove from pending
-        roomData.pendingRequests = pending.filter(p => p.id !== requestId);
-
-        // Add to members
-        roomData.members = Array.isArray(roomData.members) ? roomData.members : [];
-        const avatarColors = ['#00d4ff', '#a78bfa', '#ff3b5c', '#ffb800', '#10b981', '#38bdf8', '#f43f5e', '#ec4899'];
-        const avatarColor = avatarColors[roomData.members.length % avatarColors.length];
-
-        const newMember = {
-          id: 'm_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-          name: req.name,
-          phone: req.phone || '',
-          role: 'member',
-          avatarColor: avatarColor,
-          joinedAt: new Date().toISOString()
-        };
-
-        roomData.members.push(newMember);
-
-        await roomRef.set({
-          roomData: roomData,
-          lastUpdated: Date.now()
-        }, { merge: true });
-
-        console.log(`[FirebaseSync] Approved member ${newMember.name} in #${cleanCode}`);
-
-        // Send celebration FCM alert
-        this.sendRoomNotification({
-          roomCode: cleanCode,
-          title: `Welcome ${newMember.name}! 🍱`,
-          body: `${newMember.name} joined the flat mess!`,
-          tag: `join-${newMember.id}`,
-          data: { roomCode: cleanCode, memberName: newMember.name, type: 'member_approved' }
-        });
-
-        return { success: true, approvedMember: newMember, roomData: roomData };
-      } catch (err) {
-        console.error('[FirebaseSync] approvePendingRequest error:', err);
-        return { success: false, error: err.message };
-      }
-    },
-
-    /**
-     * Admin: Decline Pending Request (Atomic)
-     */
-    async declinePendingRequest(roomCode, requestId) {
-      if (!this.isAvailable || !db) return { success: false, error: 'Database offline.' };
-      const cleanCode = String(roomCode).trim().toUpperCase();
-
-      try {
-        const roomRef = db.collection('rooms').doc(cleanCode);
-        const doc = await roomRef.get();
-        if (!doc.exists) return { success: false, error: 'Flat not found.' };
-
-        const roomData = doc.data()?.roomData || {};
-        roomData.pendingRequests = (roomData.pendingRequests || []).filter(p => p.id !== requestId);
-
-        await roomRef.set({
-          roomData: roomData,
-          lastUpdated: Date.now()
-        }, { merge: true });
-
-        console.log(`[FirebaseSync] Declined request ${requestId} in #${cleanCode}`);
-        return { success: true };
-      } catch (err) {
-        console.error('[FirebaseSync] declinePendingRequest error:', err);
-        return { success: false, error: err.message };
-      }
-    },
-
-    /**
-     * Applicant: Cancel Join Request (Atomic)
-     */
-    async cancelJoinRequest(roomCode, requestId) {
-      return this.declinePendingRequest(roomCode, requestId);
-    },
+    async approvePendingRequest() { return { success: true }; },
+    async declinePendingRequest() { return { success: true }; },
+    async cancelJoinRequest() { return { success: true }; },
 
     /**
      * Admin: Remove Member from Flat (Atomic & Immediate)
@@ -451,6 +347,20 @@
         await roomRef.update(updatePayload);
 
         console.log(`[FirebaseSync] Removed member ${memberId} from #${cleanCode}`);
+
+        // Dispatch notification to inform room of member kick
+        this.sendRoomNotification({
+          roomCode: cleanCode,
+          title: 'Member Removed 👋',
+          body: `${target ? target.name : 'A member'} was removed from the flat by Admin.`,
+          tag: `kick-${memberId}`,
+          data: {
+            roomCode: cleanCode,
+            memberId: memberId,
+            memberName: target ? target.name : '',
+            type: 'member_kicked'
+          }
+        });
         return { success: true };
       } catch (err) {
         console.error('[FirebaseSync] removeMemberFromRoom error:', err);
@@ -527,9 +437,27 @@
           return {
             success: true,
             promotedAdmin: newAdmin,
-            remainingMembers: remainingMembers
+            remainingMembers: remainingMembers,
+            leavingMember: leavingMember
           };
         });
+
+        // Dispatch notification to notify all other flatmates that member left
+        if (result.success && !result.dissolved) {
+          const leftName = result.leavingMember ? result.leavingMember.name : 'A flatmate';
+          this.sendRoomNotification({
+            roomCode: cleanCode,
+            title: 'Flatmate Left 👋',
+            body: `${leftName} left the flat.`,
+            tag: `leave-${memberId}`,
+            data: {
+              roomCode: cleanCode,
+              memberId: memberId,
+              memberName: leftName,
+              type: 'member_left'
+            }
+          });
+        }
 
         // Broadcast notifications if admin was promoted
         if (result.promotedAdmin) {

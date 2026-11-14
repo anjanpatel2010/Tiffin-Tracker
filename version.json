@@ -1,20 +1,31 @@
 {
-  "version": "5.7.8",
-  "versionCode": 50708,
+  "version": "5.7.9",
+  "versionCode": 50709,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
-  "releaseDate": "2026-11-11",
-  "message": "Tiffin Tracker v5.7.8 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.7.8.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.8.apk",
+  "releaseDate": "2026-11-14",
+  "message": "Tiffin Tracker v5.7.9 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.7.9.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.9.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
-    "Security Hardening: Completely removed all service account private keys from client codebase and assets",
-    "Kick Fix: Permanent and immediate member removal with explicit kickedMembers registry preventing ghost resurrection",
-    "Admin Immunity: Protects flat admin from accidental disconnection during peer synchronization or multi-device joins",
-    "Firestore Queue Sync: Clean background notification queuing without client-side credential exposure"
+    "Instant Direct Join: Completely removed entry request feature; new flatmates enter instantly with the 4-digit room code",
+    "Real-time Enter/Leave Sync: Immediate bidirectional synchronization across all roommate devices when someone joins or leaves the flat",
+    "Zero Ghost Resurrection: Authoritative Firestore membership with kickedMembers blacklist for permanent admin removals",
+    "Clean Core Logic: Streamlined flat lifecycle without approval gates, pending queues, or modal waiting screens"
   ],
   "history": [
+    {
+      "version": "5.7.8",
+      "versionCode": 50708,
+      "releaseDate": "2026-11-11",
+      "releaseNotes": [
+        "Security Hardening: Completely removed all service account private keys from client codebase and assets",
+        "Kick Fix: Permanent and immediate member removal with explicit kickedMembers registry preventing ghost resurrection",
+        "Admin Immunity: Protects flat admin from accidental disconnection during peer synchronization or multi-device joins",
+        "Firestore Queue Sync: Clean background notification queuing without client-side credential exposure"
+      ]
+    },
     {
       "version": "5.7.7",
       "versionCode": 50707,
@@ -106,17 +117,6 @@
     {
       "version": "5.6.0",
       "versionCode": 50600,
-      "releaseDate": "2026-11-07",
-      "releaseNotes": [
-        "Secure Firebase Cloud Messaging backend with lockscreen alerts",
-        "Human-crafted UI design: clean emerald & deep slate theme",
-        "Instant update routing directly to in-app installation modal",
-        "Automated fail-safe version tracking across all devices"
-      ]
-    },
-    {
-      "version": "5.5.0",
-      "versionCode": 50500,
       "releaseDate": "2026-11-07",
       "releaseNotes": [
         "Secure Firebase Cloud Messaging backend with lockscreen alerts",
