@@ -1,20 +1,31 @@
 {
-  "version": "5.8.2",
-  "versionCode": 50802,
+  "version": "5.8.3",
+  "versionCode": 50803,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-14",
-  "message": "Tiffin Tracker v5.8.2 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.8.2.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.2.apk",
+  "message": "Tiffin Tracker v5.8.3 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.8.3.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.3.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
-    "Zero-Flicker Master Sheet: Eliminated table flickering and DOM thrashing with signature caching, atomic updates, and single-delegate event handling",
-    "Strict Admin Privilege Guard: Required verified Admin Security PIN before granting admin access; new devices and joining members join strictly as members",
-    "Permanent Kick Enforcement: Neutralized resurrection loops by eliminating recursive snapshot writes and enforcing kickedMembers blacklist across all sync layers",
-    "Rock-Solid Real-Time Sync: Single authoritative Firestore source of truth with debounced 60fps renderAll pipeline"
+    "Comprehensive Flicker Fix: Zero flickering across Daily Logger, Master Sheet, Split, and Amul Tracker using deterministic signature caching and atomic DOM updates",
+    "Clean Interface: Removed test push button and redundant background sync polling intervals",
+    "Strict Admin Security: Regular members joining from new devices strictly adopt member profile and cannot adopt admin status without verified PIN",
+    "Real-time Room Deletion Reset: Connected phones immediately auto-reset to gate screen if flat is removed or purged"
   ],
   "history": [
+    {
+      "version": "5.8.2",
+      "versionCode": 50802,
+      "releaseDate": "2026-11-14",
+      "releaseNotes": [
+        "Zero-Flicker Master Sheet: Eliminated table flickering and DOM thrashing with signature caching, atomic updates, and single-delegate event handling",
+        "Strict Admin Privilege Guard: Required verified Admin Security PIN before granting admin access; new devices and joining members join strictly as members",
+        "Permanent Kick Enforcement: Neutralized resurrection loops by eliminating recursive snapshot writes and enforcing kickedMembers blacklist across all sync layers",
+        "Rock-Solid Real-Time Sync: Single authoritative Firestore source of truth with debounced 60fps renderAll pipeline"
+      ]
+    },
     {
       "version": "5.8.1",
       "versionCode": 50801,
@@ -112,17 +123,6 @@
         "Zero Ghost Resurrection: Authoritative Firestore single source of truth ensures kicked users never re-add themselves",
         "Instant Kick & Logout: Kicked members are immediately logged out, local session purged, and returned to flat gate",
         "Live Waiting Screen: Real-time admission for pending join requests with Admin 1-tap approval"
-      ]
-    },
-    {
-      "version": "5.7.2",
-      "versionCode": 50702,
-      "releaseDate": "2026-11-08",
-      "releaseNotes": [
-        "Pure Native Android: Removed deprecated web/PWA service workers and legacy web push code",
-        "Custom Kotlin FirebaseMessagingService: Background alerts delivered directly to device lockscreen",
-        "Automated token registration keyed by member ID with instant Firestore synchronization",
-        "High-priority notification channel (tiffin_notifications) with chime sound and vibration"
       ]
     }
   ]

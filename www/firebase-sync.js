@@ -121,6 +121,8 @@
         activeUnsubscribe = roomRef.onSnapshot((doc) => {
           if (!doc.exists) {
             console.log(`[FirebaseSync] Room document #${cleanCode} does not exist in cloud.`);
+            this.latestSnapshot = null;
+            this.notifySubscribers({ _roomDeleted: true, roomCode: cleanCode });
             return;
           }
 
@@ -603,6 +605,16 @@
       if (!this.isAvailable || !db || !roomData) return;
       const cleanCode = this.getCleanRoom(roomCode);
       try {
+        if (Array.isArray(roomData.kickedMembers) && Array.isArray(roomData.members)) {
+          roomData.members = roomData.members.filter(m => {
+            if (!m || m.role === 'admin') return true;
+            return !roomData.kickedMembers.some(km =>
+              (km.id && m.id && km.id === m.id) ||
+              (km.phone && m.phone && km.phone.slice(-10) === m.phone.slice(-10)) ||
+              (km.name && m.name && km.name.trim().toLowerCase() === m.name.trim().toLowerCase())
+            );
+          });
+        }
         await db.collection('rooms').doc(cleanCode).set({
           roomData: roomData,
           lastUpdated: Date.now()

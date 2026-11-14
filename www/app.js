@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.8.2';
+  const APP_VERSION = '5.8.3';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -699,16 +699,8 @@
       this.identity = localStorage.getItem('tiffin_my_identity') || RoomManager.session?.name || '';
       updateIdentityUI(this.identity);
 
-      // 3. Connect EventSource
+      // 3. Connect EventSource (Firebase Firestore onSnapshot handles cloud real-time updates natively)
       this.connect();
-
-      // 4. Fast resilience polling (every 8s) to ensure instant synchronization across all room devices
-      if (this.resilienceTimer) clearInterval(this.resilienceTimer);
-      this.resilienceTimer = setInterval(() => {
-        if (document.visibilityState === 'visible') {
-          this.catchUp();
-        }
-      }, 8000);
     },
 
     setRoomCode(newRoom) {
@@ -1412,7 +1404,18 @@
   // REAL-TIME FIREBASE CLOUD REALTIME ENGINE (Two-way Firestore synchronization)
   // ==========================================================================
   function handleCloudSyncUpdate(cloudData) {
-    if (!cloudData || !cloudData.roomData) return;
+    if (!cloudData) return;
+    if (cloudData._roomDeleted) {
+      console.warn('[Sync] Active flat room was dissolved or deleted from cloud.');
+      alert('This flat has been removed or reset. Returning to the main screen.');
+      RoomManager.hardResetLocalSession();
+      RoomManager.showGateModal('join');
+      RoomManager.updateHeaderRoomUI();
+      RoomManager.renderSettingsMembersTab();
+      renderAll();
+      return;
+    }
+    if (!cloudData.roomData) return;
     const cloudRoom = cloudData.roomData;
     const cloudMembers = Array.isArray(cloudRoom.members) ? cloudRoom.members : [];
 
@@ -1445,11 +1448,15 @@
         return;
       }
 
-      let matchedMember = cloudMembers.find(m =>
-        (myId && m.id === myId) ||
-        (myPhone && m.phone && m.phone.slice(-10) === myPhone) ||
-        (myName && m.name && m.name.trim().toLowerCase() === myName)
-      );
+      let matchedMember = cloudMembers.find(m => myId && m.id === myId);
+      if (!matchedMember) {
+        matchedMember = cloudMembers.find(m => {
+          if (!isAdmin && m.role === 'admin') return false; // Strict: Non-admin never matches admin
+          if (myPhone && m.phone && m.phone.slice(-10) === myPhone) return true;
+          if (myName && m.name && m.name.trim().toLowerCase() === myName) return true;
+          return false;
+        });
+      }
 
       if (!matchedMember) {
         if (isAdmin) {
@@ -1501,6 +1508,10 @@
         kickedMembers: kickedList
       };
       const wasAdmin = RoomManager.session.role === 'admin';
+      // Strict: Never elevate non-admin session to admin without explicit PIN
+      if (RoomManager.session.role !== 'admin' && matchedMember.role === 'admin') {
+        matchedMember.role = 'member';
+      }
       RoomManager.session.role = matchedMember.role || RoomManager.session.role || 'member';
       RoomManager.session.memberId = matchedMember.id;
       RoomManager.session.name = matchedMember.name;
@@ -1946,44 +1957,48 @@
     }
     if (select) select.value = selectedDay;
 
-    // Roommate Cards Grid (Immediately visible, no off-screen push)
+    // Roommate Cards Grid (Zero-Flicker: signature caching + atomic DOM replacement)
     const container = document.getElementById('roommatesLoggerGrid');
     if (!container) return;
-    container.innerHTML = '';
 
     if (ROOMMATES.length === 0) {
-      container.innerHTML = `
-        <div class="card" style="text-align:center; padding:32px 16px; margin:16px 0;">
-          <div style="font-size:2rem; margin-bottom:8px;">👥</div>
-          <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:6px;">No Roommates in this Room</h3>
-          <p style="font-size:0.88rem; color:var(--text-muted); margin-bottom:16px;">Add flatmates or share your room invite link to start logging meals.</p>
-          <button id="emptyStateAddMemberBtn" class="primary-btn glow-btn btn-sm" style="margin:0 auto;">
-            <span>+ Add Roommates</span>
-          </button>
-        </div>
-      `;
-      const btn = document.getElementById('emptyStateAddMemberBtn');
-      if (btn) {
-        btn.addEventListener('click', () => {
-          const settingsBtn = document.getElementById('headerSettingsBtn');
-          if (settingsBtn) settingsBtn.click();
-        });
+      if (container.dataset.lastSig !== 'empty') {
+        container.dataset.lastSig = 'empty';
+        container.innerHTML = `
+          <div class="card" style="text-align:center; padding:32px 16px; margin:16px 0;">
+            <div style="font-size:2rem; margin-bottom:8px;">👥</div>
+            <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:6px;">No Roommates in this Room</h3>
+            <p style="font-size:0.88rem; color:var(--text-muted); margin-bottom:16px;">Add flatmates or share your room invite link to start logging meals.</p>
+            <button id="emptyStateAddMemberBtn" class="primary-btn glow-btn btn-sm" style="margin:0 auto;">
+              <span>+ Add Roommates</span>
+            </button>
+          </div>
+        `;
+        const btn = document.getElementById('emptyStateAddMemberBtn');
+        if (btn) {
+          btn.addEventListener('click', () => {
+            const settingsBtn = document.getElementById('headerSettingsBtn');
+            if (settingsBtn) settingsBtn.click();
+          });
+        }
       }
       return;
     }
 
     const rates = getRates();
+    const loggerSignature = `${selectedDay}-${currentMonth}-${currentYear}-${ROOMMATES.map(r => r.id + ':' + (r.role || '')).join(',')}-${JSON.stringify(dayData.meals)}-${dayData.sabzi || ''}-${rates.half}-${rates.full}-${rates.special}`;
 
-    ROOMMATES.forEach(r => {
-      const m = dayData.meals[r.id] || { lunch: '', dinner: '' };
-      const individualCost = getRoommateDayCost(r.id, selectedDay);
-      const initials = (r.name || 'RM').slice(0, 2).toUpperCase();
+    if (container.dataset.lastSig !== loggerSignature) {
+      container.dataset.lastSig = loggerSignature;
 
-      const card = document.createElement('div');
-      card.className = 'roommate-card';
+      let cardsHtml = '';
+      ROOMMATES.forEach(r => {
+        const m = dayData.meals[r.id] || { lunch: '', dinner: '' };
+        const individualCost = getRoommateDayCost(r.id, selectedDay);
+        const fName = getFirstName(r.name);
+        const isRoomAdmin = r.role === 'admin';
 
-      const renderSlot = (slotName, currentVal) => {
-        return `
+        const renderSlotHtml = (slotName, currentVal) => `
           <div class="meal-slot-group">
             <div class="meal-slot-label-row">
               <span class="slot-label">${slotName}</span>
@@ -2009,36 +2024,39 @@
             </div>
           </div>
         `;
-      };
 
-      const fName = getFirstName(r.name);
-      const isRoomAdmin = r.role === 'admin';
-
-      card.innerHTML = `
-        <div class="roommate-card-header">
-          <div class="roommate-info">
-            <div class="roommate-avatar" style="overflow:hidden; display:flex; align-items:center; justify-content:center; background:none;">
-              ${getCartoonAvatarSvg(r.id || r.name, 34)}
+        cardsHtml += `
+          <div class="roommate-card">
+            <div class="roommate-card-header">
+              <div class="roommate-info">
+                <div class="roommate-avatar" style="overflow:hidden; display:flex; align-items:center; justify-content:center; background:none;">
+                  ${getCartoonAvatarSvg(r.id || r.name, 34)}
+                </div>
+                <div class="roommate-name-wrap">
+                  <span class="roommate-name">${escapeHtml(fName)}</span>
+                  ${isRoomAdmin ? '<span class="admin-crown-badge" title="Flat Admin">👑</span>' : ''}
+                </div>
+              </div>
+              <div class="roommate-day-cost">
+                <span class="day-cost-val">₹${individualCost}</span>
+              </div>
             </div>
-            <div class="roommate-name-wrap">
-              <span class="roommate-name">${escapeHtml(fName)}</span>
-              ${isRoomAdmin ? '<span class="admin-crown-badge" title="Flat Admin">👑</span>' : ''}
-            </div>
+            ${renderSlotHtml('Lunch', m.lunch)}
+            ${renderSlotHtml('Dinner', m.dinner)}
           </div>
-          <div class="roommate-day-cost">
-            <span class="day-cost-val">₹${individualCost}</span>
-          </div>
-        </div>
-        ${renderSlot('Lunch', m.lunch)}
-        ${renderSlot('Dinner', m.dinner)}
-      `;
+        `;
+      });
 
-      container.appendChild(card);
-    });
+      // Atomic single-pass DOM insertion - Zero blank flash
+      container.innerHTML = cardsHtml;
+    }
 
-    // Attach click events on toggle buttons
-    container.querySelectorAll('.seg-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+    // Attach Event Delegation on container ONCE (Never re-bind listeners per render)
+    if (!container.dataset.eventsBound) {
+      container.dataset.eventsBound = 'true';
+      container.addEventListener('click', (e) => {
+        const btn = e.target.closest('.seg-btn');
+        if (!btn) return;
         triggerHaptic();
         const person = btn.getAttribute('data-person');
         const slot = btn.getAttribute('data-slot').toLowerCase();
@@ -2064,7 +2082,7 @@
           timestamp: timestamp
         });
       });
-    });
+    }
   }
 
   // 2. Master Sheet Matrix Render (Optimized: Zero-Flicker & Atomic Render)
@@ -2323,7 +2341,8 @@
     }
   }
 
-  // 4. Analytics & Split Render
+  // 4. Analytics & Split Render (Zero-Flicker: Signature Cached + Atomic Render)
+  let lastAnalyticsSignature = '';
   function renderAnalytics() {
     const flatTotals = getFlatTotals();
     const rates = getRates();
@@ -2336,10 +2355,16 @@
     if (statMeals) statMeals.textContent = `${flatTotals.totalMeals} total meals in ${MONTH_NAMES[currentMonth - 1]}`;
     if (splitRatesSub) splitRatesSub.textContent = `${MONTH_NAMES[currentMonth - 1]} ${currentYear} • Live Rates: Half ₹${rates.half} • Full ₹${rates.full} • Special ₹${rates.special}`;
 
-    // Roommate Expense Split Bars (Relative Scale: Highest Spender at 100%)
     const list = document.getElementById('roommateSplitBarsList');
+    const dishesGrid = document.getElementById('popularDishesGrid');
     if (!list) return;
-    list.innerHTML = '';
+
+    // Signature caching: skip re-rendering if data hasn't changed
+    const analyticsSig = `${currentYear}-${currentMonth}-${flatTotals.tiffinTotal}-${flatTotals.totalMeals}-${ROOMMATES.map(r => r.id + ':' + (r.role || '')).join(',')}-${appState._stateHash || ''}-${rates.half}-${rates.full}-${rates.special}`;
+    if (lastAnalyticsSignature === analyticsSig && list.children.length > 0) {
+      return;
+    }
+    lastAnalyticsSignature = analyticsSig;
 
     // Calculate stats for all roommates and find max spend
     const roommateStats = ROOMMATES.map(r => {
@@ -2350,40 +2375,38 @@
 
     const maxSpend = Math.max(...roommateStats.map(item => item.stats.tiffinTotal), 1);
 
+    let splitHtml = '';
     roommateStats.forEach(({ r, stats, shareOfTotal }) => {
-      // Relative scale: highest spender gets 100%, others scale relatively
       const relativePct = stats.tiffinTotal > 0 ? Math.min(100, Math.max(10, Math.round((stats.tiffinTotal / maxSpend) * 100))) : 0;
-
       const fName = getFirstName(r.name);
       const isRoomAdmin = r.role === 'admin';
 
-      const item = document.createElement('div');
-      item.className = 'split-row-item';
-      item.innerHTML = `
-        <div class="split-row-header">
-          <div class="split-person-details">
-            <div class="roommate-avatar" style="width:30px; height:30px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:none;">${getCartoonAvatarSvg(r.id || r.name, 30)}</div>
-            <div class="roommate-name-wrap">
-              <strong style="font-size:0.95rem">${escapeHtml(fName)}</strong>
-              ${isRoomAdmin ? '<span class="admin-crown-badge" title="Flat Admin">👑</span>' : ''}
+      splitHtml += `
+        <div class="split-row-item">
+          <div class="split-row-header">
+            <div class="split-person-details">
+              <div class="roommate-avatar" style="width:30px; height:30px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:none;">${getCartoonAvatarSvg(r.id || r.name, 30)}</div>
+              <div class="roommate-name-wrap">
+                <strong style="font-size:0.95rem">${escapeHtml(fName)}</strong>
+                ${isRoomAdmin ? '<span class="admin-crown-badge" title="Flat Admin">👑</span>' : ''}
+              </div>
+            </div>
+            <div class="split-amount-wrap">
+              <span class="split-share-pct" title="${shareOfTotal}% of flat total">${relativePct}%</span>
+              <span class="split-cost">₹${stats.tiffinTotal}</span>
             </div>
           </div>
-          <div class="split-amount-wrap">
-            <span class="split-share-pct" title="${shareOfTotal}% of flat total">${relativePct}%</span>
-            <span class="split-cost">₹${stats.tiffinTotal}</span>
+          <div class="split-bar-track">
+            <div class="split-bar-fill" style="width:${relativePct}%; background:${r.avatarColor}"></div>
+          </div>
+          <div class="split-actions-sub">
+            <span>${stats.halfCount} Half (₹${stats.halfCount * rates.half}) • ${stats.fullCount} Full (₹${stats.fullCount * rates.full})${stats.specialCount ? ` • ${stats.specialCount} Special (₹${stats.specialCount * rates.special})` : ''}</span>
+            <span style="font-family:var(--font-mono); font-weight:700;">${stats.totalMeals} Meals</span>
           </div>
         </div>
-        <div class="split-bar-track">
-          <div class="split-bar-fill" style="width:${relativePct}%; background:${r.avatarColor}"></div>
-        </div>
-        <div class="split-actions-sub">
-          <span>${stats.halfCount} Half (₹${stats.halfCount * rates.half}) • ${stats.fullCount} Full (₹${stats.fullCount * rates.full})${stats.specialCount ? ` • ${stats.specialCount} Special (₹${stats.specialCount * rates.special})` : ''}</span>
-          <span style="font-family:var(--font-mono); font-weight:700;">${stats.totalMeals} Meals</span>
-        </div>
       `;
-
-      list.appendChild(item);
     });
+    list.innerHTML = splitHtml;
 
     // Popular Dishes Counter
     const dishCounts = {};
@@ -2394,22 +2417,21 @@
       }
     }
 
-    const dishesGrid = document.getElementById('popularDishesGrid');
     if (dishesGrid) {
-      dishesGrid.innerHTML = '';
       const sortedDishes = Object.entries(dishCounts).sort((a, b) => b[1] - a[1]);
       if (sortedDishes.length === 0) {
         dishesGrid.innerHTML = '<p class="helper-text">No sabzis recorded yet. Start logging dishes in Daily Logger!</p>';
       } else {
+        let dishesHtml = '';
         sortedDishes.forEach(([dish, count]) => {
-          const tile = document.createElement('div');
-          tile.className = 'dish-tile';
-          tile.innerHTML = `
-            <span class="dish-tile-name">${escapeHtml(dish)}</span>
-            <span class="dish-tile-count">${count} day${count === 1 ? '' : 's'} cooked</span>
+          dishesHtml += `
+            <div class="dish-tile">
+              <span class="dish-tile-name">${escapeHtml(dish)}</span>
+              <span class="dish-tile-count">${count} day${count === 1 ? '' : 's'} cooked</span>
+            </div>
           `;
-          dishesGrid.appendChild(tile);
         });
+        dishesGrid.innerHTML = dishesHtml;
       }
     }
   }
@@ -2527,91 +2549,96 @@
     const maxMilkCost = Math.max(...memberStatsList.map(item => item.stats.milkTotal), 1);
 
     const amulBarsList = document.getElementById('amulSplitBarsList');
+    const dailyGrid = document.getElementById('amulOptionsGrid');
+    const theadRow = document.getElementById('amulTableHeadRow');
+    const tbody = document.getElementById('amulTableBody');
+    const tfoot = document.getElementById('amulTableFooter');
+
+    // Signature caching to avoid redundant DOM tearing
+    const amulSig = `${currentYear}-${currentMonth}-${selectedDay}-${members.join(',')}-${rates.amulPacket || 35}-${grandTotalPackets}-${grandTotalCost}-${JSON.stringify(dayData.amul || {})}`;
+    const amulTab = document.getElementById('amulSplitBarsList');
+    if (amulTab && amulTab.dataset.lastSig === amulSig && tbody && tbody.children.length > 0) {
+      return;
+    }
+    if (amulTab) amulTab.dataset.lastSig = amulSig;
+
     if (amulBarsList) {
-      amulBarsList.innerHTML = '';
+      let barsHtml = '';
       memberStatsList.forEach(({ personId, r, stats }) => {
         const relativePct = stats.milkTotal > 0 ? Math.min(100, Math.max(10, Math.round((stats.milkTotal / maxMilkCost) * 100))) : 0;
         const displayName = getFirstName(r.name);
 
-        const item = document.createElement('div');
-        item.className = 'split-row-item';
-        item.innerHTML = `
-          <div class="split-row-header">
-            <div class="split-person-details">
-              <div class="roommate-avatar" style="width:30px; height:30px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:none;">${getCartoonAvatarSvg(personId || r.name, 30)}</div>
-              <strong style="font-size:0.95rem">${escapeHtml(displayName)}</strong>
-              ${members.length > 1 ? `<button class="amul-remove-btn" data-person="${personId}" title="Remove ${escapeHtml(displayName)} from Amul Tracker" style="margin-left:8px; cursor:pointer; background:none; border:none; color:var(--text-dim); font-size:0.8rem; line-height:1; padding:2px 4px;">✕</button>` : ''}
+        barsHtml += `
+          <div class="split-row-item">
+            <div class="split-row-header">
+              <div class="split-person-details">
+                <div class="roommate-avatar" style="width:30px; height:30px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:none;">${getCartoonAvatarSvg(personId || r.name, 30)}</div>
+                <strong style="font-size:0.95rem">${escapeHtml(displayName)}</strong>
+                ${members.length > 1 ? `<button class="amul-remove-btn" data-person="${personId}" title="Remove ${escapeHtml(displayName)} from Amul Tracker" style="margin-left:8px; cursor:pointer; background:none; border:none; color:var(--text-dim); font-size:0.8rem; line-height:1; padding:2px 4px;">✕</button>` : ''}
+              </div>
+              <div class="split-amount-wrap">
+                <span class="split-share-pct">${relativePct}%</span>
+                <span class="split-cost">${formatRupees(stats.milkTotal)}</span>
+              </div>
             </div>
-            <div class="split-amount-wrap">
-              <span class="split-share-pct">${relativePct}%</span>
-              <span class="split-cost">${formatRupees(stats.milkTotal)}</span>
+            <div class="split-bar-track">
+              <div class="split-bar-fill" style="width:${relativePct}%; background:${r.avatarColor}"></div>
             </div>
-          </div>
-          <div class="split-bar-track">
-            <div class="split-bar-fill" style="width:${relativePct}%; background:${r.avatarColor}"></div>
-          </div>
-          <div class="split-actions-sub">
-            <span>${stats.milkPackets} packet${stats.milkPackets === 1 ? '' : 's'} (${stats.milkPackets} × ₹${rates.amulPacket || 35})</span>
-            <span style="font-family:var(--font-mono); font-weight:700;">${formatRupees(stats.milkTotal)}</span>
+            <div class="split-actions-sub">
+              <span>${stats.milkPackets} packet${stats.milkPackets === 1 ? '' : 's'} (${stats.milkPackets} × ₹${rates.amulPacket || 35})</span>
+              <span style="font-family:var(--font-mono); font-weight:700;">${formatRupees(stats.milkTotal)}</span>
+            </div>
           </div>
         `;
-        amulBarsList.appendChild(item);
       });
+      amulBarsList.innerHTML = barsHtml;
     }
 
     // 2. Dynamic Daily Quick Logging Grid
-    const dailyGrid = document.getElementById('amulOptionsGrid');
     if (dailyGrid) {
-      dailyGrid.innerHTML = '';
+      let dailyHtml = '';
       members.forEach(personId => {
         const displayName = getFirstName(ROOMMATES.find(r => r.id === personId)?.name || personId);
         const curVal = Number(dayData.amul?.[personId]) || 0;
 
-        const box = document.createElement('div');
-        box.className = 'amul-person-box';
-        box.innerHTML = `
-          <div class="amul-person-header">
-            <span class="stepper-name">${escapeHtml(displayName)}</span>
-            <span class="amul-current-selected">${curVal ? `${curVal} pkt` : '0 pkt'}</span>
-          </div>
-          <div class="amul-pill-group" data-person="${personId}">
-            <button class="amul-pill-btn ${curVal === 0 ? 'active' : ''}" data-qty="0">Off</button>
-            <button class="amul-pill-btn ${curVal === 0.5 ? 'active' : ''}" data-qty="0.5">0.5</button>
-            <button class="amul-pill-btn ${curVal === 1 ? 'active' : ''}" data-qty="1">1</button>
-            <button class="amul-pill-btn ${curVal === 2 ? 'active' : ''}" data-qty="2">2</button>
+        dailyHtml += `
+          <div class="amul-person-box">
+            <div class="amul-person-header">
+              <span class="stepper-name">${escapeHtml(displayName)}</span>
+              <span class="amul-current-selected">${curVal ? `${curVal} pkt` : '0 pkt'}</span>
+            </div>
+            <div class="amul-pill-group" data-person="${personId}">
+              <button class="amul-pill-btn ${curVal === 0 ? 'active' : ''}" data-qty="0">Off</button>
+              <button class="amul-pill-btn ${curVal === 0.5 ? 'active' : ''}" data-qty="0.5">0.5</button>
+              <button class="amul-pill-btn ${curVal === 1 ? 'active' : ''}" data-qty="1">1</button>
+              <button class="amul-pill-btn ${curVal === 2 ? 'active' : ''}" data-qty="2">2</button>
+            </div>
           </div>
         `;
-        dailyGrid.appendChild(box);
       });
+      dailyGrid.innerHTML = dailyHtml;
     }
 
     // 3. Dynamic Table Header
-    const theadRow = document.getElementById('amulTableHeadRow');
     if (theadRow) {
-      theadRow.innerHTML = `<th class="th-sticky th-date">Date</th>`;
+      let headHtml = `<th class="th-sticky th-date">Date</th>`;
       members.forEach(personId => {
         const displayName = getFirstName(ROOMMATES.find(r => r.id === personId)?.name || personId);
-        const th = document.createElement('th');
-        th.textContent = `${displayName} (Pkt)`;
-        theadRow.appendChild(th);
+        headHtml += `<th>${displayName} (Pkt)</th>`;
       });
-      const thTotal = document.createElement('th');
-      thTotal.textContent = 'Day Total';
-      theadRow.appendChild(thTotal);
+      headHtml += `<th>Day Total</th>`;
+      theadRow.innerHTML = headHtml;
     }
 
     // 4. Dynamic Table Body
-    const tbody = document.getElementById('amulTableBody');
     if (tbody) {
-      tbody.innerHTML = '';
       const pktRate = Number(rates.amulPacket) || 35;
+      let tbodyHtml = '';
 
       for (let d = 1; d <= CONFIG.daysInMonth; d++) {
         const dData = appState.days[d];
         let dayTotalPkts = 0;
-
-        const tr = document.createElement('tr');
-        if (d === selectedDay) tr.style.backgroundColor = 'rgba(6, 182, 212, 0.12)';
+        const isSelDay = (d === selectedDay);
 
         let cellsHtml = `<td class="td-sticky-date"><span class="td-sticky-cell-content">${escapeHtml(dData.dateShort)}</span></td>`;
 
@@ -2632,12 +2659,11 @@
           </td>
         `;
 
-        tr.innerHTML = cellsHtml;
-        tbody.appendChild(tr);
+        tbodyHtml += `<tr ${isSelDay ? 'style="background-color:rgba(6, 182, 212, 0.12);"' : ''}>${cellsHtml}</tr>`;
       }
+      tbody.innerHTML = tbodyHtml;
 
       // 5. Dynamic Table Footer (Contributions visible at bottom of table)
-      const tfoot = document.getElementById('amulTableFooter');
       if (tfoot) {
         let pktsRowHtml = `<td class="td-sticky-date" style="font-weight:700;"><span class="td-sticky-cell-content">Total Pkts</span></td>`;
         let costRowHtml = `<td class="td-sticky-date" style="font-weight:800; border-top:1px dashed rgba(255,255,255,0.15); color:var(--text-main);"><span class="td-sticky-cell-content">Total Bill</span></td>`;
@@ -2654,9 +2680,12 @@
         tfoot.innerHTML = `<tr>${pktsRowHtml}</tr><tr>${costRowHtml}</tr>`;
       }
 
-      // Cell Click to Cycle: 0 -> 0.5 -> 1 -> 2 -> 0
-      tbody.querySelectorAll('.cell-amul-interactive').forEach(cell => {
-        cell.addEventListener('click', () => {
+      // Cell Click to Cycle: Event Delegation on tbody ONCE
+      if (!tbody.dataset.eventsBound) {
+        tbody.dataset.eventsBound = 'true';
+        tbody.addEventListener('click', (e) => {
+          const cell = e.target.closest('.cell-amul-interactive');
+          if (!cell) return;
           triggerHaptic();
           const d = parseInt(cell.getAttribute('data-day'));
           const p = cell.getAttribute('data-person');
@@ -2680,7 +2709,7 @@
           });
           renderAmulTracker();
         });
-      });
+      }
     }
   }
 
@@ -2727,27 +2756,37 @@
   function renderAuditLog() {
     const container = document.getElementById('auditLogList');
     if (!container) return;
-    container.innerHTML = '';
 
     const logs = appState.auditLog || [];
     if (logs.length === 0) {
-      container.innerHTML = '<p class="helper-text">No activity recorded yet.</p>';
+      if (container.dataset.lastSig !== 'empty') {
+        container.dataset.lastSig = 'empty';
+        container.innerHTML = '<p class="helper-text">No activity recorded yet.</p>';
+      }
       return;
     }
 
+    const latestTime = logs[0]?.timeFormatted || '';
+    const logSig = `${logs.length}-${latestTime}`;
+    if (container.dataset.lastSig === logSig && container.children.length > 0) {
+      return;
+    }
+    container.dataset.lastSig = logSig;
+
+    let auditHtml = '';
     logs.slice(0, 50).forEach(log => {
-      const item = document.createElement('div');
-      item.className = 'audit-log-item';
-      item.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span class="audit-author">${escapeHtml(log.author)}</span>
-          <span class="audit-time">${escapeHtml(log.timeFormatted || '')}</span>
+      auditHtml += `
+        <div class="audit-log-item">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="audit-author">${escapeHtml(log.author)}</span>
+            <span class="audit-time">${escapeHtml(log.timeFormatted || '')}</span>
+          </div>
+          <div style="font-weight:600; color:var(--text-main); font-size:0.75rem;">${escapeHtml(log.action)}</div>
+          <div style="color:var(--text-muted); font-size:0.7rem;">${escapeHtml(log.details)}</div>
         </div>
-        <div style="font-weight:600; color:var(--text-main); font-size:0.75rem;">${escapeHtml(log.action)}</div>
-        <div style="color:var(--text-muted); font-size:0.7rem;">${escapeHtml(log.details)}</div>
       `;
-      container.appendChild(item);
     });
+    container.innerHTML = auditHtml;
   }
 
   // Master Render Coordinator (Debounced with requestAnimationFrame for Zero-Flicker)
@@ -3988,6 +4027,16 @@
     saveActiveRoom() {
       if (!this.activeRoom) return;
       try {
+        if (Array.isArray(this.activeRoom.kickedMembers) && Array.isArray(this.activeRoom.members)) {
+          this.activeRoom.members = this.activeRoom.members.filter(m => {
+            if (!m || m.role === 'admin') return true;
+            return !this.activeRoom.kickedMembers.some(km =>
+              (km.id && m.id && km.id === m.id) ||
+              (km.phone && m.phone && km.phone.slice(-10) === m.phone.slice(-10)) ||
+              (km.name && m.name && km.name.trim().toLowerCase() === m.name.trim().toLowerCase())
+            );
+          });
+        }
         localStorage.setItem(`tiffin_room_${this.activeRoom.code}`, JSON.stringify(this.activeRoom));
         if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
           const cachedFcm = localStorage.getItem('tiffin_fcm_token');
@@ -5028,7 +5077,7 @@
     triggerHaptic();
     const roomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || 'ROOM';
     const roomName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'our flat';
-    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.2.apk';
+    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.3.apk';
     const webUrl = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
 
     const message = `🏠 Join "${roomName}" on Tiffin Tracker!\n` +
@@ -5271,26 +5320,6 @@
     if (shareWhatsAppBtn) {
       shareWhatsAppBtn.addEventListener('click', () => {
         shareFlatInvite();
-      });
-    }
-
-    const testPushBtn = document.getElementById('testPushNotificationBtn');
-    if (testPushBtn) {
-      testPushBtn.addEventListener('click', async () => {
-        triggerHaptic();
-        const myName = RoomManager.session?.name || (typeof SyncEngine !== 'undefined' ? SyncEngine.identity : 'Flatmate');
-        const myRoom = RoomManager.activeRoom?.code || (typeof SyncEngine !== 'undefined' ? SyncEngine.roomCode : '');
-        if (!myRoom) {
-          showToast('No active flat room connected.', 'warning');
-          return;
-        }
-        showToast('Sending test FCM push notification...');
-        await NotificationManager.send(`FCM Alert 🔔 ${myName}`, {
-          body: `Test notification from ${myName} in Flat #${myRoom}! Heads-up delivery working!`,
-          tag: 'fcm-test',
-          roomCode: myRoom
-        });
-        showToast('Dispatched test push to all flatmates! Check other phone.', 'success');
       });
     }
 
@@ -5899,16 +5928,14 @@
       // Start Real-Time Cloud Sync Engine
       SyncEngine.init();
 
-      // Check reminders & catch up sync when user returns to app
+      // Catch up sync when user returns to app (Throttled to avoid render storms)
+      let lastVisibilityCatchup = 0;
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-          SyncEngine.catchUp();
-          if (RoomManager.activeRoom?.code) {
-            SyncEngine.broadcast({
-              type: 'request_room_sync',
-              roomCode: RoomManager.activeRoom.code,
-              requesterName: RoomManager.session?.name || 'Peer'
-            });
+          const now = Date.now();
+          if (now - lastVisibilityCatchup > 30000) {
+            lastVisibilityCatchup = now;
+            SyncEngine.catchUp();
           }
         }
       });
