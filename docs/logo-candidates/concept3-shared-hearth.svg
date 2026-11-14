@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="c3_bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0c1017" />
+      <stop offset="100%" stop-color="#040609" />
+    </linearGradient>
+    <linearGradient id="c3_border" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgba(245, 158, 11, 0.45)" />
+      <stop offset="50%" stop-color="rgba(16, 185, 129, 0.3)" />
+      <stop offset="100%" stop-color="rgba(255, 255, 255, 0.05)" />
+    </linearGradient>
+    <linearGradient id="c3_flame" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="50%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#00f5a0" />
+    </linearGradient>
+    <linearGradient id="c3_plate" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <filter id="c3_shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.75" />
+      <feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#10b981" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="128" fill="url(#c3_bg)" />
+  <rect x="2" y="2" width="508" height="508" rx="126" fill="none" stroke="url(#c3_border)" stroke-width="2" />
+
+  <!-- Outer Shared Thaali / Plate Orbit Ring (Monthly Cycle) -->
+  <circle cx="256" cy="256" r="172" fill="none" stroke="rgba(255, 255, 255, 0.06)" stroke-width="28" />
+  <circle cx="256" cy="256" r="172" fill="none" stroke="url(#c3_flame)" stroke-width="5" stroke-dasharray="16 8" opacity="0.6" />
+
+  <g filter="url(#c3_shadow)">
+    <!-- Top Carrier Crown / Handle (Upper 'T' Arch) -->
+    <path d="M 180 156 C 180 94, 332 94, 332 156" fill="none" stroke="url(#c3_flame)" stroke-width="18" stroke-linecap="round" />
+
+    <!-- Tier 1 (Lunch Vessel) -->
+    <path d="M 160 178 L 352 178 C 362 178, 368 186, 366 196 L 360 214 C 358 222, 350 228, 342 228 L 170 228 C 162 228, 154 222, 152 214 L 146 196 C 144 186, 150 178, 160 178 Z" fill="#1e293b" stroke="url(#c3_flame)" stroke-width="4" />
+    
+    <!-- Tier 2 (Dinner Vessel) -->
+    <path d="M 148 244 L 364 244 C 374 244, 382 252, 380 262 L 374 282 C 372 290, 364 296, 356 296 L 156 296 C 148 296, 140 290, 138 282 L 132 262 C 130 252, 138 244, 148 244 Z" fill="#1e293b" stroke="url(#c3_flame)" stroke-width="4" />
+
+    <!-- Tier 3 (Base Hearth Vessel) -->
+    <path d="M 136 312 L 376 312 C 386 312, 394 320, 392 330 L 384 354 C 382 364, 372 372, 362 372 L 150 372 C 140 372, 130 364, 128 354 L 120 330 C 118 320, 126 312, 136 312 Z" fill="#1e293b" stroke="url(#c3_flame)" stroke-width="4" />
+
+    <!-- Central Glowing Core Pillar ('T' Vertical Beam & Flame of Nourishment) -->
+    <line x1="256" y1="136" x2="256" y2="390" stroke="url(#c3_flame)" stroke-width="14" stroke-linecap="round" />
+
+    <!-- Golden Lock Jewel at Core -->
+    <circle cx="256" cy="270" r="18" fill="#f59e0b" />
+    <circle cx="256" cy="270" r="14" fill="#040609" />
+    <circle cx="256" cy="270" r="8" fill="#00f5a0" />
+  </g>
+</svg>

@@ -126,10 +126,10 @@ const updateVersionManifest = (filePath) => {
     data.githubReleaseUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/releases';
     data.message = `Tiffin Tracker v${targetVersion} is now available!`;
     data.releaseNotes = [
-      `Instant Direct Join: Completely removed entry request feature; new flatmates enter instantly with the 4-digit room code`,
-      `Real-time Enter/Leave Sync: Immediate bidirectional synchronization across all roommate devices when someone joins or leaves the flat`,
-      `Zero Ghost Resurrection: Authoritative Firestore membership with kickedMembers blacklist for permanent admin removals`,
-      `Clean Core Logic: Streamlined flat lifecycle without approval gates, pending queues, or modal waiting screens`
+      `Brand Identity Overhaul: Modern, high-precision minimalist app logo featuring the iconic 3-tiered Sovereign 'T' Dabba`,
+      `Universal Asset Refresh: High-DPI Android adaptive launcher icons (mdpi to xxxhdpi), native splash screens, and vector branding`,
+      `Luxury Startup Experience: Sleek in-app splash reveal with the new obsidian-emerald vector monogram`,
+      `Scrollable Update Modal: Compact collapsible patch details optimized for smaller phone displays`
     ];
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');

@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.8.1] — 2026-11-14
+
+### Changed
+- **Brand Identity Overhaul (The Sovereign 'T' Dabba)**: Replaced generic clip-art branding with an ultra-minimalist, high-precision vector emblem combining the iconic 3-tiered Indian Dabba (Breakfast, Lunch, Dinner) with a modern capital 'T' monogram and central golden equilibrium rivet.
+- **Universal Native & Web Asset Refresh**: Generated crisp adaptive launcher mipmaps across all Android screen densities (`mdpi`, `hdpi`, `xhdpi`, `xxhdpi`, `xxxhdpi`), deep obsidian background (`#090D16`), high-resolution native splash screens, and vector web assets (`icon.svg`, `icon.png`, `icon-192.png`).
+- **Luxury Startup Splash Screen**: Enhanced in-app startup reveal in `index.html` with vector monogram asset and luminous emerald-cyan aura.
+
+---
+
+## [5.8.0] — 2026-11-13
+
+### Fixed
+- **Scrollable Update Modal**: Made the update dialog modal body fully scrollable on smaller mobile displays and collapsed patch notes by default behind a clean toggle.
+
+---
+
 ## [5.7.5] — 2026-11-09
 
 ### Added

@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="50%" stop-color="#090D16"/>
+      <stop offset="100%" stop-color="#030712"/>
+    </linearGradient>
+
+    <!-- Emerald-to-Cyan Tier Gradient -->
+    <linearGradient id="tierGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="50%" stop-color="#06B6D4"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+
+    <!-- Handle Gradient -->
+    <linearGradient id="handleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="50%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#60A5FA"/>
+    </linearGradient>
+
+    <!-- Gold Accent Gradient -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE68A"/>
+      <stop offset="40%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+
+    <!-- Subtle Ambient Glow -->
+    <radialGradient id="ambGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#06B6D4" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#06B6D4" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- App Icon Squircle Background -->
+  <rect x="0" y="0" width="512" height="512" rx="114" fill="url(#bgGrad1)"/>
+  <rect x="1" y="1" width="510" height="510" rx="113" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+
+  <!-- Soft Ambient Glow behind tiers -->
+  <circle cx="256" cy="270" r="170" fill="url(#ambGlow)"/>
+
+  <!-- TOP HANDLE (Arch forming top of 'T') -->
+  <path d="M 180 168 C 180 114, 332 114, 332 168" 
+        fill="none" 
+        stroke="url(#handleGrad)" 
+        stroke-width="22" 
+        stroke-linecap="round"/>
+
+  <!-- THREE TIERS (Breakfast, Lunch, Dinner) -->
+  <!-- Top Tier: Morning / Breakfast -->
+  <rect x="168" y="196" width="176" height="38" rx="19" fill="url(#tierGrad)"/>
+  <!-- Top Tier Specular Edge -->
+  <line x1="190" y1="202" x2="322" y2="202" stroke="rgba(255,255,255,0.4)" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Middle Tier: Afternoon / Lunch (Core Meal) -->
+  <rect x="146" y="250" width="220" height="42" rx="21" fill="url(#tierGrad)"/>
+  <!-- Middle Tier Specular Edge -->
+  <line x1="172" y1="256" x2="340" y2="256" stroke="rgba(255,255,255,0.35)" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Bottom Tier: Night / Dinner -->
+  <rect x="124" y="308" width="264" height="46" rx="23" fill="url(#tierGrad)"/>
+  <!-- Bottom Tier Specular Edge -->
+  <line x1="154" y1="314" x2="358" y2="314" stroke="rgba(255,255,255,0.3)" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- CENTRAL PLATINUM LOCKING SPINE (Stem of 'T') -->
+  <rect x="246" y="152" width="20" height="230" rx="10" fill="#FFFFFF"/>
+  <rect x="246" y="152" width="20" height="230" rx="10" fill="none" stroke="rgba(0,0,0,0.15)" stroke-width="1.5"/>
+
+  <!-- GOLDEN BALANCE RIVET (Center of Gravity / Financial Transparency) -->
+  <circle cx="256" cy="271" r="16" fill="url(#goldGrad)"/>
+  <circle cx="256" cy="271" r="7" fill="#090D16"/>
+  <circle cx="256" cy="271" r="3" fill="#FDE68A"/>
+
+  <!-- Sleek Base Cradle Arc (Thali / Communal Plate) -->
+  <path d="M 160 382 C 200 404, 312 404, 352 382" 
+        fill="none" 
+        stroke="url(#goldGrad)" 
+        stroke-width="5" 
+        stroke-linecap="round"
+        opacity="0.85"/>
+</svg>

@@ -1,20 +1,31 @@
 {
-  "version": "5.8.0",
-  "versionCode": 50800,
+  "version": "5.8.1",
+  "versionCode": 50801,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-14",
-  "message": "Tiffin Tracker v5.8.0 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.8.0.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.0.apk",
+  "message": "Tiffin Tracker v5.8.1 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.8.1.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.1.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
-    "Instant Direct Join: Completely removed entry request feature; new flatmates enter instantly with the 4-digit room code",
-    "Real-time Enter/Leave Sync: Immediate bidirectional synchronization across all roommate devices when someone joins or leaves the flat",
-    "Zero Ghost Resurrection: Authoritative Firestore membership with kickedMembers blacklist for permanent admin removals",
-    "Clean Core Logic: Streamlined flat lifecycle without approval gates, pending queues, or modal waiting screens"
+    "Brand Identity Overhaul: Modern, high-precision minimalist app logo featuring the iconic 3-tiered Sovereign 'T' Dabba",
+    "Universal Asset Refresh: High-DPI Android adaptive launcher icons (mdpi to xxxhdpi), native splash screens, and vector branding",
+    "Luxury Startup Experience: Sleek in-app splash reveal with the new obsidian-emerald vector monogram",
+    "Scrollable Update Modal: Compact collapsible patch details optimized for smaller phone displays"
   ],
   "history": [
+    {
+      "version": "5.8.0",
+      "versionCode": 50800,
+      "releaseDate": "2026-11-14",
+      "releaseNotes": [
+        "Instant Direct Join: Completely removed entry request feature; new flatmates enter instantly with the 4-digit room code",
+        "Real-time Enter/Leave Sync: Immediate bidirectional synchronization across all roommate devices when someone joins or leaves the flat",
+        "Zero Ghost Resurrection: Authoritative Firestore membership with kickedMembers blacklist for permanent admin removals",
+        "Clean Core Logic: Streamlined flat lifecycle without approval gates, pending queues, or modal waiting screens"
+      ]
+    },
     {
       "version": "5.7.9",
       "versionCode": 50709,
@@ -112,17 +123,6 @@
         "Web Push & FCM Service Worker (firebase-messaging-sw.js) for desktop & mobile web push",
         "Fixed token registration timing and sender self-exclusion filter for reliable delivery",
         "High-priority notification channel (tiffin_notifications) with lockscreen visibility and chime sound"
-      ]
-    },
-    {
-      "version": "5.7.0",
-      "versionCode": 50700,
-      "releaseDate": "2026-11-08",
-      "releaseNotes": [
-        "Admin Approval Option: Require approval before new members join flat",
-        "Instant Admin Popup Alert: 1-Tap Approve/Decline notification banner with audio chime",
-        "Live Waiting Screen: Real-time admission for new roommates once approved",
-        "Secure Firebase Cloud Messaging & Firestore two-way real-time synchronization"
       ]
     }
   ]

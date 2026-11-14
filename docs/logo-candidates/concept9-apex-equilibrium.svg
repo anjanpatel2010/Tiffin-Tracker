@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="c9_bg" cx="50%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#0f1929" />
+      <stop offset="55%" stop-color="#080d16" />
+      <stop offset="100%" stop-color="#020306" />
+    </radialGradient>
+
+    <!-- Squircle Border -->
+    <linearGradient id="c9_border" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgba(0, 245, 160, 0.55)" />
+      <stop offset="40%" stop-color="rgba(0, 212, 255, 0.3)" />
+      <stop offset="100%" stop-color="rgba(255, 255, 255, 0.05)" />
+    </linearGradient>
+
+    <!-- Emerald-to-Cyan Tier Gradients -->
+    <linearGradient id="c9_leftTier" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f5a0" />
+      <stop offset="100%" stop-color="#00c875" />
+    </linearGradient>
+
+    <linearGradient id="c9_rightTier" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+
+    <linearGradient id="c9_handle" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00f5a0" />
+      <stop offset="50%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+
+    <linearGradient id="c9_gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+
+    <radialGradient id="c9_aura" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00f5a0" stop-opacity="0.22" />
+      <stop offset="60%" stop-color="#00d4ff" stop-opacity="0.06" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+
+    <filter id="c9_shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000000" flood-opacity="0.85" />
+      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="#00f5a0" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <!-- Squircle Base -->
+  <rect width="512" height="512" rx="128" fill="url(#c9_bg)" />
+  <rect x="2" y="2" width="508" height="508" rx="126" fill="none" stroke="url(#c9_border)" stroke-width="2.5" />
+
+  <!-- Ambient Glow -->
+  <circle cx="256" cy="265" r="175" fill="url(#c9_aura)" />
+
+  <g filter="url(#c9_shadow)">
+    <!-- Top Carrier Arch Handle (Top Crossbar of "T") -->
+    <path d="M 180 150 C 180 84, 332 84, 332 150" fill="none" stroke="url(#c9_handle)" stroke-width="20" stroke-linecap="round" />
+    <circle cx="180" cy="150" r="10" fill="#00f5a0" />
+    <circle cx="332" cy="150" r="10" fill="#38bdf8" />
+
+    <!-- Negative Space Center Channel is 24px wide: x from 244 to 268 -->
+    <!-- Left Halves: x from (244 - width) to 244 -->
+    <!-- Right Halves: x from 268 to (268 + width) -->
+
+    <!-- TIER 1 (Top / Breakfast) -->
+    <!-- Left Wing -->
+    <rect x="166" y="168" width="78" height="42" rx="14" fill="url(#c9_leftTier)" />
+    <!-- Right Wing -->
+    <rect x="268" y="168" width="78" height="42" rx="14" fill="url(#c9_rightTier)" />
+
+    <!-- TIER 2 (Middle / Lunch) -->
+    <!-- Left Wing -->
+    <rect x="144" y="226" width="100" height="48" rx="16" fill="url(#c9_leftTier)" />
+    <!-- Right Wing -->
+    <rect x="268" y="226" width="100" height="48" rx="16" fill="url(#c9_rightTier)" />
+
+    <!-- TIER 3 (Base / Dinner & Ledger Foundation) -->
+    <!-- Left Wing -->
+    <rect x="124" y="290" width="120" height="54" rx="18" fill="url(#c9_leftTier)" />
+    <!-- Right Wing -->
+    <rect x="268" y="290" width="120" height="54" rx="18" fill="url(#c9_rightTier)" />
+
+    <!-- Central Floating Golden Core (The Spark of Trust / Balance Beacon) -->
+    <g transform="translate(256, 250)">
+      <!-- Outer diamond/star spark -->
+      <circle cx="0" cy="0" r="18" fill="url(#c9_gold)" />
+      <circle cx="0" cy="0" r="13" fill="#080d16" />
+      <circle cx="0" cy="0" r="7" fill="#fef08a" />
+    </g>
+
+    <!-- Harmonious Base Thali Cradle Arc -->
+    <path d="M 152 368 C 216 404, 296 404, 360 368" fill="none" stroke="url(#c9_gold)" stroke-width="6" stroke-linecap="round" opacity="0.9" />
+  </g>
+</svg>

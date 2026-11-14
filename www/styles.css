@@ -5129,6 +5129,14 @@ input.rate-input-locked {
   filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.6));
 }
 
+.splash-logo-img {
+  width: 58px;
+  height: 58px;
+  border-radius: 14px;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.6));
+}
+
 .splash-title {
   font-family: var(--font-display);
   font-size: 1.45rem;

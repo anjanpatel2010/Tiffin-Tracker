@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B132B"/>
+      <stop offset="50%" stop-color="#1C2541"/>
+      <stop offset="100%" stop-color="#0B132B"/>
+    </linearGradient>
+
+    <linearGradient id="goldRing" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCD34D"/>
+      <stop offset="50%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+
+    <linearGradient id="tierGrad4" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="50%" stop-color="#06B6D4"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="512" height="512" rx="114" fill="url(#bgGrad4)"/>
+  <rect x="1" y="1" width="510" height="510" rx="113" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+
+  <!-- OUTER COMMUNICATIVE HALO (The 30-Day Cycle / Dining Thali) -->
+  <circle cx="256" cy="256" r="186" 
+          fill="none" 
+          stroke="url(#goldRing)" 
+          stroke-width="4" 
+          stroke-dasharray="8 12" 
+          opacity="0.5"/>
+
+  <!-- TOP HANDLE ARCH -->
+  <path d="M 184 172 C 184 116, 328 116, 328 172" 
+        fill="none" 
+        stroke="url(#tierGrad4)" 
+        stroke-width="22" 
+        stroke-linecap="round"/>
+
+  <!-- THREE GRADUATED DABBATOP TIERS -->
+  <rect x="172" y="198" width="168" height="36" rx="18" fill="url(#tierGrad4)"/>
+  <rect x="150" y="250" width="212" height="40" rx="20" fill="url(#tierGrad4)"/>
+  <rect x="128" y="306" width="256" height="44" rx="22" fill="url(#tierGrad4)"/>
+
+  <!-- CENTRAL SPINE FORMING 'T' -->
+  <rect x="246" y="156" width="20" height="224" rx="10" fill="#FFFFFF"/>
+
+  <!-- GOLDEN CENTER EYELET -->
+  <circle cx="256" cy="270" r="16" fill="url(#goldRing)"/>
+  <circle cx="256" cy="270" r="7" fill="#0B132B"/>
+  <circle cx="256" cy="270" r="3" fill="#FCD34D"/>
+</svg>

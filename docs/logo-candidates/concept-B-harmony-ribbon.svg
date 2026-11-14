@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0A0E17"/>
+      <stop offset="50%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </linearGradient>
+
+    <!-- Warm Amber / Hearth Gradient (Roommate A) -->
+    <linearGradient id="amberRibbon" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24"/>
+      <stop offset="50%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#EA580C"/>
+    </linearGradient>
+
+    <!-- Electric Mint / Freshness Gradient (Roommate B) -->
+    <linearGradient id="mintRibbon" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="50%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+
+    <!-- Central 'T' Glow -->
+    <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#38BDF8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="0" y="0" width="512" height="512" rx="114" fill="url(#bgGrad2)"/>
+  <rect x="1" y="1" width="510" height="510" rx="113" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+
+  <circle cx="256" cy="265" r="180" fill="url(#coreGlow)"/>
+
+  <!-- TOP HANDLE (Unified Arch) -->
+  <path d="M 172 170 C 172 108, 340 108, 340 170" 
+        fill="none" 
+        stroke="#E2E8F0" 
+        stroke-width="20" 
+        stroke-linecap="round"/>
+
+  <!-- LEFT WING (Mint - Roommate 1) -->
+  <!-- Top Tier Left -->
+  <rect x="156" y="200" width="84" height="38" rx="14" fill="url(#mintRibbon)"/>
+  <!-- Middle Tier Left -->
+  <rect x="134" y="254" width="106" height="42" rx="15" fill="url(#mintRibbon)"/>
+  <!-- Bottom Tier Left -->
+  <rect x="112" y="312" width="128" height="46" rx="16" fill="url(#mintRibbon)"/>
+
+  <!-- RIGHT WING (Amber - Roommate 2) -->
+  <!-- Top Tier Right -->
+  <rect x="272" y="200" width="84" height="38" rx="14" fill="url(#amberRibbon)"/>
+  <!-- Middle Tier Right -->
+  <rect x="272" y="254" width="106" height="42" rx="15" fill="url(#amberRibbon)"/>
+  <!-- Bottom Tier Right -->
+  <rect x="272" y="312" width="128" height="46" rx="16" fill="url(#amberRibbon)"/>
+
+  <!-- CENTRAL NEGATIVE SPACE BECOMES A VIBRANT STEM FORMING THE 'T' -->
+  <rect x="246" y="155" width="20" height="232" rx="10" fill="#FFFFFF"/>
+
+  <!-- CENTRAL EQUILIBRIUM PIVOT -->
+  <circle cx="256" cy="275" r="18" fill="#0A0E17"/>
+  <circle cx="256" cy="275" r="14" fill="#38BDF8"/>
+  <circle cx="256" cy="275" r="6" fill="#FFFFFF"/>
+</svg>

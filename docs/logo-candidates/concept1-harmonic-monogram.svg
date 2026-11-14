@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="c1_bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b1320" />
+      <stop offset="50%" stop-color="#070c14" />
+      <stop offset="100%" stop-color="#03060a" />
+    </linearGradient>
+    <linearGradient id="c1_border" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgba(0, 245, 160, 0.4)" />
+      <stop offset="50%" stop-color="rgba(0, 212, 255, 0.2)" />
+      <stop offset="100%" stop-color="rgba(255, 255, 255, 0.05)" />
+    </linearGradient>
+    <radialGradient id="c1_glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00f5a0" stop-opacity="0.18" />
+      <stop offset="60%" stop-color="#00d4ff" stop-opacity="0.06" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="c1_t1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#34d399" />
+    </linearGradient>
+    <linearGradient id="c1_t2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00d4ff" />
+      <stop offset="100%" stop-color="#00f5a0" />
+    </linearGradient>
+    <linearGradient id="c1_t3" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+    <linearGradient id="c1_gold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fde68a" />
+      <stop offset="35%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <linearGradient id="c1_handle" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#94a3b8" />
+    </linearGradient>
+    <filter id="c1_shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.65" />
+    </filter>
+  </defs>
+
+  <!-- Background Squircle -->
+  <rect width="512" height="512" rx="128" fill="url(#c1_bg)" />
+  <rect x="2" y="2" width="508" height="508" rx="126" fill="none" stroke="url(#c1_border)" stroke-width="2.5" />
+
+  <!-- Ambient Glow Behind Glyph -->
+  <circle cx="256" cy="270" r="160" fill="url(#c1_glow)" />
+
+  <g filter="url(#c1_shadow)">
+    <!-- Top Carrier Handle (Forming the top apex of T) -->
+    <path d="M 188 152 C 188 88, 324 88, 324 152" fill="none" stroke="url(#c1_handle)" stroke-width="16" stroke-linecap="round" />
+    <circle cx="188" cy="152" r="8" fill="#e2e8f0" />
+    <circle cx="324" cy="152" r="8" fill="#e2e8f0" />
+
+    <!-- Tier 1: Top Vessel (Starter / Breakfast) -->
+    <rect x="166" y="162" width="180" height="42" rx="21" fill="url(#c1_t1)" />
+    <!-- Tier 1 subtle specular highlight -->
+    <rect x="174" y="166" width="164" height="8" rx="4" fill="#ffffff" opacity="0.3" />
+
+    <!-- Tier 2: Middle Vessel (Core Meal / Lunch - Electric Mint) -->
+    <rect x="150" y="222" width="212" height="48" rx="24" fill="url(#c1_t2)" />
+    <!-- Tier 2 highlight -->
+    <rect x="158" y="226" width="196" height="9" rx="4.5" fill="#ffffff" opacity="0.32" />
+
+    <!-- Tier 3: Bottom Vessel (Feast / Dinner - Glacial Cyan) -->
+    <rect x="136" y="288" width="240" height="54" rx="27" fill="url(#c1_t3)" />
+    <!-- Tier 3 highlight -->
+    <rect x="144" y="293" width="224" height="10" rx="5" fill="#ffffff" opacity="0.28" />
+
+    <!-- Central Brass Latch Spine (Completing the 'T' stem & locking mechanism) -->
+    <rect x="244" y="132" width="24" height="236" rx="12" fill="url(#c1_gold)" />
+    <!-- Latch Pivot Eyelet -->
+    <circle cx="256" cy="132" r="15" fill="url(#c1_gold)" />
+    <circle cx="256" cy="132" r="7" fill="#070c14" />
+    <!-- Latch Fastener Pin at bottom -->
+    <circle cx="256" cy="354" r="6" fill="#fde68a" />
+
+    <!-- Harmonious Base Table Cradle Arc -->
+    <path d="M 164 366 C 220 398, 292 398, 348 366" fill="none" stroke="rgba(255, 255, 255, 0.18)" stroke-width="6" stroke-linecap="round" />
+  </g>
+</svg>

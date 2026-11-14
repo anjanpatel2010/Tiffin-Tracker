@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="c2_bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a121d" />
+      <stop offset="100%" stop-color="#04070c" />
+    </linearGradient>
+    <linearGradient id="c2_border" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgba(0, 245, 160, 0.45)" />
+      <stop offset="100%" stop-color="rgba(255, 255, 255, 0.06)" />
+    </linearGradient>
+    <linearGradient id="c2_primary" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f5a0" />
+      <stop offset="50%" stop-color="#00d4ff" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    <radialGradient id="c2_aura" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00f5a0" stop-opacity="0.22" />
+      <stop offset="70%" stop-color="#00d4ff" stop-opacity="0.05" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+    <filter id="c2_glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#00f5a0" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="128" fill="url(#c2_bg)" />
+  <rect x="2" y="2" width="508" height="508" rx="126" fill="none" stroke="url(#c2_border)" stroke-width="2" />
+
+  <circle cx="256" cy="260" r="170" fill="url(#c2_aura)" />
+
+  <g filter="url(#c2_glow)">
+    <!-- Top Arc Handle (Apex of T) -->
+    <path d="M 176 136 C 176 76, 336 76, 336 136" fill="none" stroke="url(#c2_primary)" stroke-width="22" stroke-linecap="round" />
+
+    <!-- Tier 1 Arc (Upper Container) -->
+    <path d="M 166 188 C 166 172, 346 172, 346 188 C 346 204, 166 204, 166 188 Z" fill="url(#c2_primary)" opacity="0.95" />
+
+    <!-- Tier 2 Arc (Middle Container - Expanded) -->
+    <path d="M 142 248 C 142 230, 370 230, 370 248 C 370 266, 142 266, 142 248 Z" fill="url(#c2_primary)" />
+
+    <!-- Tier 3 Arc (Base Container - Solid Foundation) -->
+    <path d="M 124 314 C 124 294, 388 294, 388 314 C 388 334, 124 334, 124 314 Z" fill="url(#c2_primary)" opacity="0.85" />
+
+    <!-- Vertical Central Spine (Cutting through creating clean 'T' geometry) -->
+    <line x1="256" y1="126" x2="256" y2="376" stroke="#ffffff" stroke-width="16" stroke-linecap="round" />
+    
+    <!-- Central Latch Jewel (Trust & Precision Indicator) -->
+    <circle cx="256" cy="248" r="12" fill="#ffffff" />
+    <circle cx="256" cy="248" r="5" fill="#0a121d" />
+
+    <!-- Delicate Steam Pulse at Top -->
+    <path d="M 240 68 C 248 58, 252 58, 256 68 C 260 78, 268 78, 272 68" fill="none" stroke="#00f5a0" stroke-width="4.5" stroke-linecap="round" opacity="0.85" />
+  </g>
+</svg>
