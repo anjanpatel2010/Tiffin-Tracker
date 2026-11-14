@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.7.9';
+  const APP_VERSION = '5.8.0';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -4995,7 +4995,7 @@
     triggerHaptic();
     const roomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || 'ROOM';
     const roomName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'our flat';
-    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.9.apk';
+    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.0.apk';
     const webUrl = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
 
     const message = `🏠 Join "${roomName}" on Tiffin Tracker!\n` +

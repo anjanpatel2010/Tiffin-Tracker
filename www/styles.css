@@ -5188,45 +5188,69 @@ input.rate-input-locked {
 
 
 /* ========================================================================== */
-/* MORPHE-STYLE LUXURY IN-APP UPDATE MODAL                                    */
+/* MORPHE-STYLE LUXURY IN-APP UPDATE MODAL (MOBILE RESPONSIVE & SCROLLABLE)    */
 /* ========================================================================== */
+.update-modal-backdrop {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain !important;
+  padding: 16px 12px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .morphe-update-card {
   max-width: 440px !important;
+  width: 100% !important;
   text-align: center;
-  padding: 28px 22px !important;
+  padding: 24px 20px !important;
   background: #0f172a !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
   border-radius: 24px !important;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.08) inset !important;
   position: relative;
-  overflow: hidden;
+  overflow-y: auto !important;
+  max-height: min(90dvh, 640px) !important;
+  margin: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.morphe-update-card::-webkit-scrollbar {
+  width: 5px;
+}
+.morphe-update-card::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
 }
 
 .update-icon-badge {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
   background: rgba(16, 185, 129, 0.12);
   border: 1px solid rgba(16, 185, 129, 0.25);
   color: #10b981;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 16px;
+  margin: 0 auto 12px;
 }
 
 .morphe-version-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 14px;
+  padding: 4px 12px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 700;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .morphe-chip-current {
@@ -5253,48 +5277,86 @@ input.rate-input-locked {
 }
 
 .morphe-update-title {
-  font-size: 1.4rem;
+  font-size: 1.3rem;
   font-weight: 800;
   color: #ffffff;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   letter-spacing: -0.01em;
 }
 
 .morphe-update-desc {
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   color: #94a3b8;
-  line-height: 1.5;
-  margin-bottom: 16px;
+  line-height: 1.45;
+  margin-bottom: 12px;
 }
 
+/* Collapsible Changelog Accordion (Minimized by default) */
 .morphe-changelog-box {
   text-align: left;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 18px;
-  padding: 14px 18px;
-  margin-bottom: 16px;
+  border-radius: 14px;
+  padding: 0;
+  margin-bottom: 14px;
+  overflow: hidden;
   backdrop-filter: blur(8px);
+}
+
+.morphe-changelog-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  font-family: inherit;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease;
+}
+
+.morphe-changelog-toggle:hover, .morphe-changelog-toggle:active {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .morphe-changelog-header {
   font-size: 0.74rem;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.06em;
   color: #00d4ff;
   font-weight: 800;
-  margin-bottom: 8px;
   display: flex;
   align-items: center;
   gap: 6px;
+  margin: 0;
+}
+
+.morphe-changelog-arrow {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  transition: transform 0.25s ease, color 0.2s ease;
+}
+
+.morphe-changelog-arrow.expanded {
+  color: #00d4ff;
+}
+
+.morphe-changelog-content {
+  padding: 4px 14px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  animation: fadeIn 0.2s ease;
 }
 
 .morphe-notes-list {
   margin: 0;
   padding-left: 18px;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   color: #e2e8f0;
-  line-height: 1.65;
+  line-height: 1.55;
 }
 
 .morphe-notes-list li {
@@ -5302,19 +5364,21 @@ input.rate-input-locked {
 }
 
 .morphe-github-row {
-  margin-bottom: 16px;
+  margin-top: 10px;
+  margin-bottom: 0;
 }
 
 .morphe-github-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 16px;
-  border-radius: 14px;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: #cbd5e1;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 600;
   text-decoration: none;
   transition: all 0.2s ease;
@@ -5325,6 +5389,41 @@ input.rate-input-locked {
   color: #ffffff;
   border-color: rgba(255, 255, 255, 0.25);
   transform: translateY(-1px);
+}
+
+/* Responsiveness for compact mobile screens */
+@media (max-width: 480px), (max-height: 720px) {
+  .update-modal-backdrop {
+    padding: 10px 8px !important;
+  }
+  .morphe-update-card {
+    padding: 18px 14px !important;
+    border-radius: 20px !important;
+    max-height: calc(100dvh - 20px) !important;
+  }
+  .update-icon-badge {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 8px;
+  }
+  .morphe-update-title {
+    font-size: 1.2rem !important;
+    margin-bottom: 4px !important;
+  }
+  .morphe-update-desc {
+    font-size: 0.8rem !important;
+    margin-bottom: 10px !important;
+  }
+  .morphe-changelog-toggle {
+    padding: 8px 12px;
+  }
+  .morphe-changelog-content {
+    padding: 4px 12px 10px;
+  }
+  .morphe-update-btn {
+    padding: 12px !important;
+    font-size: 0.9rem !important;
+  }
 }
 
 .morphe-progress-wrap {

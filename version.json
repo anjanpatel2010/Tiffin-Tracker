@@ -1,12 +1,12 @@
 {
-  "version": "5.7.9",
-  "versionCode": 50709,
+  "version": "5.8.0",
+  "versionCode": 50800,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-14",
-  "message": "Tiffin Tracker v5.7.9 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.7.9.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.7.9.apk",
+  "message": "Tiffin Tracker v5.8.0 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.8.0.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.0.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
   "releaseNotes": [
     "Instant Direct Join: Completely removed entry request feature; new flatmates enter instantly with the 4-digit room code",
@@ -15,6 +15,17 @@
     "Clean Core Logic: Streamlined flat lifecycle without approval gates, pending queues, or modal waiting screens"
   ],
   "history": [
+    {
+      "version": "5.7.9",
+      "versionCode": 50709,
+      "releaseDate": "2026-11-14",
+      "releaseNotes": [
+        "Instant Direct Join: Completely removed entry request feature; new flatmates enter instantly with the 4-digit room code",
+        "Real-time Enter/Leave Sync: Immediate bidirectional synchronization across all roommate devices when someone joins or leaves the flat",
+        "Zero Ghost Resurrection: Authoritative Firestore membership with kickedMembers blacklist for permanent admin removals",
+        "Clean Core Logic: Streamlined flat lifecycle without approval gates, pending queues, or modal waiting screens"
+      ]
+    },
     {
       "version": "5.7.8",
       "versionCode": 50708,
@@ -112,17 +123,6 @@
         "Instant Admin Popup Alert: 1-Tap Approve/Decline notification banner with audio chime",
         "Live Waiting Screen: Real-time admission for new roommates once approved",
         "Secure Firebase Cloud Messaging & Firestore two-way real-time synchronization"
-      ]
-    },
-    {
-      "version": "5.6.0",
-      "versionCode": 50600,
-      "releaseDate": "2026-11-07",
-      "releaseNotes": [
-        "Secure Firebase Cloud Messaging backend with lockscreen alerts",
-        "Human-crafted UI design: clean emerald & deep slate theme",
-        "Instant update routing directly to in-app installation modal",
-        "Automated fail-safe version tracking across all devices"
       ]
     }
   ]

@@ -1,6 +1,6 @@
 {
   "name": "tiffin-tracker",
-  "version": "5.7.9",
+  "version": "5.8.0",
   "description": "Tiffin Tracker Android Native App with Firebase Cloud Messaging and real-time cloud sync",
   "main": "www/index.html",
   "scripts": {

@@ -8,7 +8,7 @@
 (function () {
   'use strict';
 
-  const CURRENT_VERSION = '5.7.9';
+  const CURRENT_VERSION = '5.8.0';
   const UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/anjanpatel2010/Tiffin-Tracker/master/version.json';
   const SNOOZE_KEY = 'tiffin_update_snooze_until';
 
@@ -97,6 +97,10 @@
       const verTag = document.getElementById('updateVersionTag');
       const curTag = document.getElementById('updateCurrentVersionTag');
       const notesList = document.getElementById('updateNotesList');
+      const notesCount = document.getElementById('updateNotesCount');
+      const toggleChangelogBtn = document.getElementById('toggleChangelogBtn');
+      const changelogContent = document.getElementById('morpheChangelogContent');
+      const changelogArrow = document.getElementById('changelogArrow');
       const downloadBtn = document.getElementById('updateDownloadBtn');
       const btnText = document.getElementById('updateDownloadBtnText');
       const msgElem = document.getElementById('updateMessage');
@@ -128,19 +132,47 @@
       if (downloadBtn) downloadBtn.disabled = false;
       if (btnText) btnText.textContent = 'Update Now';
 
+      // Ensure Patch Description is MINIMIZED by default per user request
+      if (changelogContent) changelogContent.style.display = 'none';
+      if (toggleChangelogBtn) toggleChangelogBtn.setAttribute('aria-expanded', 'false');
+      if (changelogArrow) {
+        changelogArrow.textContent = '▼';
+        changelogArrow.classList.remove('expanded');
+      }
+
+      // Bind collapsible accordion toggle
+      if (toggleChangelogBtn && !toggleChangelogBtn._bound) {
+        toggleChangelogBtn._bound = true;
+        toggleChangelogBtn.onclick = (e) => {
+          e.preventDefault();
+          const content = document.getElementById('morpheChangelogContent');
+          const arrow = document.getElementById('changelogArrow');
+          if (!content) return;
+          const isCurrentlyHidden = content.style.display === 'none' || !content.style.display;
+          content.style.display = isCurrentlyHidden ? 'block' : 'none';
+          toggleChangelogBtn.setAttribute('aria-expanded', isCurrentlyHidden ? 'true' : 'false');
+          if (arrow) {
+            arrow.textContent = isCurrentlyHidden ? '▲' : '▼';
+            arrow.classList.toggle('expanded', isCurrentlyHidden);
+          }
+        };
+      }
+
       if (notesList) {
         notesList.innerHTML = '';
-        if (Array.isArray(data.releaseNotes) && data.releaseNotes.length > 0) {
-          data.releaseNotes.forEach(note => {
-            const li = document.createElement('li');
-            li.textContent = note;
-            notesList.appendChild(li);
-          });
-        } else {
-          const li = document.createElement('li');
-          li.textContent = 'Performance improvements and bug fixes.';
-          notesList.appendChild(li);
+        const notes = Array.isArray(data.releaseNotes) && data.releaseNotes.length > 0
+          ? data.releaseNotes
+          : ['Performance improvements and bug fixes.'];
+
+        if (notesCount) {
+          notesCount.textContent = `${notes.length} item${notes.length === 1 ? '' : 's'}`;
         }
+
+        notes.forEach(note => {
+          const li = document.createElement('li');
+          li.textContent = note;
+          notesList.appendChild(li);
+        });
       }
 
       if (downloadBtn) {

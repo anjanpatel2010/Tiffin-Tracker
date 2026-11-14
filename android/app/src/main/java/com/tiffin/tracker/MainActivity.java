@@ -67,7 +67,7 @@ public class MainActivity extends BridgeActivity {
         try {
             crashlytics = FirebaseCrashlytics.getInstance();
             crashlytics.setCrashlyticsCollectionEnabled(true);
-            crashlytics.setCustomKey("app_version", "5.7.9");
+            crashlytics.setCustomKey("app_version", "5.8.0");
             crashlytics.setCustomKey("build_type", "release");
         } catch (Exception e) {
             Log.w(TAG, "Firebase Crashlytics initialization warning: " + e.getMessage());

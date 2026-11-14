@@ -20,7 +20,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css?v=5.7.9">
+  <link rel="stylesheet" href="styles.css?v=5.8.0">
 </head>
 <body>
   <!-- Luxury Startup Animation (Fast & Smooth Brand Reveal) -->
@@ -1170,11 +1170,11 @@
 
 
     <!-- MODAL: APK IN-APP UPDATE NOTIFICATION -->
-    <div id="appUpdateModal" class="modal-backdrop" style="display:none; z-index:99999;">
+    <div id="appUpdateModal" class="modal-backdrop update-modal-backdrop" style="display:none; z-index:99999;">
       <div class="modal-box update-modal-window morphe-update-card">
         <!-- Professional Update Badge -->
         <div class="update-icon-badge">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -1183,44 +1183,45 @@
 
         <!-- Version Comparison Badge -->
         <div class="morphe-version-badge">
-          <span id="updateCurrentVersionTag" class="morphe-chip-current">v5.3.6</span>
+          <span id="updateCurrentVersionTag" class="morphe-chip-current">v5.7.8</span>
           <span class="morphe-version-arrow">➔</span>
-          <span id="updateVersionTag" class="morphe-chip-latest">v5.7.9</span>
+          <span id="updateVersionTag" class="morphe-chip-latest">v5.8.0</span>
           <span class="morphe-latest-pill">LATEST</span>
         </div>
 
         <h3 class="morphe-update-title">Update Available</h3>
         <p class="morphe-update-desc" id="updateMessage">
-          A new version of Tiffin Tracker is available with background updates and installer integration.
+          A new version of Tiffin Tracker is available.
         </p>
 
-        <!-- Changelog Section -->
+        <!-- Changelog Section (Minimized by default per user request) -->
         <div class="morphe-changelog-box">
-          <div class="morphe-changelog-header">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-              <line x1="16" y1="13" x2="8" y2="13"></line>
-              <line x1="16" y1="17" x2="8" y2="17"></line>
-            </svg>
-            <span>WHAT'S NEW</span>
+          <button type="button" id="toggleChangelogBtn" class="morphe-changelog-toggle" aria-expanded="false" title="Tap to expand or minimize patch notes">
+            <div class="morphe-changelog-header">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+              </svg>
+              <span>WHAT'S NEW (<span id="updateNotesCount">View Details</span>)</span>
+            </div>
+            <span id="changelogArrow" class="morphe-changelog-arrow">▼</span>
+          </button>
+          
+          <div id="morpheChangelogContent" class="morphe-changelog-content" style="display:none;">
+            <ul id="updateNotesList" class="morphe-notes-list">
+              <!-- Populated via JS -->
+            </ul>
+            <div class="morphe-github-row">
+              <a id="updateGithubReleaseBtn" href="https://github.com/anjanpatel2010/Tiffin-Tracker/releases" target="_blank" rel="noopener noreferrer" class="morphe-github-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                </svg>
+                <span>View Full Release Notes ↗</span>
+              </a>
+            </div>
           </div>
-          <ul id="updateNotesList" class="morphe-notes-list">
-            <li>Background update checks when app is closed</li>
-            <li>Direct in-app APK download with live progress bar</li>
-            <li>1-Tap native package installation prompt</li>
-            <li>GitHub Release notes integration</li>
-          </ul>
-        </div>
-
-        <!-- GitHub Release Link Button -->
-        <div class="morphe-github-row">
-          <a id="updateGithubReleaseBtn" href="https://github.com/anjanpatel2010/Tiffin-Tracker/releases" target="_blank" rel="noopener noreferrer" class="morphe-github-btn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:6px;">
-              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-            </svg>
-            <span>View Release on GitHub ↗</span>
-          </a>
         </div>
 
         <!-- In-App Download Progress Tracker -->
@@ -1254,19 +1255,19 @@
   </div>
 
   <!-- Firebase Cloud Realtime Engine -->
-  <script src="firebase-app.js?v=5.7.9"></script>
-  <script src="firebase-firestore.js?v=5.7.9"></script>
+  <script src="firebase-app.js?v=5.8.0"></script>
+  <script src="firebase-firestore.js?v=5.8.0"></script>
   <!-- FCM Dispatcher Bridge -->
-  <script src="fcm-dispatcher.js?v=5.7.9"></script>
+  <script src="fcm-dispatcher.js?v=5.8.0"></script>
   <!-- Native Device Bridge (Status bar, Insets, Back Button, Local Notifications, Push Notifications) -->
-  <script src="native-bridge.js?v=5.7.9"></script>
+  <script src="native-bridge.js?v=5.8.0"></script>
   <!-- QR Generator Script -->
-  <script src="qr.js?v=5.7.9"></script>
+  <script src="qr.js?v=5.8.0"></script>
   <!-- Firebase Cloud Sync Bridge -->
-  <script src="firebase-sync.js?v=5.7.9"></script>
+  <script src="firebase-sync.js?v=5.8.0"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=5.7.9"></script>
+  <script src="app.js?v=5.8.0"></script>
   <!-- In-App Auto Update Sentinel -->
-  <script src="updater.js?v=5.7.9"></script>
+  <script src="updater.js?v=5.8.0"></script>
 </body>
 </html>
