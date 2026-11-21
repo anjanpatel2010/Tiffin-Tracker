@@ -1,20 +1,31 @@
 {
-  "version": "5.8.3",
-  "versionCode": 50803,
+  "version": "5.8.4",
+  "versionCode": 50804,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
-  "releaseDate": "2026-11-14",
-  "message": "Tiffin Tracker v5.8.3 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.8.3.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.3.apk",
-  "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/releases",
+  "releaseDate": "2026-11-21",
+  "message": "Tiffin Tracker v5.8.4 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.8.4.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.4.apk",
+  "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker",
   "releaseNotes": [
-    "Comprehensive Flicker Fix: Zero flickering across Daily Logger, Master Sheet, Split, and Amul Tracker using deterministic signature caching and atomic DOM updates",
-    "Clean Interface: Removed test push button and redundant background sync polling intervals",
-    "Strict Admin Security: Regular members joining from new devices strictly adopt member profile and cannot adopt admin status without verified PIN",
-    "Real-time Room Deletion Reset: Connected phones immediately auto-reset to gate screen if flat is removed or purged"
+    "Same-Day Meal Locking: Roommates can only modify their meal portions on the current day; past locked dates require Admin Password/PIN to unlock",
+    "Native Repository Linking: Replaced all legacy web app and release URLs with direct GitHub repository links across invite cards and modals",
+    "Streamlined Interface: Removed deprecated CSV/Spreadsheet export controls for a clutter-free, distraction-free workflow",
+    "Updated Documentation: Overhauled repository README with Sovereign Dabba branding, architecture guide, and full screenshot gallery"
   ],
   "history": [
+    {
+      "version": "5.8.3",
+      "versionCode": 50803,
+      "releaseDate": "2026-11-14",
+      "releaseNotes": [
+        "Comprehensive Flicker Fix: Zero flickering across Daily Logger, Master Sheet, Split, and Amul Tracker using deterministic signature caching and atomic DOM updates",
+        "Clean Interface: Removed test push button and redundant background sync polling intervals",
+        "Strict Admin Security: Regular members joining from new devices strictly adopt member profile and cannot adopt admin status without verified PIN",
+        "Real-time Room Deletion Reset: Connected phones immediately auto-reset to gate screen if flat is removed or purged"
+      ]
+    },
     {
       "version": "5.8.2",
       "versionCode": 50802,
@@ -112,17 +123,6 @@
         "Manual Ownership Transfer: Flat Admins can transfer full authority to any flatmate via '👑 Make Admin'",
         "Rock-solid Room Lifecycle: Cloud Firestore authoritative source of truth with zero ghost resurrection",
         "Instant Kick & Logout: Kicked members are immediately purged, local session reset, and returned to gate"
-      ]
-    },
-    {
-      "version": "5.7.3",
-      "versionCode": 50703,
-      "releaseDate": "2026-11-08",
-      "releaseNotes": [
-        "Rock-solid Room & User Lifecycle: Ground-up overhaul for flat creation, joining, approving, and kicking",
-        "Zero Ghost Resurrection: Authoritative Firestore single source of truth ensures kicked users never re-add themselves",
-        "Instant Kick & Logout: Kicked members are immediately logged out, local session purged, and returned to flat gate",
-        "Live Waiting Screen: Real-time admission for pending join requests with Admin 1-tap approval"
       ]
     }
   ]

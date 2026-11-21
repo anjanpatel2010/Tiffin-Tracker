@@ -1,189 +1,173 @@
-# 🍱 Tiffin Tracker
+<div align="center">
+  <img src="docs/logo-candidates/concept-A-sovereign-t.png" width="130" alt="Tiffin Tracker Sovereign Logo" style="border-radius:24px; box-shadow:0 8px 24px rgba(0,212,255,0.25);" />
+  <h1>🍱 Tiffin Tracker</h1>
+  <p><strong>The modern, real-time shared mess and tiffin expense manager built for flatmates, hostels, and PG residents.</strong></p>
 
-> **A shared mess & tiffin expense tracker built for roommates and flat groups.**
+  <p>
+    <a href="https://github.com/anjanpatel2010/Tiffin-Tracker"><img src="https://img.shields.io/badge/Platform-Android-green.svg?style=for-the-badge&logo=android" alt="Android" /></a>
+    <a href="https://github.com/anjanpatel2010/Tiffin-Tracker"><img src="https://img.shields.io/badge/Release-v5.8.4-00d4ff.svg?style=for-the-badge" alt="Version" /></a>
+    <a href="https://github.com/anjanpatel2010/Tiffin-Tracker"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License" /></a>
+    <a href="https://github.com/anjanpatel2010/Tiffin-Tracker"><img src="https://img.shields.io/badge/Realtime-Cloud_Firestore-orange.svg?style=for-the-badge&logo=firebase" alt="Firebase" /></a>
+  </p>
 
-[![Live App](https://img.shields.io/badge/Live_App-tiffintracker--xi.vercel.app-emerald?style=for-the-badge&logo=vercel)](https://tiffintracker-xi.vercel.app)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![PWA Ready](https://img.shields.io/badge/PWA-Installable-purple.svg)](manifest.json)
-[![Pure Vanilla JS](https://img.shields.io/badge/Stack-Vanilla_JS_%2B_CSS-yellow.svg)](#technology-stack)
-
----
-
-## 🌐 Live Web App
-
-👉 **[https://tiffintracker-xi.vercel.app](https://tiffintracker-xi.vercel.app)**
-
----
-
-## 📱 Installing on Mobile as an App (PWA)
-
-Tiffin Tracker is a Progressive Web App (PWA). It runs offline, opens in standalone full-screen mode, and does not require an app store download.
-
-### 🤖 Android (Google Chrome)
-1. Open **[https://tiffintracker-xi.vercel.app](https://tiffintracker-xi.vercel.app)** in Chrome.
-2. Tap the three dots (**⋮**) in the top-right corner.
-3. Tap **Install app** (or **Add to Home screen**).
-4. Tap **Install**. The Tiffin Tracker icon will appear on your phone's home screen and app drawer.
-
-### 🍎 iOS / iPhone (Safari)
-1. Open **[https://tiffintracker-xi.vercel.app](https://tiffintracker-xi.vercel.app)** in Safari.
-2. Tap the **Share** button (box with an upward arrow at the bottom).
-3. Scroll down and tap **Add to Home Screen**.
-4. Tap **Add** in the top-right corner. It will launch full-screen like a native iOS app.
+  <p>
+    <a href="#-download--installation"><strong>📥 Download Latest APK</strong></a> •
+    <a href="#-key-features"><strong>✨ Key Features</strong></a> •
+    <a href="#-screenshots"><strong>📱 Screenshots</strong></a> •
+    <a href="#-how-it-works"><strong>🚀 How It Works</strong></a>
+  </p>
+</div>
 
 ---
 
-## 📌 The Problem
+## 📌 The Problem It Solves
 
-Living in a shared flat, PG, or hostel with daily tiffin delivery always creates month-end confusion:
-- *“Did you eat dinner on the 12th when you stayed late at the office?”*
-- *“Who had the tiffin when a roommate was out of town?”*
-- *“What is our total owed to the cook, and who pays how much?”*
-- *“Who consumed how many packets of milk this month?”*
+Living in a shared flat, PG, or hostel in India with a daily mess or tiffin service always creates month-end confusion and awkward billing disputes:
+- *“Did you eat dinner on the 14th when you stayed late at the office?”*
+- *“Who had the tiffin when a roommate went home for the weekend?”*
+- *“How much do we owe the cook, and who pays how much?”*
+- *“Who consumed how many packets of Amul milk this month?”*
 
-Spreadsheets on phones are clumsy, generic split apps don't handle recurring lunch/dinner options, and pen-and-paper diaries lead to billing disputes. 
+Paper registers get lost, manual spreadsheets on phones are clumsy, and generic expense-split apps don't handle recurring **Lunch (Half/Full/Special)**, **Dinner**, and **Milk Packets**.
 
-**Tiffin Tracker** provides an open-source, zero-data-leak ledger that runs directly in your browser.
+**Tiffin Tracker** solves this completely with a dedicated, zero-friction Android app that keeps all flatmates synchronized in real-time.
 
 ---
 
-## 🚀 How It Works (Step-by-Step)
+## 📱 Screenshots
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center" width="33%">
+        <img src="docs/screenshots/uptodown_screenshot_1_daily_logger.png" alt="1-Tap Daily Logger" width="260" /><br />
+        <b>1-Tap Daily Meal Logger</b><br />
+        <sub>Half, Full, Special, Off portion toggles with same-day lock protection</sub>
+      </td>
+      <td align="center" width="33%">
+        <img src="docs/screenshots/uptodown_screenshot_3_master_sheet.png" alt="Master Attendance Sheet" width="260" /><br />
+        <b>Master Attendance Sheet</b><br />
+        <sub>Zero-flicker matrix showing the whole month's meals at a glance</sub>
+      </td>
+      <td align="center" width="33%">
+        <img src="docs/screenshots/uptodown_screenshot_4_split_analytics.png" alt="Expense Split & Stats" width="260" /><br />
+        <b>Split & Analytics</b><br />
+        <sub>Relative contribution bars and dish popularity counter</sub>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" width="33%">
+        <img src="docs/screenshots/uptodown_screenshot_5_amul_tracker.png" alt="Amul Milk Tracker" width="260" /><br />
+        <b>Amul Milk Tracker</b><br />
+        <sub>Daily packet counter (0.5, 1, 2 pkts) with automatic bill calculations</sub>
+      </td>
+      <td align="center" width="33%">
+        <img src="docs/screenshots/uptodown_screenshot_6_upi_settlement.png" alt="Direct UPI Settlement" width="260" /><br />
+        <b>Direct UPI Settlements</b><br />
+        <sub>Dynamic QR code & 1-tap UPI deep links to pay the cook directly</sub>
+      </td>
+      <td align="center" width="33%">
+        <img src="docs/screenshots/uptodown_featured_image_1_daily_logger.png" alt="Featured Meal Logger" width="260" /><br />
+        <b>Flatmate Cloud Sync</b><br />
+        <sub>Instant multi-device sync via 4-digit room code</sub>
+      </td>
+    </tr>
+  </table>
+</div>
+
+---
+
+## ✨ Key Features
+
+### 1. 🔒 Same-Day Meal Logging & Daily Lock Protection
+- Flatmates can log or change their meals (**Half**, **Full**, **Special**, **Off**) on the **same day only**.
+- Once the day has passed, records automatically lock to prevent back-dated alterations and billing disputes.
+- Only the **Flat Admin** can unlock and edit past meals using the verified **Admin Security PIN**.
+
+### 2. ⚡ Real-Time Multi-Device Cloud Sync
+- Single source of truth powered by **Google Cloud Firestore**.
+- When one flatmate logs a meal or records a dish, all other devices in the flat update instantly without manual refreshing.
+- Quick flat sharing with an easy-to-remember **4-digit Room Code**.
+
+### 3. 📊 Zero-Flicker Master Matrix Sheet
+- Full-month calendar grid with sticky dates, daily dish names, individual meal icons, and total flat expenditure.
+- Signature-cached atomic rendering guarantees a silky smooth 60 FPS mobile experience.
+
+### 4. 🥛 Dedicated Amul Milk Tracker
+- Separate ledger specifically designed for daily pouch milk tracking.
+- Cycle through **Off**, **0.5**, **1**, and **2** packets with a single tap.
+- Live calculation of monthly consumption and exact individual dues.
+
+### 5. 💳 Direct Cook UPI Settlements
+- Configure your cook/caterer's UPI ID, phone number, and meal rates.
+- Generates **dynamic UPI deep links** (compatible with Google Pay, PhonePe, Paytm, and BHIM) and auto-generated **QR Codes**.
+- Automatically inserts the roommate's name and month in the UPI transaction note for easy payment tracking.
+
+### 6. 💬 WhatsApp Monthly Summary Formatter
+- 1-tap formatted itemized text statement ready to post directly into your flat's WhatsApp group.
+- Details each roommate's meal count, tiffin cost, milk total, and final payable amount.
+
+### 7. 👑 Strict Admin Authority & Security
+- Protected by a dedicated **Admin Security PIN**.
+- Regular roommates joining with room code enter strictly as members and cannot adopt admin privileges.
+- Admin has exclusive rights to kick members, adjust rates, reset months, and override locked records.
+
+---
+
+## 📥 Download & Installation
+
+The latest standalone Android APK is hosted directly in this repository:
+
+👉 **[Download Latest APK (Tiffin Tracker)](https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.4.apk)**
+
+### Installation Instructions:
+1. Download the `.apk` file directly on your Android phone.
+2. Tap the downloaded file. When prompted, select **Allow from this source** to enable sideloading.
+3. Tap **Install** and open the app!
+
+---
+
+## 🚀 How It Works (Quick Setup)
 
 ```
 +--------------------------------------------------------------+
-| 1. Admin Creates Group -> Generates Room Code (e.g., #TF-402) |
+| 1. Admin creates flat room -> Sets Admin PIN & 4-digit Code |
 +--------------------------------------------------------------+
                                |
                                v
 +--------------------------------------------------------------+
-| 2. Setup Provider & Rates (Cook's UPI, Half/Full/Sp rates)    |
+| 2. Configure Cook Rates (Half, Full, Special, Milk Packet)   |
 +--------------------------------------------------------------+
                                |
                                v
 +--------------------------------------------------------------+
-| 3. Flatmates Join -> Admin Notified -> 1-Tap Approval         |
+| 3. Share 4-digit Room Code with Flatmates on WhatsApp        |
 +--------------------------------------------------------------+
                                |
                                v
 +--------------------------------------------------------------+
-| 4. Daily Attendance & Menu Voting (Lunch/Dinner: H/F/Sp/Off) |
+| 4. Flatmates enter room instantly & log meals in real-time   |
 +--------------------------------------------------------------+
                                |
                                v
 +--------------------------------------------------------------+
-| 5. Month-End Settlement (Printable Invoice, CSV & UPI QR)    |
+| 5. Month-End: Settle directly via UPI & copy WhatsApp bill   |
 +--------------------------------------------------------------+
 ```
 
-1. **Step 1: Admin Creates Flat Group**  
-   The flat admin opens the app, enters their Name, Mobile Number, Flat Name (e.g. *Flat 402*), and sets an Admin Security PIN. The app generates a 6-character room code (e.g., `TF-402`).
-
-2. **Step 2: Configure Provider & Rates**  
-   In Settings, configure your cook's Name, Mobile, and UPI ID, plus per-meal pricing (Half, Full, Special) and milk packet rates. Changing rates creates a month-scoped snapshot so past months are never altered.
-
-3. **Step 3: Flatmates Knock & Admin Approves**  
-   Roommates click the invite link or enter the Room Code. The Admin receives a real-time notification in the app header and approves them with a single tap.
-
-4. **Step 4: Daily Meal Logging & Menu Voting**  
-   Flatmates tap **Off**, **Half**, **Full**, or **Special** for lunch and dinner. If the cook asks for today's dish choice, launch a quick Menu Poll and send a 1-click WhatsApp order.
-
-5. **Step 5: Statement, Invoicing & Direct UPI Settlement**  
-   At month-end, click **Print / PDF Statement** for an official itemized bill or **Export CSV** for Excel. Flatmates scan the provider's dynamic UPI QR code or tap the UPI payment link to settle directly.
-
 ---
 
-## ✨ Features
+## 🛠 Technology Stack
 
-### 🍱 1-Tap Meal Logger
-- Mobile-first interface with day-by-day navigation.
-- Universal meal slots: **Off (₹0)**, **Half**, **Full**, and **Special Diet**.
-- Live cost tally for today's meals.
-
-### 📊 Dynamic Master Spreadsheet
-- Calendar overview of all 31 days with 2 clean columns per roommate (**Lunch** and **Dinner**).
-- No clumsy extra columns: Special diet meals are handled inside the meal slot toggles.
-- Click any cell to cycle status: `Off ➜ Half ➜ Full ➜ Special ➜ Off`.
-- Search through sabzi history to find when specific dishes were served.
-
-### 🗳️ Daily Menu Voting Poll
-- Poll flatmates on today's sabzi choices.
-- Flatmates cast votes and specify portion preferences.
-- 1-tap WhatsApp summary pre-formatted to message the cook directly.
-
-### 🥛 Amul Milk Tracker
-- Track shared milk consumption separately from meal orders.
-- Custom member selector, packet quantity toggles (0.5, 1, 2 pkts), and monthly cost totals.
-
-### 📄 Professional Printable Invoice & Clean CSV
-- **Printable PDF Statement:** Clean, A4-optimized printable document with Billed To, Cook UPI details, rate snapshot, member meal counts, and total flat due.
-- **CSV Export:** UTF-8 BOM spreadsheet with member summaries and full 31-day meal attendance matrix compatible with Excel and Google Sheets.
-
-### 💳 Direct Provider UPI Settlement
-- Dynamic QR code generation for the cook's UPI VPA.
-- Roommate dropdown automatically loads their exact monthly total into the payment intent.
-- 1-click launch in GPay, PhonePe, or Paytm.
-
----
-
-## 🛠️ Technology Stack
-
-- **Core:** Pure Vanilla JavaScript (ES6+), HTML5 semantic markup, CSS3 design system.
-- **Zero Dependencies:** No React, Vue, or Webpack runtime overhead — instant first paint.
-- **PWA & Offline:** Service Worker (`sw.js`) and Web Manifest (`manifest.json`).
-- **Storage:** Local-first with multi-tenant room isolation.
-- **Hosting:** Static CDN (Vercel, GitHub Pages) — **₹0/month infrastructure cost**.
-
----
-
-## 💻 Local Development Setup
-
-No build step or `npm install` required:
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/anjanpatel2010/Tiffin-Tracker.git
-cd Tiffin-Tracker
-
-# 2. Serve locally with Python
-python -m http.server 8080
-
-# 3. Or serve with Node
-npx serve .
-```
-
-Open `http://localhost:8080` in your browser.
-
----
-
-## 📁 Repository Structure
-
-```
-Tiffin-Tracker/
-├── index.html        # Main single-page web app structure
-├── app.js            # Core application state, RoomManager & UI logic
-├── styles.css        # Responsive dark-mode design system & print styles
-├── sw.js             # Service worker for offline caching and fast loads
-├── qr.js             # Client-side QR code generator
-├── manifest.json     # PWA mobile installation manifest
-├── version.json      # Remote version metadata for in-app updates
-├── vercel.json       # Clean URL routing and cache control configuration
-├── icon.svg          # High-resolution vector app icon
-├── docs/             # Architecture, deployment, contributing docs & promo screenshots
-├── android/          # Native Android Studio Capacitor project
-├── api/              # Serverless push notification endpoints
-└── scripts/          # Automation, icon generator, and build tools
-```
+- **Frontend:** Pure Vanilla JavaScript (ES6+), Modern CSS3 Glassmorphism with Obsidian & Emerald luxury palette.
+- **Mobile Container:** [Capacitor 8](https://capacitorjs.com/) (Native Android bridge, Haptics, Local Notifications, Status Bar).
+- **Cloud Backend:** Google Cloud Firestore (Real-time snapshot listeners, offline persistence).
+- **Push Messaging:** Firebase Cloud Messaging (FCM HTTP v1).
+- **Build Pipeline:** Automated Gradle release pipeline with semantic versioning.
 
 ---
 
 ## 📄 License
 
-Distributed under the MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-## 👨‍💻 Maintainer
-
-**Anjan Patel**  
-- GitHub: [@anjanpatel2010](https://github.com/anjanpatel2010)  
-- Repository: [anjanpatel2010/Tiffin-Tracker](https://github.com/anjanpatel2010/Tiffin-Tracker)
+This project is licensed under the [MIT License](LICENSE).
+Feel free to fork, customize for your flat, and contribute!

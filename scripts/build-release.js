@@ -123,13 +123,13 @@ const updateVersionManifest = (filePath) => {
     data.releaseDate = releaseDate;
     data.apkFilename = apkFilename;
     data.downloadUrl = `https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/${apkFilename}`;
-    data.githubReleaseUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/releases';
+    data.githubReleaseUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker';
     data.message = `Tiffin Tracker v${targetVersion} is now available!`;
     data.releaseNotes = [
-      `Zero-Flicker Master Sheet: Eliminated table flickering and DOM thrashing with signature caching, atomic updates, and single-delegate event handling`,
-      `Strict Admin Privilege Guard: Required verified Admin Security PIN before granting admin access; new devices and joining members join strictly as members`,
-      `Permanent Kick Enforcement: Neutralized resurrection loops by eliminating recursive snapshot writes and enforcing kickedMembers blacklist across all sync layers`,
-      `Rock-Solid Real-Time Sync: Single authoritative Firestore source of truth with debounced 60fps renderAll pipeline`
+      `Same-Day Meal Locking: Roommates can only modify their meal portions on the current day; past locked dates require Admin Password/PIN to unlock`,
+      `Native Repository Linking: Replaced all legacy web app and release URLs with direct GitHub repository links across invite cards and modals`,
+      `Streamlined Interface: Removed deprecated CSV/Spreadsheet export controls for a clutter-free, distraction-free workflow`,
+      `Updated Documentation: Overhauled repository README with Sovereign Dabba branding, architecture guide, and full screenshot gallery`
     ];
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');

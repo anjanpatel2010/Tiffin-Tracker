@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.8.3';
+  const APP_VERSION = '5.8.4';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -1905,11 +1905,27 @@
     const dayOfWeek = DAY_NAMES[dateObj.getDay()];
     const monthShort = MONTH_SHORTS[currentMonth - 1];
     const monthName = MONTH_NAMES[currentMonth - 1];
-    const isRealToday = (now.getFullYear() === currentYear && (now.getMonth() + 1) === currentMonth && selectedDay === now.getDate());
+    const isRealToday = isSameDay(currentYear, currentMonth, selectedDay);
+    const isLocked = isDayLocked(currentYear, currentMonth, selectedDay);
 
     if (dayTitle) dayTitle.textContent = `${dayOfWeek}, ${selectedDay} ${monthShort}`;
     if (dayTagPill) {
-      dayTagPill.style.display = isRealToday ? 'inline-flex' : 'none';
+      if (isRealToday) {
+        dayTagPill.textContent = 'Today';
+        dayTagPill.className = 'badge-pill today-pill';
+        dayTagPill.style.display = 'inline-flex';
+        dayTagPill.title = 'Current day — meal edits open';
+      } else if (isLocked) {
+        dayTagPill.textContent = '🔒 Locked';
+        dayTagPill.className = 'badge-pill text-rose';
+        dayTagPill.style.display = 'inline-flex';
+        dayTagPill.title = 'Meals on this date are locked. Only Admin can edit with password.';
+      } else {
+        dayTagPill.textContent = '🔓 Unlocked';
+        dayTagPill.className = 'badge-pill text-emerald';
+        dayTagPill.style.display = 'inline-flex';
+        dayTagPill.title = 'Admin unlocked for this session';
+      }
     }
     if (jumpLabel) {
       const realTodayDay = now.getDate();
@@ -2061,26 +2077,43 @@
         const person = btn.getAttribute('data-person');
         const slot = btn.getAttribute('data-slot').toLowerCase();
         const val = btn.getAttribute('data-val');
-        const timestamp = Date.now();
 
-        if (!appState.days[selectedDay].mealTimestamps) {
-          appState.days[selectedDay].mealTimestamps = {};
+        const executeMealChange = () => {
+          const timestamp = Date.now();
+          if (!appState.days[selectedDay].mealTimestamps) {
+            appState.days[selectedDay].mealTimestamps = {};
+          }
+          appState.days[selectedDay].mealTimestamps[`${person}_${slot}`] = timestamp;
+          appState.days[selectedDay].meals[person][slot] = val;
+
+          logActivity(SyncEngine.identity, 'Logged Meal', `${capitalize(person)} ${slot}: ${val || 'Off'}`);
+          queueMealPushNotification(person, slot, val, selectedDay);
+          persistAndBroadcast({
+            type: 'meal_update',
+            year: currentYear,
+            month: currentMonth,
+            day: selectedDay,
+            person: person,
+            slot: slot,
+            value: val,
+            timestamp: timestamp
+          });
+          renderDailyLogger();
+        };
+
+        if (isDayLocked(currentYear, currentMonth, selectedDay)) {
+          requireAdminPassword(
+            () => {
+              unlockDayForSession(currentYear, currentMonth, selectedDay);
+              executeMealChange();
+              showToast('Admin override: Meal updated', 'success');
+            },
+            '🔒 Day Locked',
+            `Meals can only be changed on the same day. Modifying Day ${selectedDay} requires the Admin Password.`
+          );
+        } else {
+          executeMealChange();
         }
-        appState.days[selectedDay].mealTimestamps[`${person}_${slot}`] = timestamp;
-        appState.days[selectedDay].meals[person][slot] = val;
-
-        logActivity(SyncEngine.identity, 'Logged Meal', `${capitalize(person)} ${slot}: ${val || 'Off'}`);
-        queueMealPushNotification(person, slot, val, selectedDay);
-        persistAndBroadcast({
-          type: 'meal_update',
-          year: currentYear,
-          month: currentMonth,
-          day: selectedDay,
-          person: person,
-          slot: slot,
-          value: val,
-          timestamp: timestamp
-        });
       });
     }
   }
@@ -2257,34 +2290,51 @@
           const person = cell.getAttribute('data-person');
           const slot = cell.getAttribute('data-slot');
 
-          if (!appState.days[d].meals) appState.days[d].meals = {};
-          if (!appState.days[d].meals[person]) appState.days[d].meals[person] = { lunch: '', dinner: '' };
+          const applyCellChange = () => {
+            if (!appState.days[d].meals) appState.days[d].meals = {};
+            if (!appState.days[d].meals[person]) appState.days[d].meals[person] = { lunch: '', dinner: '' };
 
-          const curVal = appState.days[d].meals[person][slot] || '';
-          let nextVal = '';
-          if (!curVal) nextVal = 'Half';
-          else if (curVal === 'Half') nextVal = 'Full';
-          else if (curVal === 'Full') nextVal = 'Special';
-          else nextVal = '';
+            const curVal = appState.days[d].meals[person][slot] || '';
+            let nextVal = '';
+            if (!curVal) nextVal = 'Half';
+            else if (curVal === 'Half') nextVal = 'Full';
+            else if (curVal === 'Full') nextVal = 'Special';
+            else nextVal = '';
 
-          const timestamp = Date.now();
-          if (!appState.days[d].mealTimestamps) {
-            appState.days[d].mealTimestamps = {};
+            const timestamp = Date.now();
+            if (!appState.days[d].mealTimestamps) {
+              appState.days[d].mealTimestamps = {};
+            }
+            appState.days[d].mealTimestamps[`${person}_${slot}`] = timestamp;
+            appState.days[d].meals[person][slot] = nextVal;
+
+            logActivity(SyncEngine.identity, 'Meal Update', `${capitalize(person)} ${slot}: ${nextVal || 'Off'} (Day ${d})`);
+            persistAndBroadcast({
+              type: 'meal_update',
+              year: currentYear,
+              month: currentMonth,
+              day: d,
+              person: person,
+              slot: slot,
+              value: nextVal,
+              timestamp: timestamp
+            });
+            renderAll();
+          };
+
+          if (isDayLocked(currentYear, currentMonth, d)) {
+            requireAdminPassword(
+              () => {
+                unlockDayForSession(currentYear, currentMonth, d);
+                applyCellChange();
+                showToast('Admin override: Meal updated', 'success');
+              },
+              '🔒 Day Locked',
+              `Meals can only be changed on the same day. Modifying Day ${d} requires the Admin Password.`
+            );
+          } else {
+            applyCellChange();
           }
-          appState.days[d].mealTimestamps[`${person}_${slot}`] = timestamp;
-          appState.days[d].meals[person][slot] = nextVal;
-
-          logActivity(SyncEngine.identity, 'Meal Update', `${capitalize(person)} ${slot}: ${nextVal || 'Off'} (Day ${d})`);
-          persistAndBroadcast({
-            type: 'meal_update',
-            year: currentYear,
-            month: currentMonth,
-            day: d,
-            person: person,
-            slot: slot,
-            value: nextVal,
-            timestamp: timestamp
-          });
           return;
         }
 
@@ -2293,21 +2343,39 @@
           triggerHaptic();
           const d = parseInt(menuCell.getAttribute('data-day'));
           const currentSabzi = appState.days[d].sabzi || '';
-          const newDish = prompt(`Enter Sabzi / Dish for ${d} ${MONTH_NAMES[currentMonth - 1]}:`, currentSabzi);
-          if (newDish !== null) {
-            const timestamp = Date.now();
-            appState.days[d].sabzi = newDish.trim();
-            appState.days[d].sabziUpdatedAt = timestamp;
-            logActivity(SyncEngine.identity, 'Updated Sabzi from Sheet', `Day ${d}: "${newDish.trim()}"`);
-            persistAndBroadcast({
-              type: 'sabzi_update',
-              year: currentYear,
-              month: currentMonth,
-              day: d,
-              sabzi: newDish.trim(),
-              timestamp: timestamp
-            });
-            showToast(`Updated dish for ${d} ${MONTH_SHORTS[currentMonth - 1]}`);
+
+          const applyDishChange = () => {
+            const newDish = prompt(`Enter Sabzi / Dish for ${d} ${MONTH_NAMES[currentMonth - 1]}:`, currentSabzi);
+            if (newDish !== null) {
+              const timestamp = Date.now();
+              appState.days[d].sabzi = newDish.trim();
+              appState.days[d].sabziUpdatedAt = timestamp;
+              logActivity(SyncEngine.identity, 'Updated Sabzi from Sheet', `Day ${d}: "${newDish.trim()}"`);
+              persistAndBroadcast({
+                type: 'sabzi_update',
+                year: currentYear,
+                month: currentMonth,
+                day: d,
+                sabzi: newDish.trim(),
+                timestamp: timestamp
+              });
+              showToast(`Updated dish for ${d} ${MONTH_SHORTS[currentMonth - 1]}`);
+              renderAll();
+            }
+          };
+
+          if (isDayLocked(currentYear, currentMonth, d)) {
+            requireAdminPassword(
+              () => {
+                unlockDayForSession(currentYear, currentMonth, d);
+                applyDishChange();
+                showToast('Admin override: Dish updated', 'success');
+              },
+              '🔒 Day Locked',
+              `Modifying Day ${d} dish requires the Admin Password.`
+            );
+          } else {
+            applyDishChange();
           }
         }
       });
@@ -2743,8 +2811,7 @@
   function renderExportView() {
     const shareUrlInput = document.getElementById('shareUrlDisplay');
     if (shareUrlInput) {
-      const roomCode = SyncEngine.roomCode || RoomManager.activeRoom?.code || '';
-      shareUrlInput.value = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
+      shareUrlInput.value = 'https://github.com/anjanpatel2010/Tiffin-Tracker';
     }
 
     const waPre = document.getElementById('waSummaryText');
@@ -2997,21 +3064,37 @@
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
         triggerHaptic();
-        const timestamp = Date.now();
-        appState.days[selectedDay].sabzi = '';
-        appState.days[selectedDay].sabziUpdatedAt = timestamp;
-        if (sabziInput) sabziInput.value = '';
-        renderDailyLogger();
-        renderMasterSheet();
-        logActivity(SyncEngine.identity, 'Cleared Sabzi', `Day ${selectedDay}`);
-        persistAndBroadcast({
-          type: 'sabzi_update',
-          year: currentYear,
-          month: currentMonth,
-          day: selectedDay,
-          sabzi: '',
-          timestamp: timestamp
-        });
+        const clearDishAction = () => {
+          const timestamp = Date.now();
+          appState.days[selectedDay].sabzi = '';
+          appState.days[selectedDay].sabziUpdatedAt = timestamp;
+          if (sabziInput) sabziInput.value = '';
+          renderDailyLogger();
+          renderMasterSheet();
+          logActivity(SyncEngine.identity, 'Cleared Sabzi', `Day ${selectedDay}`);
+          persistAndBroadcast({
+            type: 'sabzi_update',
+            year: currentYear,
+            month: currentMonth,
+            day: selectedDay,
+            sabzi: '',
+            timestamp: timestamp
+          });
+        };
+
+        if (isDayLocked(currentYear, currentMonth, selectedDay)) {
+          requireAdminPassword(
+            () => {
+              unlockDayForSession(currentYear, currentMonth, selectedDay);
+              clearDishAction();
+              showToast('Admin override: Dish cleared', 'success');
+            },
+            '🔒 Day Locked',
+            `Clearing Day ${selectedDay} dish requires the Admin Password.`
+          );
+        } else {
+          clearDishAction();
+        }
       });
     }
 
@@ -3020,11 +3103,27 @@
     if (editBannerBtn) {
       editBannerBtn.addEventListener('click', () => {
         triggerHaptic();
-        const banner = document.getElementById('sabziDisplayBanner');
-        const inputRow = document.getElementById('sabziInputRow');
-        if (banner) banner.style.display = 'none';
-        if (inputRow) inputRow.style.display = 'flex';
-        if (sabziInput) sabziInput.focus();
+        const openDishEditor = () => {
+          const banner = document.getElementById('sabziDisplayBanner');
+          const inputRow = document.getElementById('sabziInputRow');
+          if (banner) banner.style.display = 'none';
+          if (inputRow) inputRow.style.display = 'flex';
+          if (sabziInput) sabziInput.focus();
+        };
+
+        if (isDayLocked(currentYear, currentMonth, selectedDay)) {
+          requireAdminPassword(
+            () => {
+              unlockDayForSession(currentYear, currentMonth, selectedDay);
+              openDishEditor();
+              showToast('Admin override: Dish unlocked', 'success');
+            },
+            '🔒 Day Locked',
+            `Modifying Day ${selectedDay} dish requires the Admin Password.`
+          );
+        } else {
+          openDishEditor();
+        }
       });
     }
   }
@@ -3601,12 +3700,38 @@
     }
   }
 
-  // --- Password Prompt Modal ("Flower") ---
-  function requireAdminPassword(onSuccess) {
+  // --- Password Prompt Modal ("Flower" / Admin Security PIN) ---
+  const adminUnlockedDays = new Set();
+
+  function isSameDay(year, month, day) {
+    const today = new Date();
+    return today.getFullYear() === year &&
+           (today.getMonth() + 1) === month &&
+           today.getDate() === day;
+  }
+
+  function isDayLocked(year, month, day) {
+    if (isSameDay(year, month, day)) return false;
+    const key = `${year}-${month}-${day}`;
+    if (adminUnlockedDays.has(key)) return false;
+    return true;
+  }
+
+  function unlockDayForSession(year, month, day) {
+    const key = `${year}-${month}-${day}`;
+    adminUnlockedDays.add(key);
+  }
+
+  function requireAdminPassword(onSuccess, customTitle, customDesc) {
     pendingPasswordCallback = onSuccess;
     const modal = document.getElementById('passwordPromptModal');
     const input = document.getElementById('adminPasswordInput');
     const err = document.getElementById('passwordErrorMsg');
+    const titleEl = modal?.querySelector('.modal-title');
+    const descEl = modal?.querySelector('.card-desc');
+
+    if (titleEl) titleEl.textContent = customTitle || 'Admin Authentication';
+    if (descEl) descEl.textContent = customDesc || 'Sensitive ledger action. Only authorized flat admin can confirm.';
 
     if (input) input.value = '';
     if (err) err.style.display = 'none';
@@ -3623,11 +3748,13 @@
 
     const handleConfirm = () => {
       const entered = (input?.value || '').trim();
-      if (entered === CONFIG.adminPassword) {
+      const currentPin = (CONFIG.adminPassword || RoomManager.activeRoom?.adminPin || 'Flower').trim();
+      if (entered && entered === currentPin) {
         if (modal) modal.classList.remove('active');
         if (pendingPasswordCallback) {
-          pendingPasswordCallback();
+          const cb = pendingPasswordCallback;
           pendingPasswordCallback = null;
+          cb();
         }
       } else {
         if (err) err.style.display = 'block';
@@ -5077,16 +5204,14 @@
     triggerHaptic();
     const roomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || 'ROOM';
     const roomName = RoomManager.activeRoom?.name || RoomManager.session?.groupName || 'our flat';
-    const apkUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.3.apk';
-    const webUrl = `https://anjanpatel2010.github.io/Tiffin-Tracker/?room=${encodeURIComponent(roomCode)}`;
+    const repoUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker';
 
     const message = `🏠 Join "${roomName}" on Tiffin Tracker!\n` +
-      `🔑 Room Code: ${roomCode}\n\n` +
-      `📱 Download & Install Android App:\n${apkUrl}\n\n` +
-      `🌐 Or Open Web App:\n${webUrl}\n\n` +
+      `🔑 Flat Room Code: ${roomCode}\n\n` +
+      `📱 Get the Android App (GitHub Repository):\n${repoUrl}\n\n` +
       `👉 Quick Setup:\n` +
-      `1. Download & open the app\n` +
-      `2. Room Code ${roomCode} auto-fills (or tap Paste)\n` +
+      `1. Download & install the Android APK from the GitHub repository\n` +
+      `2. Open the app and enter Room Code: ${roomCode}\n` +
       `3. Enter your Name and tap 'Join Flat'!`;
 
     if (navigator.share) {
@@ -5604,7 +5729,6 @@
     const copyShareUrlBtn = document.getElementById('copyShareUrlBtn');
     const copyWaSummaryBtn = document.getElementById('copyWaSummaryBtn');
     const sendDirectWaBtn = document.getElementById('sendDirectWaBtn');
-    const exportCsvBtn = document.getElementById('exportCsvBtn');
     const printInvoiceBtn = document.getElementById('printInvoiceBtn');
     const backupJsonBtn = document.getElementById('backupJsonBtn');
     const importInput = document.getElementById('importJsonInput');
@@ -5647,18 +5771,11 @@
       });
     }
 
-    const settingsExportCsv = document.getElementById('settingsExportCsvBtn');
-    if (settingsExportCsv) settingsExportCsv.addEventListener('click', downloadCsvExport);
-
     const settingsPrintInv = document.getElementById('settingsPrintInvoiceBtn');
     if (settingsPrintInv) {
       settingsPrintInv.addEventListener('click', () => {
         openInvoiceModal();
       });
-    }
-
-    if (exportCsvBtn) {
-      exportCsvBtn.addEventListener('click', downloadCsvExport);
     }
 
     if (printInvoiceBtn) {
