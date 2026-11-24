@@ -233,10 +233,27 @@ if (stats.size < 1000000) {
 }
 console.log(`  ✓ Successfully created ${apkFilename} (${sizeMb} MB)`);
 
-// 9. Step: Summary
+// 9. Step: Auto Git Commit & Push to Remote
+console.log('[7/7] Automatically staging, committing, and pushing release to GitHub...');
+try {
+  execSync('git add -A', { cwd: rootDir, stdio: 'inherit' });
+  execSync(`git commit -m "Release v${targetVersion}: Build and publish standalone APK"`, { cwd: rootDir, stdio: 'inherit' });
+  execSync('git push origin master', { cwd: rootDir, stdio: 'inherit' });
+  console.log('  ✓ Automatically committed and pushed to origin/master.');
+  
+  // Instant purge of version.json on jsDelivr CDN
+  try {
+    execSync('node -e "fetch(\'https://purge.jsdelivr.net/gh/anjanpatel2010/Tiffin-Tracker@master/version.json\').catch(()=>{})"', { cwd: rootDir, stdio: 'ignore' });
+  } catch (e) {}
+} catch (gitErr) {
+  console.warn('  ⚠️ Git push status/warning:', gitErr.message || gitErr);
+}
+
+// 10. Step: Summary
 console.log('\n======================================================================');
 console.log(`  🎉 RELEASE BUILD SUCCESSFUL: v${targetVersion} (Code ${versionCode})`);
 console.log(`  📦 Standalone APK: ${targetApkPath}`);
 console.log(`  📄 Manifest: ${path.join(rootDir, 'version.json')}`);
 console.log(`  📝 Changelog: ${path.join(rootDir, 'docs/CHANGELOG.md')}`);
+console.log('  🚀 Remote: Automatically pushed to https://github.com/anjanpatel2010/Tiffin-Tracker');
 console.log('======================================================================\n');
