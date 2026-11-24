@@ -20,7 +20,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css?v=5.8.5">
+  <link rel="stylesheet" href="styles.css?v=5.8.6">
 </head>
 <body>
   <!-- Luxury Startup Animation (Fast & Smooth Brand Reveal) -->
@@ -356,10 +356,23 @@
             <div class="upi-launch-actions">
               <a id="upiDirectPayLink" href="#" class="primary-btn glow-btn btn-md w-full upi-pay-btn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-                <span>Pay via UPI App</span>
+                <span>Pay via Any UPI App</span>
               </a>
 
-              <button id="copyUpiLinkBtn" class="secondary-btn btn-sm w-full">
+              <!-- Quick Direct App Launchers -->
+              <div class="upi-app-quick-row" style="display:flex; gap:8px; width:100%; margin-top:4px;">
+                <button type="button" id="payViaGPayBtn" class="pill-btn-ghost flex-1" style="display:flex; align-items:center; justify-content:center; gap:6px; font-weight:600; padding:9px 6px; font-size:0.82rem; border-color:rgba(255,255,255,0.12);">
+                  <span>Google Pay</span>
+                </button>
+                <button type="button" id="payViaPhonePeBtn" class="pill-btn-ghost flex-1" style="display:flex; align-items:center; justify-content:center; gap:6px; font-weight:600; padding:9px 6px; font-size:0.82rem; border-color:rgba(95,37,159,0.4); color:#c084fc;">
+                  <span>PhonePe</span>
+                </button>
+                <button type="button" id="payViaPaytmBtn" class="pill-btn-ghost flex-1" style="display:flex; align-items:center; justify-content:center; gap:6px; font-weight:600; padding:9px 6px; font-size:0.82rem; border-color:rgba(0,186,242,0.4); color:#38bdf8;">
+                  <span>Paytm</span>
+                </button>
+              </div>
+
+              <button id="copyUpiLinkBtn" class="secondary-btn btn-sm w-full" style="margin-top:4px;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 <span>Copy UPI Payment Link</span>
               </button>
@@ -1181,7 +1194,7 @@
         <div class="morphe-version-badge">
           <span id="updateCurrentVersionTag" class="morphe-chip-current">v5.7.8</span>
           <span class="morphe-version-arrow">➔</span>
-          <span id="updateVersionTag" class="morphe-chip-latest">v5.8.5</span>
+          <span id="updateVersionTag" class="morphe-chip-latest">v5.8.6</span>
           <span class="morphe-latest-pill">LATEST</span>
         </div>
 
@@ -1251,19 +1264,19 @@
   </div>
 
   <!-- Firebase Cloud Realtime Engine -->
-  <script src="firebase-app.js?v=5.8.5"></script>
-  <script src="firebase-firestore.js?v=5.8.5"></script>
+  <script src="firebase-app.js?v=5.8.6"></script>
+  <script src="firebase-firestore.js?v=5.8.6"></script>
   <!-- FCM Dispatcher Bridge -->
-  <script src="fcm-dispatcher.js?v=5.8.5"></script>
+  <script src="fcm-dispatcher.js?v=5.8.6"></script>
   <!-- Native Device Bridge (Status bar, Insets, Back Button, Local Notifications, Push Notifications) -->
-  <script src="native-bridge.js?v=5.8.5"></script>
+  <script src="native-bridge.js?v=5.8.6"></script>
   <!-- QR Generator Script -->
-  <script src="qr.js?v=5.8.5"></script>
+  <script src="qr.js?v=5.8.6"></script>
   <!-- Firebase Cloud Sync Bridge -->
-  <script src="firebase-sync.js?v=5.8.5"></script>
+  <script src="firebase-sync.js?v=5.8.6"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=5.8.5"></script>
+  <script src="app.js?v=5.8.6"></script>
   <!-- In-App Auto Update Sentinel -->
-  <script src="updater.js?v=5.8.5"></script>
+  <script src="updater.js?v=5.8.6"></script>
 </body>
 </html>

@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.8.6] — 2026-11-24
+
+### Fixed
+- **Universal Multi-App UPI Payment Compatibility**: Resolved "Could not fetch profile or amount" errors in PhonePe, Paytm, BHIM, and Cred by aligning deep-link and QR code parameters with strict NPCI specifications.
+- **Literal VPA `@` Preservation**: Fixed URL percent-encoding (`%40`) of the payee address that broke PhonePe and Paytm VPA regex validation.
+- **Strict NPCI Amount Formatting**: Formatted amounts to exact 2-decimal strings (`am=1800.00`) and safely omitted `am=` when amount is zero or unconfigured.
+- **Alphanumeric Transaction Notes**: Sanitized transaction note (`tn`) strings to alphanumeric and space characters only, removing hyphens and parentheses rejected by third-party UPI apps.
+- **Dedicated Quick App Launchers**: Added 1-tap direct payment buttons for Google Pay, PhonePe, and Paytm, backed by native Android `launchUpi` package intents and Android 11+ `<queries>` declarations.
+
+---
+
 ## [5.8.5] — 2026-11-24
 
 ### Fixed

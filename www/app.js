@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.8.5';
+  const APP_VERSION = '5.8.6';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -132,8 +132,8 @@
       amulPacket: 35
     },
     defaultProvider: {
-      name: '',
-      upi: '',
+      name: 'Sandhya Tiwari',
+      upi: 'sandhyatiwari0205@oksbi',
       phone: ''
     }
   };
@@ -2581,6 +2581,45 @@
     }
   }
 
+  // Helper: Build NPCI-Compliant Universal UPI Deep Link URI
+  // Compatible with PhonePe, Paytm, Google Pay, BHIM, and Cred
+  function buildUpiUri(provider, roommateName, amount) {
+    const rawUpi = (provider && provider.upi ? provider.upi : (CONFIG.defaultProvider?.upi || '')).trim();
+    if (!rawUpi) return '';
+
+    // Payee VPA: trim whitespace.
+    // Critical: Keep literal '@' - NEVER encode as '%40' because PhonePe/Paytm regex parser breaks on '%40'
+    const pa = rawUpi.replace(/\s+/g, '');
+
+    // Payee Name: clean alphanumeric and spaces, max 50 chars
+    let rawName = (provider && provider.name ? provider.name : (CONFIG.defaultProvider?.name || 'Tiffin Provider')).trim();
+    let cleanName = rawName.replace(/[^a-zA-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!cleanName) cleanName = 'Tiffin Provider';
+    if (cleanName.length > 50) cleanName = cleanName.substring(0, 50);
+    const pn = encodeURIComponent(cleanName);
+
+    // Transaction Note: alphanumeric and spaces ONLY, max 50 chars
+    // Strictly NO hyphens, brackets, or special symbols (PhonePe & BHIM reject these with "could not fetch details")
+    const cleanRoommate = (roommateName || 'Roommate').replace(/[^a-zA-Z0-9 ]/g, ' ').trim();
+    const monthShort = (MONTH_SHORTS && MONTH_SHORTS[currentMonth - 1]) ? MONTH_SHORTS[currentMonth - 1] : 'Month';
+    let cleanNote = `Tiffin ${monthShort} ${currentYear} ${cleanRoommate}`.replace(/[^a-zA-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (cleanNote.length > 50) cleanNote = cleanNote.substring(0, 50);
+    const tn = encodeURIComponent(cleanNote);
+
+    // Amount: positive decimal formatted to exactly 2 decimal places (e.g. 1800.00)
+    // If <= 0 or not numeric, omit am= per NPCI specification so user can enter amount in UPI app
+    const numAmount = Number(amount);
+    const hasValidAmount = !isNaN(numAmount) && numAmount > 0;
+
+    let uri = `upi://pay?pa=${pa}&pn=${pn}`;
+    if (hasValidAmount) {
+      uri += `&am=${numAmount.toFixed(2)}`;
+    }
+    uri += `&tn=${tn}&cu=INR`;
+
+    return uri;
+  }
+
   // 5. UPI Direct Settlement Render
   function renderUpiSettlement() {
     const roommateSelect = document.getElementById('upiRoommateSelect');
@@ -2601,14 +2640,16 @@
       roommateSelect.value = selectedUpiRoommate || (ROOMMATES[0] ? ROOMMATES[0].id : '');
     }
 
-    const provider = appState.provider || CONFIG.defaultProvider;
+    const provider = appState.provider && appState.provider.upi 
+      ? appState.provider 
+      : (CONFIG.defaultProvider || { name: 'Sandhya Tiwari', upi: 'sandhyatiwari0205@oksbi', phone: '' });
 
     // Display cook details
     const nameDisplay = document.getElementById('upiCookNameDisplay');
     const vpaDisplay = document.getElementById('upiCookVpaDisplay');
     const phoneDisplay = document.getElementById('upiCookPhoneDisplay');
-    if (nameDisplay) nameDisplay.textContent = provider.name;
-    if (vpaDisplay) vpaDisplay.textContent = provider.upi;
+    if (nameDisplay) nameDisplay.textContent = provider.name || 'Sandhya Tiwari';
+    if (vpaDisplay) vpaDisplay.textContent = provider.upi || 'sandhyatiwari0205@oksbi';
     if (phoneDisplay) phoneDisplay.textContent = provider.phone ? `Mobile: ${provider.phone}` : 'Tiffin & Mess Provider';
 
     const roommateObj = ROOMMATES.find(r => r.id === selectedUpiRoommate) || ROOMMATES[0];
@@ -2631,26 +2672,29 @@
         : `${fName}'s ${MONTH_NAMES[currentMonth - 1]} bill (${stats.totalMeals} meals)`;
     }
 
-    // Dynamic UPI Deep Link
-    const note = encodeURIComponent(`Tiffin Payment - ${fName} (${MONTH_SHORTS[currentMonth - 1]} ${currentYear})`);
-    const upiUri = `upi://pay?pa=${encodeURIComponent(provider.upi)}&pn=${encodeURIComponent(provider.name)}&am=${amountToPay}&tn=${note}&cu=INR`;
+    // Dynamic NPCI-Compliant UPI Deep Link
+    const upiUri = buildUpiUri(provider, fName, amountToPay);
 
     const payLink = document.getElementById('upiDirectPayLink');
-    if (payLink) payLink.href = upiUri;
+    if (payLink) payLink.href = upiUri || '#';
 
     // Dynamic QR Code Rendering
     const qrContainer = document.getElementById('upiQrCodeContainer');
     if (qrContainer && window.QRCode) {
-      try {
-        const svg = window.QRCode.generateSVG(upiUri, {
-          size: 190,
-          margin: 1,
-          color: '#090e17',
-          background: '#ffffff'
-        });
-        qrContainer.innerHTML = svg;
-      } catch (err) {
-        qrContainer.innerHTML = `<span style="font-size:0.75rem; color:#f43f5e">QR code generator error</span>`;
+      if (!upiUri) {
+        qrContainer.innerHTML = `<div style="font-size:0.75rem; color:#94a3b8; text-align:center; padding:20px 10px;">Configure Cook UPI ID in Settings</div>`;
+      } else {
+        try {
+          const svg = window.QRCode.generateSVG(upiUri, {
+            size: 190,
+            margin: 1,
+            color: '#090e17',
+            background: '#ffffff'
+          });
+          qrContainer.innerHTML = svg;
+        } catch (err) {
+          qrContainer.innerHTML = `<span style="font-size:0.75rem; color:#f43f5e">QR code generator error</span>`;
+        }
       }
     }
   }
@@ -3272,6 +3316,10 @@
     const copyUpiId = document.getElementById('cookUpiIdCopy');
     const copyLinkBtn = document.getElementById('copyUpiLinkBtn');
     const editCustomBtn = document.getElementById('editCustomAmountBtn');
+    const mainPayBtn = document.getElementById('upiDirectPayLink');
+    const gpayBtn = document.getElementById('payViaGPayBtn');
+    const phonepeBtn = document.getElementById('payViaPhonePeBtn');
+    const paytmBtn = document.getElementById('payViaPaytmBtn');
 
     if (select) {
       select.addEventListener('change', (e) => {
@@ -3281,10 +3329,76 @@
       });
     }
 
+    const triggerUpiLaunch = (targetPackage = 'all') => {
+      triggerHaptic();
+      const provider = appState.provider && appState.provider.upi 
+        ? appState.provider 
+        : (CONFIG.defaultProvider || { name: 'Sandhya Tiwari', upi: 'sandhyatiwari0205@oksbi', phone: '' });
+
+      const cleanUpi = (provider && provider.upi ? provider.upi : '').trim();
+      if (!cleanUpi) {
+        showToast('Please configure Cook UPI ID in Settings first!');
+        const settingsModal = document.getElementById('settingsModal');
+        if (settingsModal) {
+          settingsModal.classList.add('active');
+          settingsModal.style.display = 'flex';
+          const ratesTab = document.querySelector('.settings-tab-btn[data-subtab="subtab-rates"]');
+          if (ratesTab) ratesTab.click();
+        }
+        return;
+      }
+
+      const roommateObj = ROOMMATES.find(r => r.id === selectedUpiRoommate) || ROOMMATES[0];
+      const stats = roommateObj ? getRoommateMonthlyStats(roommateObj.id) : { tiffinTotal: 0 };
+      const amountToPay = (customUpiAmount !== null) ? customUpiAmount : stats.tiffinTotal;
+      const fName = roommateObj ? getFirstName(roommateObj.name) : 'Roommate';
+
+      const upiUri = buildUpiUri(provider, fName, amountToPay);
+      if (!upiUri) return;
+
+      if (window.NativeAppInstaller && typeof window.NativeAppInstaller.launchUpi === 'function') {
+        window.NativeAppInstaller.launchUpi(upiUri, targetPackage);
+      } else if (window.NativeAppInstaller && typeof window.NativeAppInstaller.openExternalUrl === 'function') {
+        window.NativeAppInstaller.openExternalUrl(upiUri);
+      } else {
+        window.location.href = upiUri;
+      }
+    };
+
+    if (mainPayBtn) {
+      mainPayBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        triggerUpiLaunch('all');
+      });
+    }
+
+    if (gpayBtn) {
+      gpayBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        triggerUpiLaunch('com.google.android.apps.nbu.paisa.user');
+      });
+    }
+
+    if (phonepeBtn) {
+      phonepeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        triggerUpiLaunch('com.phonepe.app');
+      });
+    }
+
+    if (paytmBtn) {
+      paytmBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        triggerUpiLaunch('net.one97.paytm');
+      });
+    }
+
     if (copyUpiId) {
       copyUpiId.addEventListener('click', () => {
         triggerHaptic();
-        const provider = appState.provider || CONFIG.defaultProvider;
+        const provider = appState.provider && appState.provider.upi 
+          ? appState.provider 
+          : (CONFIG.defaultProvider || { upi: 'sandhyatiwari0205@oksbi' });
         copyToClipboard(provider.upi);
         showToast(`Copied UPI ID: ${provider.upi}`);
       });
@@ -3293,10 +3407,20 @@
     if (copyLinkBtn) {
       copyLinkBtn.addEventListener('click', () => {
         triggerHaptic();
-        const payLink = document.getElementById('upiDirectPayLink');
-        if (payLink) {
-          copyToClipboard(payLink.href);
-          showToast('Copied direct UPI payment link');
+        const provider = appState.provider && appState.provider.upi 
+          ? appState.provider 
+          : (CONFIG.defaultProvider || { name: 'Sandhya Tiwari', upi: 'sandhyatiwari0205@oksbi' });
+        const roommateObj = ROOMMATES.find(r => r.id === selectedUpiRoommate) || ROOMMATES[0];
+        const stats = roommateObj ? getRoommateMonthlyStats(roommateObj.id) : { tiffinTotal: 0 };
+        const amountToPay = (customUpiAmount !== null) ? customUpiAmount : stats.tiffinTotal;
+        const fName = roommateObj ? getFirstName(roommateObj.name) : 'Roommate';
+
+        const upiUri = buildUpiUri(provider, fName, amountToPay);
+        if (upiUri) {
+          copyToClipboard(upiUri);
+          showToast('Copied universal UPI payment link');
+        } else {
+          showToast('Please configure Cook UPI ID first');
         }
       });
     }

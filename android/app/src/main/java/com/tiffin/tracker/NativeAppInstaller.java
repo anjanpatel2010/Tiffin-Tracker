@@ -52,6 +52,36 @@ public class NativeAppInstaller {
     }
 
     @JavascriptInterface
+    public boolean launchUpi(final String upiUri, final String targetPackage) {
+        if (upiUri == null || upiUri.trim().isEmpty()) return false;
+        mainHandler.post(() -> {
+            try {
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setData(Uri.parse(upiUri.trim()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+                if (targetPackage != null && !targetPackage.trim().isEmpty() && !targetPackage.equalsIgnoreCase("all")) {
+                    intent.setPackage(targetPackage.trim());
+                    try {
+                        activity.startActivity(intent);
+                        return;
+                    } catch (Exception appNotFound) {
+                        Log.w(TAG, "Target UPI app not found (" + targetPackage + "), falling back to system chooser: " + appNotFound.getMessage());
+                        intent.setPackage(null);
+                    }
+                }
+
+                Intent chooser = Intent.createChooser(intent, "Pay via UPI App");
+                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                activity.startActivity(chooser);
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to launch UPI Intent: " + e.getMessage(), e);
+            }
+        });
+        return true;
+    }
+
+    @JavascriptInterface
     public void downloadAndInstall(final String downloadUrl, final String filename) {
         Log.d(TAG, "Starting native APK download: " + downloadUrl);
         new Thread(() -> {

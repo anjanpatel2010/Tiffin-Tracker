@@ -126,10 +126,10 @@ const updateVersionManifest = (filePath) => {
     data.githubReleaseUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker';
     data.message = `Tiffin Tracker v${targetVersion} is now available!`;
     data.releaseNotes = [
-      `Fixed New User Retention: Prevented race conditions and membership drops when roommates join room from multiple phones`,
-      `Restored Ledger Persistence & Matrix Sync: Month-scoped Firestore storage with automatic meal slot initialization across all days`,
-      `Restored CSV Spreadsheet Export: Download full Excel/Google Sheets compatible monthly summaries directly from exports and settings`,
-      `Flexible Meal Logging: Fixed rigid lockouts; roommates can freely log and update meals with a smooth 3-day grace period`
+      `Universal UPI Payment Fix: Fixed 'Could not fetch profile or amount' errors across PhonePe, Paytm, BHIM, and Cred`,
+      `Strict NPCI Formatting: Unencoded VPA '@' symbol, two-decimal positive amounts, and clean alphanumeric transaction notes`,
+      `Direct App Quick Launchers: Added 1-tap dedicated payment buttons for Google Pay, PhonePe, and Paytm alongside the system chooser`,
+      `Android Package Visibility: Added native UPI queries declaration in manifest for seamless multi-app intent resolution`
     ];
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');

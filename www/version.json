@@ -1,20 +1,31 @@
 {
-  "version": "5.8.5",
-  "versionCode": 50805,
+  "version": "5.8.6",
+  "versionCode": 50806,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-24",
-  "message": "Tiffin Tracker v5.8.5 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.8.5.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.5.apk",
+  "message": "Tiffin Tracker v5.8.6 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.8.6.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.6.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker",
   "releaseNotes": [
-    "Fixed New User Retention: Prevented race conditions and membership drops when roommates join room from multiple phones",
-    "Restored Ledger Persistence & Matrix Sync: Month-scoped Firestore storage with automatic meal slot initialization across all days",
-    "Restored CSV Spreadsheet Export: Download full Excel/Google Sheets compatible monthly summaries directly from exports and settings",
-    "Flexible Meal Logging: Fixed rigid lockouts; roommates can freely log and update meals with a smooth 3-day grace period"
+    "Universal UPI Payment Fix: Fixed 'Could not fetch profile or amount' errors across PhonePe, Paytm, BHIM, and Cred",
+    "Strict NPCI Formatting: Unencoded VPA '@' symbol, two-decimal positive amounts, and clean alphanumeric transaction notes",
+    "Direct App Quick Launchers: Added 1-tap dedicated payment buttons for Google Pay, PhonePe, and Paytm alongside the system chooser",
+    "Android Package Visibility: Added native UPI queries declaration in manifest for seamless multi-app intent resolution"
   ],
   "history": [
+    {
+      "version": "5.8.5",
+      "versionCode": 50805,
+      "releaseDate": "2026-11-24",
+      "releaseNotes": [
+        "Fixed New User Retention: Prevented race conditions and membership drops when roommates join room from multiple phones",
+        "Restored Ledger Persistence & Matrix Sync: Month-scoped Firestore storage with automatic meal slot initialization across all days",
+        "Restored CSV Spreadsheet Export: Download full Excel/Google Sheets compatible monthly summaries directly from exports and settings",
+        "Flexible Meal Logging: Fixed rigid lockouts; roommates can freely log and update meals with a smooth 3-day grace period"
+      ]
+    },
     {
       "version": "5.8.4",
       "versionCode": 50804,
@@ -106,17 +117,6 @@
     {
       "version": "5.7.6",
       "versionCode": 50706,
-      "releaseDate": "2026-11-09",
-      "releaseNotes": [
-        "FCM Push Notifications: Ground-up rebuild using Google FCM HTTP v1 API with high-priority background delivery",
-        "Smart Flatmate Alerts: Real-time status bar notifications when meals, dishes, expenses, or deposits are logged",
-        "Dedicated Notification Channel: High importance 'tiffin_notifications' with heads-up display, sound, and vibration",
-        "Automatic Token Lifecycle: Robust device token binding and room sync in Cloud Firestore with sender exclusion"
-      ]
-    },
-    {
-      "version": "5.7.5",
-      "versionCode": 50705,
       "releaseDate": "2026-11-09",
       "releaseNotes": [
         "FCM Push Notifications: Ground-up rebuild using Google FCM HTTP v1 API with high-priority background delivery",
