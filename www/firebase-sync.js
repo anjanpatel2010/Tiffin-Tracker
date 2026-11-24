@@ -157,7 +157,7 @@
           console.error('[FirebaseSync] Listener callback error:', e);
         }
       });
-      if (typeof window.handleCloudSyncUpdate === 'function') {
+      if (typeof window.handleCloudSyncUpdate === 'function' && !this.listeners.includes(window.handleCloudSyncUpdate)) {
         try {
           window.handleCloudSyncUpdate(data);
         } catch (e) {
@@ -605,20 +605,57 @@
       if (!this.isAvailable || !db || !roomData) return;
       const cleanCode = this.getCleanRoom(roomCode);
       try {
-        if (Array.isArray(roomData.kickedMembers) && Array.isArray(roomData.members)) {
-          roomData.members = roomData.members.filter(m => {
+        const roomRef = db.collection('rooms').doc(cleanCode);
+        await db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(roomRef);
+          let currentMembers = [];
+          let currentKicked = [];
+          if (doc.exists) {
+            const currentData = doc.data()?.roomData || {};
+            if (Array.isArray(currentData.members)) currentMembers = currentData.members;
+            if (Array.isArray(currentData.kickedMembers)) currentKicked = currentData.kickedMembers;
+          }
+          const incomingKicked = Array.isArray(roomData.kickedMembers) ? roomData.kickedMembers : [];
+          // Combine kicked lists safely
+          const mergedKickedMap = new Map();
+          currentKicked.forEach(km => { if (km && (km.id || km.name)) mergedKickedMap.set(km.id || km.name, km); });
+          incomingKicked.forEach(km => { if (km && (km.id || km.name)) mergedKickedMap.set(km.id || km.name, km); });
+          const mergedKicked = Array.from(mergedKickedMap.values());
+
+          // Merge members preserving anyone already in cloud
+          const memberMap = new Map();
+          currentMembers.forEach(m => {
+            if (m && m.id) memberMap.set(m.id, m);
+          });
+          (Array.isArray(roomData.members) ? roomData.members : []).forEach(m => {
+            if (m && m.id) {
+              const existing = memberMap.get(m.id);
+              if (existing) {
+                memberMap.set(m.id, { ...existing, ...m });
+              } else {
+                memberMap.set(m.id, m);
+              }
+            }
+          });
+
+          // Filter out explicitly kicked members (except admin)
+          const mergedMembers = Array.from(memberMap.values()).filter(m => {
             if (!m || m.role === 'admin') return true;
-            return !roomData.kickedMembers.some(km =>
+            return !mergedKicked.some(km =>
               (km.id && m.id && km.id === m.id) ||
               (km.phone && m.phone && km.phone.slice(-10) === m.phone.slice(-10)) ||
               (km.name && m.name && km.name.trim().toLowerCase() === m.name.trim().toLowerCase())
             );
           });
-        }
-        await db.collection('rooms').doc(cleanCode).set({
-          roomData: roomData,
-          lastUpdated: Date.now()
-        }, { merge: true });
+
+          roomData.members = mergedMembers;
+          roomData.kickedMembers = mergedKicked;
+
+          transaction.set(roomRef, {
+            roomData: roomData,
+            lastUpdated: Date.now()
+          }, { merge: true });
+        });
       } catch (err) {
         console.warn('[FirebaseSync] saveRoomData error:', err);
       }
@@ -628,11 +665,30 @@
       if (!this.isAvailable || !db || !state) return;
       const cleanCode = this.getCleanRoom(roomCode);
       try {
-        const compact = (typeof getCompactSyncState === 'function') ? getCompactSyncState(state) : state;
-        await db.collection('rooms').doc(cleanCode).set({
+        const compactFn = (typeof getCompactSyncState === 'function')
+          ? getCompactSyncState
+          : (typeof window !== 'undefined' && typeof window.getCompactSyncState === 'function')
+            ? window.getCompactSyncState
+            : null;
+        const compact = compactFn ? compactFn(state) : state;
+        const year = compact.year || state.year || (new Date()).getFullYear();
+        const month = compact.month || state.month || ((new Date()).getMonth() + 1);
+        const monthKey = `${year}_${month}`;
+
+        const payload = {
           state: compact,
           lastUpdated: Date.now()
-        }, { merge: true });
+        };
+        payload[`months.${monthKey}`] = compact;
+
+        await db.collection('rooms').doc(cleanCode).update(payload).catch(async () => {
+          // Fallback if doc or nested months field is created for first time
+          await db.collection('rooms').doc(cleanCode).set({
+            state: compact,
+            months: { [monthKey]: compact },
+            lastUpdated: Date.now()
+          }, { merge: true });
+        });
       } catch (err) {
         console.warn('[FirebaseSync] saveLedgerState error:', err);
       }

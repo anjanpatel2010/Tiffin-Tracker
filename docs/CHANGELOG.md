@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.8.5] — 2026-11-24
+
+### Fixed
+- **New User Auto-Disappearance & Member Retention**: Fixed Firestore transaction race conditions and destructive session resets that caused newly joined roommates to disappear. Room membership updates now use atomic document transactions and set union merging.
+- **Missing Entries & Multi-Month Persistence**: Re-architected Firestore storage to isolate months (`months[YYYY_M]`) so switching months never overwrites current ledger records. Restored missing meal slots across all roommates and days.
+- **Flexible Meal Logging & Grace Period**: Fixed overzealous same-day meal locks. Members can freely log and edit meals for today and past 3 days in the current month without administrative friction; admin remains unrestricted.
+- **Restored CSV Spreadsheet Export**: Restored Excel-compatible CSV export button in both Document Exports and Settings modals.
+- **NTFY Catch-up Looping**: Guarded background catch-up replays from executing stale `member_kicked` messages.
+
+---
+
 ## [5.8.2] — 2026-11-14
 
 ### Fixed

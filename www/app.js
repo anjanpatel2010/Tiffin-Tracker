@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.8.4';
+  const APP_VERSION = '5.8.5';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -636,7 +636,11 @@
   function getCompactSyncState(state) {
     if (!state || !state.days) return null;
     const compactDays = {};
-    for (let d = 1; d <= CONFIG.daysInMonth; d++) {
+    const yr = state.year || currentYear;
+    const mo = state.month || currentMonth;
+    const daysInM = getDaysInMonth(yr, mo);
+
+    for (let d = 1; d <= daysInM; d++) {
       const day = state.days[d];
       if (!day) continue;
       const hasSabzi = !!(day.sabzi || (day.sabziUpdatedAt && day.sabziUpdatedAt > 0));
@@ -658,13 +662,15 @@
 
     return {
       version: state.version || 4,
-      year: state.year || currentYear,
-      month: state.month || currentMonth,
+      year: yr,
+      month: mo,
       lastModified: state.lastModified || new Date().toISOString(),
       rates: state.rates || CONFIG.defaultRates,
       provider: state.provider || CONFIG.defaultProvider,
-      days: compactDays,    };
+      days: compactDays
+    };
   }
+  window.getCompactSyncState = getCompactSyncState;
 
   // ==========================================================================
   // REAL-TIME MULTI-USER CLOUD SYNC ENGINE
@@ -1109,7 +1115,7 @@
           }
 
           // Reply with authoritative room metadata & ledger state so new member receives full history
-          if (RoomManager.session?.status === 'approved' || RoomManager.isAdmin()) {
+          if (!isCatchUp && (RoomManager.session?.status === 'approved' || RoomManager.isAdmin())) {
             SyncEngine.broadcast({
               type: 'room_meta_sync',
               roomCode: targetRoom || myRoom,
@@ -1147,7 +1153,8 @@
             renderAll();
           }
         }
-} else if (action.type === 'member_kicked') {
+      } else if (action.type === 'member_kicked') {
+        if (isCatchUp) return; // Do not replay old 12h kicked members during catch-up
         const targetRoom = (action.roomCode || '').toString().toUpperCase().trim();
         const myRoom = (RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
         if (targetRoom === myRoom) {
@@ -1460,7 +1467,7 @@
 
       if (!matchedMember) {
         if (isAdmin) {
-          // Admin session active; retain local admin representation without ping-pong writes
+          // Admin session active; retain local admin representation
           console.log('[RoomManager] Admin session active; preserving admin representation.');
           matchedMember = {
             id: myId || ('m_' + (myName ? RoomManager.sanitizeId(myName) : 'admin')),
@@ -1472,15 +1479,20 @@
           };
           cloudMembers.unshift(matchedMember);
         } else {
-          // Regular member was removed from flat!
-          console.warn('[RoomManager] Current user is no longer in cloud members! User was removed.');
-          alert(`You have been removed from flat #${cloudRoom.code} by the admin.`);
-          RoomManager.hardResetLocalSession();
-          RoomManager.showGateModal('join');
-          RoomManager.updateHeaderRoomUI();
-          RoomManager.renderSettingsMembersTab();
-          renderAll();
-          return;
+          // Member is approved locally and not in kickedList - re-assert in cloud members so they never disappear
+          console.log('[RoomManager] Re-asserting local active member in cloud snapshot:', myName);
+          matchedMember = {
+            id: myId || ('m_' + RoomManager.sanitizeId(myName || 'member') + '_' + Date.now().toString().slice(-4)),
+            name: RoomManager.session.name || 'Flatmate',
+            phone: RoomManager.session.phone || '',
+            role: 'member',
+            avatarColor: '#00d4ff',
+            joinedAt: new Date().toISOString()
+          };
+          cloudMembers.push(matchedMember);
+          if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
+            FirebaseSync.saveRoomData(cloudRoom.code, { ...cloudRoom, members: cloudMembers });
+          }
         }
       }
 
@@ -1529,17 +1541,35 @@
         RoomManager.showNewAdminPinModal(cloudRoom.name || 'My Flat');
       }
 
-      // Ensure meal slots exist in appState for all roommates
+      // Ensure meal slots exist in appState for all roommates across all days
       if (appState && appState.days) {
         for (let d = 1; d <= (CONFIG.daysInMonth || 31); d++) {
-          if (appState.days[d]) {
-            if (!appState.days[d].meals) appState.days[d].meals = {};
-            ROOMMATES.forEach(r => {
-              if (!appState.days[d].meals[r.id]) {
-                appState.days[d].meals[r.id] = { lunch: '', dinner: '' };
-              }
-            });
+          if (!appState.days[d]) {
+            const dateObj = new Date(currentYear, currentMonth - 1, d);
+            const dayOfWeek = DAY_NAMES[dateObj.getDay()];
+            appState.days[d] = {
+              day: d,
+              dayOfWeek: dayOfWeek,
+              dateFormatted: `${dayOfWeek}, Day ${d}`,
+              dateShort: `Day ${d}`,
+              sabzi: '',
+              sabziUpdatedAt: 0,
+              meals: {},
+              mealTimestamps: {},
+              amul: {},
+              amulTimestamps: {}
+            };
           }
+          if (!appState.days[d].meals) appState.days[d].meals = {};
+          if (!appState.days[d].amul) appState.days[d].amul = {};
+          ROOMMATES.forEach(r => {
+            if (!appState.days[d].meals[r.id]) {
+              appState.days[d].meals[r.id] = { lunch: '', dinner: '' };
+            }
+            if (appState.days[d].amul[r.id] === undefined) {
+              appState.days[d].amul[r.id] = 0;
+            }
+          });
         }
       }
 
@@ -1569,25 +1599,64 @@
 
     // 2. Synchronize Ledger State (Days, Meals, Sabzi, Amul)
     let modified = false;
-    if (cloudData.state && cloudData.state.days && appState && appState.days) {
-      const incomingDays = cloudData.state.days;
+    let targetState = null;
+    const currentMonthKey = `${currentYear}_${currentMonth}`;
+
+    // Prefer month-scoped ledger snapshot if available
+    if (cloudData.months && cloudData.months[currentMonthKey]) {
+      targetState = cloudData.months[currentMonthKey];
+    } else if (cloudData.state) {
+      if (!cloudData.state.year || !cloudData.state.month ||
+          (cloudData.state.year === currentYear && cloudData.state.month === currentMonth)) {
+        targetState = cloudData.state;
+      } else {
+        // State is for another month; store safely without corrupting active view
+        try {
+          saveStateForMonth(cloudData.state.year, cloudData.state.month, cloudData.state);
+        } catch (e) {}
+      }
+    }
+
+    if (targetState && targetState.days && appState && appState.days) {
+      const incomingDays = targetState.days;
       for (let d = 1; d <= (CONFIG.daysInMonth || 31); d++) {
-        if (incomingDays[d] && appState.days[d]) {
+        if (incomingDays[d]) {
+          if (!appState.days[d]) {
+            const dateObj = new Date(currentYear, currentMonth - 1, d);
+            const dayOfWeek = DAY_NAMES[dateObj.getDay()];
+            appState.days[d] = {
+              day: d,
+              dayOfWeek: dayOfWeek,
+              dateFormatted: `${dayOfWeek}, Day ${d}`,
+              dateShort: `Day ${d}`,
+              sabzi: '',
+              sabziUpdatedAt: 0,
+              meals: {},
+              mealTimestamps: {},
+              amul: {},
+              amulTimestamps: {}
+            };
+          }
           const incD = incomingDays[d];
           const locD = appState.days[d];
 
-          // Merge sabzi with timestamp
+          // Merge sabzi with timestamp & baseline fallback
           const incSabziT = Number(incD.sabziUpdatedAt || 0);
           const locSabziT = Number(locD.sabziUpdatedAt || 0);
           if (incSabziT > locSabziT) {
             locD.sabzi = (incD.sabzi || '').trim();
             locD.sabziUpdatedAt = incSabziT;
             modified = true;
+          } else if (locSabziT === 0 && !locD.sabzi && incD.sabzi) {
+            locD.sabzi = (incD.sabzi || '').trim();
+            locD.sabziUpdatedAt = incSabziT || Date.now();
+            modified = true;
           }
 
-          // Merge meals with timestamp
+          // Merge meals with timestamp & baseline fallback
           const incMeals = incD.meals || {};
           const incTimes = incD.mealTimestamps || {};
+          if (!locD.meals) locD.meals = {};
           if (!locD.mealTimestamps) locD.mealTimestamps = {};
 
           Object.keys(incMeals).forEach(pId => {
@@ -1600,11 +1669,15 @@
                 locD.meals[pId][slot] = incMeals[pId][slot] || '';
                 locD.mealTimestamps[key] = incT;
                 modified = true;
+              } else if (locT === 0 && !locD.meals[pId][slot] && incMeals[pId][slot]) {
+                locD.meals[pId][slot] = incMeals[pId][slot];
+                if (incT) locD.mealTimestamps[key] = incT;
+                modified = true;
               }
             });
           });
 
-          // Merge Amul milk
+          // Merge Amul milk with timestamp & baseline fallback
           if (incD.amul) {
             if (!locD.amul) locD.amul = {};
             if (!locD.amulTimestamps) locD.amulTimestamps = {};
@@ -1612,7 +1685,11 @@
             Object.keys(incD.amul).forEach(pId => {
               const incT = Number(incAmulTimes[pId] || 0);
               const locT = Number(locD.amulTimestamps[pId] || 0);
-              if (incT >= locT) {
+              if (incT > locT) {
+                locD.amul[pId] = incD.amul[pId];
+                locD.amulTimestamps[pId] = incT;
+                modified = true;
+              } else if (locT === 0 && !locD.amul[pId] && incD.amul[pId]) {
                 locD.amul[pId] = incD.amul[pId];
                 if (incT) locD.amulTimestamps[pId] = incT;
                 modified = true;
@@ -3711,9 +3788,22 @@
   }
 
   function isDayLocked(year, month, day) {
+    // 1. Flat Admin is never locked
+    if (typeof RoomManager !== 'undefined' && RoomManager.isAdmin()) return false;
+    // 2. Today is always editable
     if (isSameDay(year, month, day)) return false;
+    // 3. Unlocked for this session
     const key = `${year}-${month}-${day}`;
     if (adminUnlockedDays.has(key)) return false;
+    // 4. If no Admin PIN is configured for this flat, do not lock
+    const currentPin = (CONFIG.adminPassword || RoomManager?.activeRoom?.adminPin || '').trim();
+    if (!currentPin) return false;
+    // 5. Grace window: Allow editing within current month's past 3 days freely
+    const today = new Date();
+    if (today.getFullYear() === year && (today.getMonth() + 1) === month) {
+      const diff = today.getDate() - day;
+      if (diff >= 0 && diff <= 3) return false;
+    }
     return true;
   }
 
@@ -3834,15 +3924,13 @@
 
     findMatchingMember(members, candidate) {
       if (!Array.isArray(members) || !candidate) return null;
+      const cId = (candidate.id || '').trim().toLowerCase();
       const cPhone = this.normalizePhone(candidate.phone);
       const cName = (candidate.name || '').trim().toLowerCase();
-      const cFirst = getFirstName(cName).toLowerCase();
-      const cId = (candidate.id || '').toLowerCase();
-      const cSanitized = this.sanitizeId(cName).toLowerCase();
 
       return members.find(m => {
         if (!m) return false;
-        const mId = (m.id || '').toLowerCase();
+        const mId = (m.id || '').trim().toLowerCase();
         if (cId && mId && cId === mId) return true;
 
         const mPhone = this.normalizePhone(m.phone);
@@ -3850,12 +3938,6 @@
 
         const mName = (m.name || '').trim().toLowerCase();
         if (cName && mName && cName === mName) return true;
-
-        const mFirst = getFirstName(mName).toLowerCase();
-        if (cFirst && mFirst && cFirst.length >= 3 && cFirst === mFirst) return true;
-
-        const mSanitized = this.sanitizeId(mName).toLowerCase();
-        if (cSanitized && mSanitized && cSanitized === mSanitized) return true;
 
         return false;
       }) || null;
@@ -3942,10 +4024,11 @@
       // 2. Ensure the actual admin is marked role === 'admin'
       if (adminName && adminName.toLowerCase() !== 'admin') {
         let foundAdmin = false;
+        const adminPhone = this.normalizePhone(this.session?.phone || roomData.adminPhone);
         roomData.members.forEach(m => {
-          const mFirst = getFirstName(m.name).toLowerCase();
           const mFull = (m.name || '').trim().toLowerCase();
-          if (mFull === adminName.toLowerCase() || mFirst === cleanAdminFirst || m.id === this.sanitizeId(adminName)) {
+          const mPhone = this.normalizePhone(m.phone);
+          if (mFull === adminName.toLowerCase() || (adminPhone && mPhone && adminPhone.length >= 10 && mPhone === adminPhone)) {
             m.role = 'admin';
             foundAdmin = true;
           }
@@ -5729,6 +5812,7 @@
     const copyShareUrlBtn = document.getElementById('copyShareUrlBtn');
     const copyWaSummaryBtn = document.getElementById('copyWaSummaryBtn');
     const sendDirectWaBtn = document.getElementById('sendDirectWaBtn');
+    const exportCsvBtn = document.getElementById('exportCsvBtn');
     const printInvoiceBtn = document.getElementById('printInvoiceBtn');
     const backupJsonBtn = document.getElementById('backupJsonBtn');
     const importInput = document.getElementById('importJsonInput');
@@ -5741,6 +5825,12 @@
 
     if (headerShareBtn) headerShareBtn.addEventListener('click', copyShare);
     if (copyShareUrlBtn) copyShareUrlBtn.addEventListener('click', copyShare);
+
+    if (exportCsvBtn) {
+      exportCsvBtn.addEventListener('click', () => {
+        downloadCsvExport();
+      });
+    }
 
     if (copyWaSummaryBtn) {
       copyWaSummaryBtn.addEventListener('click', () => {
@@ -5775,6 +5865,13 @@
     if (settingsPrintInv) {
       settingsPrintInv.addEventListener('click', () => {
         openInvoiceModal();
+      });
+    }
+
+    const settingsExportCsv = document.getElementById('settingsExportCsvBtn');
+    if (settingsExportCsv) {
+      settingsExportCsv.addEventListener('click', () => {
+        downloadCsvExport();
       });
     }
 

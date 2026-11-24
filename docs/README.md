@@ -5,7 +5,7 @@
 
   <p>
     <a href="https://github.com/anjanpatel2010/Tiffin-Tracker"><img src="https://img.shields.io/badge/Platform-Android-green.svg?style=for-the-badge&logo=android" alt="Android" /></a>
-    <a href="https://github.com/anjanpatel2010/Tiffin-Tracker"><img src="https://img.shields.io/badge/Release-v5.8.4-00d4ff.svg?style=for-the-badge" alt="Version" /></a>
+    <a href="https://github.com/anjanpatel2010/Tiffin-Tracker"><img src="https://img.shields.io/badge/Release-v5.8.5-00d4ff.svg?style=for-the-badge" alt="Version" /></a>
     <a href="https://github.com/anjanpatel2010/Tiffin-Tracker"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License" /></a>
     <a href="https://github.com/anjanpatel2010/Tiffin-Tracker"><img src="https://img.shields.io/badge/Realtime-Cloud_Firestore-orange.svg?style=for-the-badge&logo=firebase" alt="Firebase" /></a>
   </p>
@@ -118,7 +118,7 @@ Paper registers get lost, manual spreadsheets on phones are clumsy, and generic 
 
 The latest standalone Android APK is hosted directly in this repository:
 
-👉 **[Download Latest APK (Tiffin Tracker)](https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.4.apk)**
+👉 **[Download Latest APK (Tiffin Tracker)](https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.5.apk)**
 
 ### Installation Instructions:
 1. Download the `.apk` file directly on your Android phone.

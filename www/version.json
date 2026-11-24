@@ -1,20 +1,31 @@
 {
-  "version": "5.8.4",
-  "versionCode": 50804,
+  "version": "5.8.5",
+  "versionCode": 50805,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
-  "releaseDate": "2026-11-21",
-  "message": "Tiffin Tracker v5.8.4 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.8.4.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.4.apk",
+  "releaseDate": "2026-11-24",
+  "message": "Tiffin Tracker v5.8.5 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.8.5.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.5.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker",
   "releaseNotes": [
-    "Same-Day Meal Locking: Roommates can only modify their meal portions on the current day; past locked dates require Admin Password/PIN to unlock",
-    "Native Repository Linking: Replaced all legacy web app and release URLs with direct GitHub repository links across invite cards and modals",
-    "Streamlined Interface: Removed deprecated CSV/Spreadsheet export controls for a clutter-free, distraction-free workflow",
-    "Updated Documentation: Overhauled repository README with Sovereign Dabba branding, architecture guide, and full screenshot gallery"
+    "Fixed New User Retention: Prevented race conditions and membership drops when roommates join room from multiple phones",
+    "Restored Ledger Persistence & Matrix Sync: Month-scoped Firestore storage with automatic meal slot initialization across all days",
+    "Restored CSV Spreadsheet Export: Download full Excel/Google Sheets compatible monthly summaries directly from exports and settings",
+    "Flexible Meal Logging: Fixed rigid lockouts; roommates can freely log and update meals with a smooth 3-day grace period"
   ],
   "history": [
+    {
+      "version": "5.8.4",
+      "versionCode": 50804,
+      "releaseDate": "2026-11-21",
+      "releaseNotes": [
+        "Same-Day Meal Locking: Roommates can only modify their meal portions on the current day; past locked dates require Admin Password/PIN to unlock",
+        "Native Repository Linking: Replaced all legacy web app and release URLs with direct GitHub repository links across invite cards and modals",
+        "Streamlined Interface: Removed deprecated CSV/Spreadsheet export controls for a clutter-free, distraction-free workflow",
+        "Updated Documentation: Overhauled repository README with Sovereign Dabba branding, architecture guide, and full screenshot gallery"
+      ]
+    },
     {
       "version": "5.8.3",
       "versionCode": 50803,
@@ -112,17 +123,6 @@
         "Smart Flatmate Alerts: Real-time status bar notifications when meals, dishes, expenses, or deposits are logged",
         "Dedicated Notification Channel: High importance 'tiffin_notifications' with heads-up display, sound, and vibration",
         "Automatic Token Lifecycle: Robust device token binding and room sync in Cloud Firestore with sender exclusion"
-      ]
-    },
-    {
-      "version": "5.7.4",
-      "versionCode": 50704,
-      "releaseDate": "2026-11-08",
-      "releaseNotes": [
-        "Admin Succession & PIN Generation: Automatic promotion of senior flatmate when admin leaves with popup to set new Admin PIN",
-        "Manual Ownership Transfer: Flat Admins can transfer full authority to any flatmate via '👑 Make Admin'",
-        "Rock-solid Room Lifecycle: Cloud Firestore authoritative source of truth with zero ghost resurrection",
-        "Instant Kick & Logout: Kicked members are immediately purged, local session reset, and returned to gate"
       ]
     }
   ]

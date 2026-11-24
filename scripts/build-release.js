@@ -126,10 +126,10 @@ const updateVersionManifest = (filePath) => {
     data.githubReleaseUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker';
     data.message = `Tiffin Tracker v${targetVersion} is now available!`;
     data.releaseNotes = [
-      `Same-Day Meal Locking: Roommates can only modify their meal portions on the current day; past locked dates require Admin Password/PIN to unlock`,
-      `Native Repository Linking: Replaced all legacy web app and release URLs with direct GitHub repository links across invite cards and modals`,
-      `Streamlined Interface: Removed deprecated CSV/Spreadsheet export controls for a clutter-free, distraction-free workflow`,
-      `Updated Documentation: Overhauled repository README with Sovereign Dabba branding, architecture guide, and full screenshot gallery`
+      `Fixed New User Retention: Prevented race conditions and membership drops when roommates join room from multiple phones`,
+      `Restored Ledger Persistence & Matrix Sync: Month-scoped Firestore storage with automatic meal slot initialization across all days`,
+      `Restored CSV Spreadsheet Export: Download full Excel/Google Sheets compatible monthly summaries directly from exports and settings`,
+      `Flexible Meal Logging: Fixed rigid lockouts; roommates can freely log and update meals with a smooth 3-day grace period`
     ];
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');
