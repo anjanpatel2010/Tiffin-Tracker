@@ -1,12 +1,12 @@
 {
-  "version": "5.8.7",
-  "versionCode": 50807,
+  "version": "5.8.8",
+  "versionCode": 50808,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-26",
-  "message": "Tiffin Tracker v5.8.7 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.8.7.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.7.apk",
+  "message": "Tiffin Tracker v5.8.8 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.8.8.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.8.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker",
   "releaseNotes": [
     "Admin Visibility Fix: Anchored Admin credentials to flat adminPhone/adminName, ensuring new flatmates appear immediately in Admin view",
@@ -15,6 +15,17 @@
     "Ledger Recovery: Restored missing meals and menu notes for Room 1249"
   ],
   "history": [
+    {
+      "version": "5.8.7",
+      "versionCode": 50807,
+      "releaseDate": "2026-11-26",
+      "releaseNotes": [
+        "Admin Visibility Fix: Anchored Admin credentials to flat adminPhone/adminName, ensuring new flatmates appear immediately in Admin view",
+        "Data Wipeout Protection: Atomic transactional deep merge in Firestore sync prevents newly joined users or partial syncs from erasing ledger history",
+        "Role-Based Day Locking: Admin can edit any date without password; regular members edit current day freely, other dates require Admin PIN",
+        "Ledger Recovery: Restored missing meals and menu notes for Room 1249"
+      ]
+    },
     {
       "version": "5.8.6",
       "versionCode": 50806,
@@ -112,17 +123,6 @@
         "Kick Fix: Permanent and immediate member removal with explicit kickedMembers registry preventing ghost resurrection",
         "Admin Immunity: Protects flat admin from accidental disconnection during peer synchronization or multi-device joins",
         "Firestore Queue Sync: Clean background notification queuing without client-side credential exposure"
-      ]
-    },
-    {
-      "version": "5.7.7",
-      "versionCode": 50707,
-      "releaseDate": "2026-11-09",
-      "releaseNotes": [
-        "Admin Protection Fix: Prevents flat admin from ever being disconnected or removed when peers join",
-        "Autonomous FCM v1 Push: Direct Google Play Services notification dispatch working even when app is killed/closed",
-        "Safe Peer Synchronization: Automatically merges flat members without destructive ghost-kicks",
-        "Multi-Device Test Button: Send instant test push notifications directly from Settings to check all phones"
       ]
     }
   ]

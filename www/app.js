@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.8.7';
+  const APP_VERSION = '5.8.8';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -1429,12 +1429,13 @@
     const cloudRoom = cloudData.roomData;
     const cloudMembers = Array.isArray(cloudRoom.members) ? cloudRoom.members : [];
 
+    const activeCode = (RoomManager.session?.roomCode || RoomManager.activeRoom?.code || SyncEngine.roomCode || localStorage.getItem('tiffin_sync_room') || '').toString().toUpperCase().trim();
+    if (activeCode && String(cloudRoom.code).toUpperCase() !== activeCode) {
+      return; // Snapshot is from another room
+    }
+
     // Active logged-in member or admin
     if (RoomManager.session && RoomManager.session.roomCode) {
-      if (String(cloudRoom.code).toUpperCase() !== String(RoomManager.session.roomCode).toUpperCase()) {
-        return; // Snapshot is from another room
-      }
-
       const isAdmin = RoomManager.isAdmin();
       const myId = RoomManager.session.memberId;
       const myName = (RoomManager.session.name || '').trim().toLowerCase();
@@ -1522,6 +1523,7 @@
         members: sanitizedMembers,
         kickedMembers: kickedList
       };
+      RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
       if (isAdmin || RoomManager.session.role === 'admin') {
         RoomManager.session.role = 'admin';
         matchedMember.role = 'admin';
@@ -1532,10 +1534,11 @@
       RoomManager.session.name = matchedMember.name;
       RoomManager.saveActiveRoom();
       try {
+        localStorage.setItem(`tiffin_room_${cloudRoom.code}`, JSON.stringify(RoomManager.activeRoom));
         localStorage.setItem('tiffin_session', JSON.stringify(RoomManager.session));
         localStorage.setItem('tiffin_user_session', JSON.stringify(RoomManager.session));
       } catch (e) {}
-      ROOMMATES = sanitizedMembers;
+      ROOMMATES = RoomManager.activeRoom.members;
 
       // Invalidate render signatures so new/updated members immediately display in all views
       const roommatesGrid = document.getElementById('roommatesLoggerGrid');
@@ -1589,6 +1592,7 @@
       RoomManager.updateHeaderRoomUI();
       RoomManager.renderSettingsMembersTab();
       populateHeaderIdentityDropdown();
+      setupSheetFilterControls();
       if (typeof updateIdentityUI === 'function') {
         updateIdentityUI(RoomManager.session?.name || '');
       }
@@ -1608,6 +1612,31 @@
           showToast(`${lm.name} left the flat 👋`, 'info', 3500);
         });
       }
+    } else {
+      // Session not yet restored; still keep authoritative room data ready
+      const kickedList = Array.isArray(cloudRoom.kickedMembers) ? cloudRoom.kickedMembers : [];
+      const sanitizedMembers = cloudMembers.filter(m => {
+        if (!m) return false;
+        if (m.role === 'admin') return true;
+        return !kickedList.some(km =>
+          (km.id && m.id && km.id === m.id) ||
+          (km.phone && m.phone && km.phone.slice(-10) === m.phone.slice(-10)) ||
+          (km.name && m.name && km.name.trim().toLowerCase() === m.name.trim().toLowerCase())
+        );
+      });
+      RoomManager.activeRoom = {
+        ...cloudRoom,
+        members: sanitizedMembers,
+        kickedMembers: kickedList
+      };
+      RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
+      RoomManager.saveActiveRoom();
+      try {
+        localStorage.setItem(`tiffin_room_${cloudRoom.code}`, JSON.stringify(RoomManager.activeRoom));
+      } catch (e) {}
+      ROOMMATES = RoomManager.activeRoom.members;
+      setupSheetFilterControls();
+      renderAll();
     }
 
     // 2. Synchronize Ledger State (Days, Meals, Sabzi, Amul)
@@ -2188,7 +2217,6 @@
             value: val,
             timestamp: timestamp
           });
-          renderDailyLogger();
         };
 
         if (isDayLocked(currentYear, currentMonth, selectedDay)) {
@@ -2233,58 +2261,62 @@
     }
     lastMasterSheetSignature = fullSig;
 
-    // Render Table Header dynamically
+    // Render Table Header dynamically (only when header structure changes)
     if (thead) {
-      if (isAll) {
-        if (ROOMMATES.length === 0) {
-          thead.innerHTML = `
-            <tr class="header-group-row">
-              <th class="th-sticky th-date"><div class="td-sticky-cell-content">Date</div></th>
-              <th class="th-sticky th-menu"><div class="td-sticky-cell-content">Sabzi / Note</div></th>
-              <th class="th-day-total">Day Total</th>
-            </tr>
-            <tr class="header-sub-row">
-              <th class="th-sticky th-date-sub"><div class="td-sticky-cell-content">${CONFIG.daysInMonth} Days</div></th>
-              <th class="th-sticky th-menu-sub"><div class="td-sticky-cell-content">Dish</div></th>
-              <th>Amount</th>
-            </tr>
-          `;
-        } else {
-          const personHeaders = ROOMMATES.map(r => `
-            <th colspan="2" class="th-person" style="background:${r.avatarColor || '#00d26a'}; color:#ffffff">${escapeHtml(getFirstName(r.name))}${r.role === 'admin' ? ' 👑' : ''}</th>
-          `).join('');
-          const slotHeaders = ROOMMATES.map(() => `<th>Lunch</th><th>Dinner</th>`).join('');
+      const headerSig = `${activeSheetFilter}_${ROOMMATES.map(r => r.id + r.name + r.role + (r.avatarColor || '')).join('|')}_${CONFIG.daysInMonth}`;
+      if (thead.dataset.lastHeaderSig !== headerSig) {
+        thead.dataset.lastHeaderSig = headerSig;
+        if (isAll) {
+          if (ROOMMATES.length === 0) {
+            thead.innerHTML = `
+              <tr class="header-group-row">
+                <th class="th-sticky th-date"><div class="td-sticky-cell-content">Date</div></th>
+                <th class="th-sticky th-menu"><div class="td-sticky-cell-content">Sabzi / Note</div></th>
+                <th class="th-day-total">Day Total</th>
+              </tr>
+              <tr class="header-sub-row">
+                <th class="th-sticky th-date-sub"><div class="td-sticky-cell-content">${CONFIG.daysInMonth} Days</div></th>
+                <th class="th-sticky th-menu-sub"><div class="td-sticky-cell-content">Dish</div></th>
+                <th>Amount</th>
+              </tr>
+            `;
+          } else {
+            const personHeaders = ROOMMATES.map(r => `
+              <th colspan="2" class="th-person" style="background:${r.avatarColor || '#00d26a'}; color:#ffffff">${escapeHtml(getFirstName(r.name))}${r.role === 'admin' ? ' 👑' : ''}</th>
+            `).join('');
+            const slotHeaders = ROOMMATES.map(() => `<th>Lunch</th><th>Dinner</th>`).join('');
 
+            thead.innerHTML = `
+              <tr class="header-group-row">
+                <th class="th-sticky th-date"><div class="td-sticky-cell-content">Date</div></th>
+                <th class="th-sticky th-menu"><div class="td-sticky-cell-content">Sabzi / Note</div></th>
+                ${personHeaders}
+                <th class="th-day-total">Day Total</th>
+              </tr>
+              <tr class="header-sub-row">
+                <th class="th-sticky th-date-sub"><div class="td-sticky-cell-content">${CONFIG.daysInMonth} Days</div></th>
+                <th class="th-sticky th-menu-sub"><div class="td-sticky-cell-content">Dish</div></th>
+                ${slotHeaders}
+                <th>Amount</th>
+              </tr>
+            `;
+          }
+        } else if (activePerson) {
           thead.innerHTML = `
             <tr class="header-group-row">
               <th class="th-sticky th-date"><div class="td-sticky-cell-content">Date</div></th>
               <th class="th-sticky th-menu"><div class="td-sticky-cell-content">Sabzi / Note</div></th>
-              ${personHeaders}
+              <th colspan="2" class="th-person" style="background:${activePerson.avatarColor || '#00d26a'}; color:#ffffff">${escapeHtml(getFirstName(activePerson.name))}${activePerson.role === 'admin' ? ' 👑' : ''}</th>
               <th class="th-day-total">Day Total</th>
             </tr>
             <tr class="header-sub-row">
               <th class="th-sticky th-date-sub"><div class="td-sticky-cell-content">${CONFIG.daysInMonth} Days</div></th>
               <th class="th-sticky th-menu-sub"><div class="td-sticky-cell-content">Dish</div></th>
-              ${slotHeaders}
+              <th>Lunch</th><th>Dinner</th>
               <th>Amount</th>
             </tr>
           `;
         }
-      } else if (activePerson) {
-        thead.innerHTML = `
-          <tr class="header-group-row">
-            <th class="th-sticky th-date"><div class="td-sticky-cell-content">Date</div></th>
-            <th class="th-sticky th-menu"><div class="td-sticky-cell-content">Sabzi / Note</div></th>
-            <th colspan="2" class="th-person" style="background:${activePerson.avatarColor || '#00d26a'}; color:#ffffff">${escapeHtml(getFirstName(activePerson.name))}${activePerson.role === 'admin' ? ' 👑' : ''}</th>
-            <th class="th-day-total">Day Total</th>
-          </tr>
-          <tr class="header-sub-row">
-            <th class="th-sticky th-date-sub"><div class="td-sticky-cell-content">${CONFIG.daysInMonth} Days</div></th>
-            <th class="th-sticky th-menu-sub"><div class="td-sticky-cell-content">Dish</div></th>
-            <th>Lunch</th><th>Dinner</th>
-            <th>Amount</th>
-          </tr>
-        `;
       }
     }
 
@@ -2366,8 +2398,80 @@
       }
     }
 
-    // Atomic DOM replacement - Zero blank frame / zero flicker
-    tbody.innerHTML = rowsHtml;
+    // In-place DOM update or atomic replacement for Zero-Flicker
+    const canUpdateInPlace = (
+      !searchTerm &&
+      tbody.dataset.renderedFilter === activeSheetFilter &&
+      tbody.dataset.renderedRoommates === ROOMMATES.map(r => r.id).join(',') &&
+      tbody.children.length === CONFIG.daysInMonth
+    );
+
+    if (canUpdateInPlace) {
+      // In-place DOM update without destroying elements or causing reflow / flicker
+      for (let d = 1; d <= CONFIG.daysInMonth; d++) {
+        const tr = tbody.children[d - 1];
+        const dayData = appState.days[d];
+        if (!tr || !dayData) continue;
+
+        // Sabzi cell (index 1)
+        const menuCell = tr.children[1];
+        if (menuCell) {
+          const currentSabzi = dayData.sabzi || '';
+          if (menuCell.dataset.lastSabzi !== currentSabzi) {
+            menuCell.dataset.lastSabzi = currentSabzi;
+            menuCell.title = currentSabzi ? currentSabzi : 'Click to edit sabzi';
+            const innerContent = menuCell.querySelector('.td-sticky-cell-content');
+            if (innerContent) {
+              innerContent.innerHTML = currentSabzi ? escapeHtml(currentSabzi) : '<span style="opacity:0.35">+ Edit</span>';
+            }
+          }
+        }
+
+        // Helper to update interactive cell
+        const updateCell = (cell, val) => {
+          if (!cell) return;
+          let valClass = 'val-off';
+          let displayVal = '-';
+          if (val === 'Half') { valClass = 'val-half'; displayVal = `H (₹${rates.half})`; }
+          else if (val === 'Full') { valClass = 'val-full'; displayVal = `F (₹${rates.full})`; }
+          else if (val === 'Special') { valClass = 'val-special'; displayVal = `Sp (₹${rates.special})`; }
+
+          const targetClass = `cell-interactive ${valClass}`;
+          if (cell.className !== targetClass) cell.className = targetClass;
+          if (cell.textContent !== displayVal) cell.textContent = displayVal;
+        };
+
+        let colIdx = 2;
+        if (isAll) {
+          ROOMMATES.forEach(r => {
+            const lunchCell = tr.children[colIdx++];
+            const dinnerCell = tr.children[colIdx++];
+            updateCell(lunchCell, dayData.meals?.[r.id]?.lunch || '');
+            updateCell(dinnerCell, dayData.meals?.[r.id]?.dinner || '');
+          });
+        } else if (activePerson) {
+          const lunchCell = tr.children[colIdx++];
+          const dinnerCell = tr.children[colIdx++];
+          updateCell(lunchCell, dayData.meals?.[activePerson.id]?.lunch || '');
+          updateCell(dinnerCell, dayData.meals?.[activePerson.id]?.dinner || '');
+        }
+
+        // Day total cell (last child)
+        const totalCell = tr.children[colIdx];
+        if (totalCell) {
+          const dayTotal = getDayTotalCost(d);
+          const totalText = `₹${dayTotal}`;
+          if (totalCell.textContent.trim() !== totalText) totalCell.textContent = totalText;
+          totalCell.style.color = dayTotal > 0 ? 'var(--emerald)' : 'var(--text-dim)';
+        }
+      }
+    } else {
+      // Re-render rows once, then stamp datasets for subsequent in-place updates
+      tbody.innerHTML = rowsHtml;
+      tbody.dataset.renderedFilter = activeSheetFilter;
+      tbody.dataset.renderedRoommates = ROOMMATES.map(r => r.id).join(',');
+      tbody.dataset.renderedDays = CONFIG.daysInMonth;
+    }
 
     // Attach Event Delegation on tbody ONCE (Never re-bind hundreds of listeners per render)
     if (!tbody.dataset.eventsBound) {
@@ -2409,7 +2513,6 @@
               value: nextVal,
               timestamp: timestamp
             });
-            renderAll();
           };
 
           if (isDayLocked(currentYear, currentMonth, d)) {
@@ -2450,7 +2553,6 @@
                 timestamp: timestamp
               });
               showToast(`Updated dish for ${d} ${MONTH_SHORTS[currentMonth - 1]}`);
-              renderAll();
             }
           };
 
@@ -2471,31 +2573,37 @@
       });
     }
 
-    // Master Sheet Footer Totals
-    if (isAll) {
-      const memberFooters = ROOMMATES.map(r => {
-        const stats = getRoommateMonthlyStats(r.id);
-        return `<td colspan="2">₹${stats.tiffinTotal}</td>`;
-      }).join('');
+    // Master Sheet Footer Totals (cached to avoid redundant layout shifts)
+    if (tfoot) {
+      const footerSig = `${activeSheetFilter}_${grandFlatTotal}_${ROOMMATES.map(r => r.id + getRoommateMonthlyStats(r.id).tiffinTotal).join('|')}`;
+      if (tfoot.dataset.lastFooterSig !== footerSig) {
+        tfoot.dataset.lastFooterSig = footerSig;
+        if (isAll) {
+          const memberFooters = ROOMMATES.map(r => {
+            const stats = getRoommateMonthlyStats(r.id);
+            return `<td colspan="2">₹${stats.tiffinTotal}</td>`;
+          }).join('');
 
-      tfoot.innerHTML = `
-        <tr>
-          <td class="td-sticky-date" style="font-weight:800; color:var(--text-main);"><div class="td-sticky-cell-content">Total</div></td>
-          <td class="td-sticky-menu"><div class="td-sticky-cell-content">—</div></td>
-          ${memberFooters}
-          <td style="font-size:1rem; color:var(--emerald);">₹${grandFlatTotal}</td>
-        </tr>
-      `;
-    } else if (activePerson) {
-      const pStats = getRoommateMonthlyStats(activePerson.id);
-      tfoot.innerHTML = `
-        <tr>
-          <td class="td-sticky-date" style="font-weight:800; color:var(--text-main);"><div class="td-sticky-cell-content">Total</div></td>
-          <td class="td-sticky-menu"><div class="td-sticky-cell-content">—</div></td>
-          <td colspan="2" style="font-size:0.95rem; font-weight:800; color:var(--accent-light);">₹${pStats.tiffinTotal}</td>
-          <td style="font-size:1rem; color:var(--emerald);">₹${grandFlatTotal}</td>
-        </tr>
-      `;
+          tfoot.innerHTML = `
+            <tr>
+              <td class="td-sticky-date" style="font-weight:800; color:var(--text-main);"><div class="td-sticky-cell-content">Total</div></td>
+              <td class="td-sticky-menu"><div class="td-sticky-cell-content">—</div></td>
+              ${memberFooters}
+              <td style="font-size:1rem; color:var(--emerald);">₹${grandFlatTotal}</td>
+            </tr>
+          `;
+        } else if (activePerson) {
+          const pStats = getRoommateMonthlyStats(activePerson.id);
+          tfoot.innerHTML = `
+            <tr>
+              <td class="td-sticky-date" style="font-weight:800; color:var(--text-main);"><div class="td-sticky-cell-content">Total</div></td>
+              <td class="td-sticky-menu"><div class="td-sticky-cell-content">—</div></td>
+              <td colspan="2" style="font-size:0.95rem; font-weight:800; color:var(--accent-light);">₹${pStats.tiffinTotal}</td>
+              <td style="font-size:1rem; color:var(--emerald);">₹${grandFlatTotal}</td>
+            </tr>
+          `;
+        }
+      }
     }
   }
 
@@ -3021,7 +3129,7 @@
     document.querySelectorAll('.view-panel').forEach(panel => {
       panel.classList.toggle('active', panel.id === `view-${target}`);
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo(0, 0);
   }
 
   function handleUrlHash() {
@@ -4297,6 +4405,21 @@
       }
 
       this.updateHeaderRoomUI();
+
+      // Ensure window focus, page visibility, and mobile Cordova/Capacitor resume refresh room members from server
+      const refreshActiveRoom = () => {
+        const code = this.session?.roomCode || this.activeRoom?.code || localStorage.getItem('tiffin_sync_room');
+        if (code && typeof FirebaseSync !== 'undefined' && FirebaseSync.fetchRoomFromServer) {
+          FirebaseSync.fetchRoomFromServer(code).then(snap => {
+            if (snap) handleCloudSyncUpdate(snap);
+          }).catch(e => console.warn('[RoomManager] background refresh error:', e));
+        }
+      };
+      window.addEventListener('focus', refreshActiveRoom);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') refreshActiveRoom();
+      });
+      document.addEventListener('resume', refreshActiveRoom);
     },
 
     loadRoom(roomCode) {
@@ -4342,6 +4465,11 @@
         if (cachedFcm) {
           FirebaseSync.registerFcmToken(cachedFcm);
         }
+        if (FirebaseSync.fetchRoomFromServer) {
+          FirebaseSync.fetchRoomFromServer(codeKey).then(snap => {
+            if (snap) handleCloudSyncUpdate(snap);
+          }).catch(e => console.warn('[RoomManager] fetchRoomFromServer in loadRoom:', e));
+        }
         if (FirebaseSync.latestSnapshot) {
           handleCloudSyncUpdate(FirebaseSync.latestSnapshot);
         }
@@ -4369,6 +4497,7 @@
         ROOMMATES = [adminMember];
         this.saveActiveRoom();
       }
+      setupSheetFilterControls();
 
       // Reload ledger state for this room
       appState = loadStateForMonth(currentYear, currentMonth);
@@ -5193,6 +5322,18 @@
       const adminPinRow = document.querySelector('.admin-pin-row');
       const dangerTab = document.querySelector('.sub-tab[data-subtab="danger"]');
 
+      // Auto-refresh fresh member state from cloud in background if not refreshed in last 8s
+      const nowTs = Date.now();
+      if (!this._lastCloudMembersFetch || (nowTs - this._lastCloudMembersFetch) > 8000) {
+        this._lastCloudMembersFetch = nowTs;
+        const code = this.session?.roomCode || this.activeRoom?.code;
+        if (code && typeof FirebaseSync !== 'undefined' && FirebaseSync.fetchRoomFromServer) {
+          FirebaseSync.fetchRoomFromServer(code).then(snap => {
+            if (snap) handleCloudSyncUpdate(snap);
+          }).catch(e => {});
+        }
+      }
+
       const isAdmin = this.isAdmin();
 
       // Flat Admin authorities only
@@ -5919,6 +6060,12 @@
     if (statusBtn && modal) {
       statusBtn.addEventListener('click', () => {
         triggerHaptic();
+        const code = RoomManager.session?.roomCode || RoomManager.activeRoom?.code || SyncEngine.roomCode;
+        if (code && typeof FirebaseSync !== 'undefined' && FirebaseSync.fetchRoomFromServer) {
+          FirebaseSync.fetchRoomFromServer(code).then(snap => {
+            if (snap) handleCloudSyncUpdate(snap);
+          }).catch(e => {});
+        }
         SyncEngine.updateStatusUI(SyncEngine.status);
         modal.classList.add('active');
       });
@@ -5945,6 +6092,15 @@
     if (forceSyncBtn) {
       forceSyncBtn.addEventListener('click', () => {
         triggerHaptic();
+        const code = RoomManager.session?.roomCode || RoomManager.activeRoom?.code || SyncEngine.roomCode;
+        if (code && typeof FirebaseSync !== 'undefined' && FirebaseSync.fetchRoomFromServer) {
+          FirebaseSync.fetchRoomFromServer(code).then(snap => {
+            if (snap) {
+              handleCloudSyncUpdate(snap);
+              showToast('Synced latest flat data from cloud! ☁️', 'success');
+            }
+          }).catch(e => {});
+        }
         SyncEngine.broadcastFullState('Manual broadcast');
       });
     }

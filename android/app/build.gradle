@@ -8,8 +8,8 @@ android {
         applicationId "com.tiffin.tracker"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 50807
-        versionName "5.8.7"
+        versionCode 50808
+        versionName "5.8.8"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

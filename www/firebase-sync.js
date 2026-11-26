@@ -109,11 +109,19 @@
       if (!this.isAvailable || !db) return;
       const cleanCode = this.getCleanRoom(roomCode);
       if (!cleanCode) return;
-      if (activeUnsubscribe && currentRoomCode === cleanCode) return;
+
+      // If already subscribed, still force a fresh server fetch to guarantee zero stale cache
+      if (activeUnsubscribe && currentRoomCode === cleanCode) {
+        this.fetchRoomFromServer(cleanCode);
+        return;
+      }
 
       this.unsubscribeRoom();
       currentRoomCode = cleanCode;
       console.log(`[FirebaseSync] Subscribing to real-time room: #${cleanCode}`);
+
+      // Immediately fetch from server in parallel so we never wait on IndexedDB or offline cache
+      this.fetchRoomFromServer(cleanCode);
 
       try {
         const roomRef = db.collection('rooms').doc(cleanCode);
@@ -131,10 +139,81 @@
           this.notifySubscribers(data);
         }, (err) => {
           console.warn('[FirebaseSync] Snapshot listener error:', err);
+          // If onSnapshot encounters issues, fall back to direct HTTPS REST fetch
+          this.fetchRoomFromServer(cleanCode);
         });
       } catch (err) {
         console.warn('[FirebaseSync] Subscription failed:', err);
+        this.fetchRoomFromServer(cleanCode);
       }
+    },
+
+    /**
+     * Unpack Firestore REST API structured values into clean JavaScript objects
+     */
+    unpackFirestoreValue(val) {
+      if (!val || typeof val !== 'object') return val;
+      if ('stringValue' in val) return val.stringValue;
+      if ('booleanValue' in val) return val.booleanValue;
+      if ('integerValue' in val) return parseInt(val.integerValue, 10);
+      if ('doubleValue' in val) return parseFloat(val.doubleValue);
+      if ('timestampValue' in val) return val.timestampValue;
+      if ('nullValue' in val) return null;
+      if ('mapValue' in val) return this.unpackFirestoreFields(val.mapValue.fields || {});
+      if ('arrayValue' in val) return (val.arrayValue.values || []).map(v => this.unpackFirestoreValue(v));
+      return val;
+    },
+
+    unpackFirestoreFields(fields) {
+      if (!fields || typeof fields !== 'object') return {};
+      const res = {};
+      for (const k of Object.keys(fields)) {
+        res[k] = this.unpackFirestoreValue(fields[k]);
+      }
+      return res;
+    },
+
+    /**
+     * Forcefully fetch latest room document directly from Firestore server or REST API
+     * (bypasses stale offline IndexedDB snapshots)
+     */
+    async fetchRoomFromServer(roomCode) {
+      const cleanCode = this.getCleanRoom(roomCode);
+      if (!cleanCode) return null;
+
+      // 1. Try Firestore SDK directly from server
+      if (this.isAvailable && db) {
+        try {
+          const doc = await db.collection('rooms').doc(cleanCode).get({ source: 'server' });
+          if (doc.exists) {
+            const data = doc.data() || {};
+            this.latestSnapshot = data;
+            this.notifySubscribers(data);
+            return data;
+          }
+        } catch (sdkErr) {
+          console.warn('[FirebaseSync] Direct SDK server fetch failed, trying HTTPS REST fallback:', sdkErr.message || sdkErr);
+        }
+      }
+
+      // 2. Fallback to HTTPS REST API (Always reaches cloud and bypasses local cache)
+      try {
+        const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/rooms/${cleanCode}?key=${FIREBASE_CONFIG.apiKey}`;
+        const resp = await fetch(url);
+        if (resp.ok) {
+          const json = await resp.json();
+          if (json && json.fields) {
+            const data = this.unpackFirestoreFields(json.fields);
+            this.latestSnapshot = data;
+            this.notifySubscribers(data);
+            return data;
+          }
+        }
+      } catch (restErr) {
+        console.warn('[FirebaseSync] HTTPS REST API fallback failed:', restErr.message || restErr);
+      }
+
+      return null;
     },
 
     onRoomDataChange(callback) {

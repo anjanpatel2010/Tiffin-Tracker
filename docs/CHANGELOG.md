@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.8.8] — 2026-11-26
+
+### Fixed
+- **Direct Server & REST Fallback Sync for Flatmates**:
+  - Implemented `FirebaseSync.fetchRoomFromServer(roomCode)` which bypasses stale IndexedDB webview offline cache by querying Cloud Firestore with `source: 'server'`, falling back to direct HTTPS REST API with the API key.
+  - Automatically fetches fresh room data on `RoomManager.init()`, `RoomManager.loadRoom()`, app resume (`visibilitychange`, `window.focus`, Cordova/Capacitor `resume`), opening the Settings Members tab, and clicking the Live Sync status button.
+  - Newly joined flatmates (such as Alok) now immediately appear in the Flat Admin's room members list, logger grid, identity dropdowns, and master sheet.
+- **Zero-Flicker Master Sheet**:
+  - Eliminated `.view-panel` CSS fade/slide animation that caused visual flashing whenever switching to the Sheet tab.
+  - Replaced full table DOM reconstruction (`tbody.innerHTML = rowsHtml`, 500+ nodes) with high-performance in-place cell updates for sabzi dishes, meal toggles, and day totals.
+  - Cached `thead` and `tfoot` DOM structures, only updating when column filters or flat totals change.
+  - Removed duplicate `renderAll()` calls on meal and dish clicks.
+  - Dynamically re-binds filter chips in `setupSheetFilterControls()` whenever room members are synchronized.
+
+---
+
 ## [5.8.7] — 2026-11-26
 
 ### Fixed
