@@ -20,7 +20,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <link rel="stylesheet" href="styles.css?v=5.8.8">
+  <link rel="stylesheet" href="styles.css?v=5.9.0">
 </head>
 <body>
   <!-- Luxury Startup Animation (Fast & Smooth Brand Reveal) -->
@@ -685,10 +685,13 @@
                 </div>
               </div>
 
-              <!-- Switch / Leave Flat Option -->
-              <div class="mt-3" style="text-align: right;">
-                <button id="switchRoomBtn" class="pill-btn-ghost btn-xs text-rose" type="button" title="Log out or switch to another flat">
-                  <span>Switch Flat / Log Out</span>
+              <!-- Log Out vs Leave Flat Options -->
+              <div class="mt-3" style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding-top:10px; border-top:1px dashed rgba(255,255,255,0.08);">
+                <button id="logoutDeviceBtn" class="pill-btn-ghost btn-xs" type="button" title="Log out on this device without removing yourself from the group">
+                  <span>Log Out (Stay in Group)</span>
+                </button>
+                <button id="switchRoomBtn" class="pill-btn-ghost btn-xs text-rose" type="button" title="Permanently leave this flat and remove yourself from the group for everyone">
+                  <span>Leave Flat Permanently</span>
                 </button>
               </div>
             </div>
@@ -1194,7 +1197,7 @@
         <div class="morphe-version-badge">
           <span id="updateCurrentVersionTag" class="morphe-chip-current">v5.7.8</span>
           <span class="morphe-version-arrow">➔</span>
-          <span id="updateVersionTag" class="morphe-chip-latest">v5.8.8</span>
+          <span id="updateVersionTag" class="morphe-chip-latest">v5.9.0</span>
           <span class="morphe-latest-pill">LATEST</span>
         </div>
 
@@ -1264,19 +1267,19 @@
   </div>
 
   <!-- Firebase Cloud Realtime Engine -->
-  <script src="firebase-app.js?v=5.8.8"></script>
-  <script src="firebase-firestore.js?v=5.8.8"></script>
+  <script src="firebase-app.js?v=5.9.0"></script>
+  <script src="firebase-firestore.js?v=5.9.0"></script>
   <!-- FCM Dispatcher Bridge -->
-  <script src="fcm-dispatcher.js?v=5.8.8"></script>
+  <script src="fcm-dispatcher.js?v=5.9.0"></script>
   <!-- Native Device Bridge (Status bar, Insets, Back Button, Local Notifications, Push Notifications) -->
-  <script src="native-bridge.js?v=5.8.8"></script>
+  <script src="native-bridge.js?v=5.9.0"></script>
   <!-- QR Generator Script -->
-  <script src="qr.js?v=5.8.8"></script>
+  <script src="qr.js?v=5.9.0"></script>
   <!-- Firebase Cloud Sync Bridge -->
-  <script src="firebase-sync.js?v=5.8.8"></script>
+  <script src="firebase-sync.js?v=5.9.0"></script>
   <!-- Main Application Logic -->
-  <script src="app.js?v=5.8.8"></script>
+  <script src="app.js?v=5.9.0"></script>
   <!-- In-App Auto Update Sentinel -->
-  <script src="updater.js?v=5.8.8"></script>
+  <script src="updater.js?v=5.9.0"></script>
 </body>
 </html>

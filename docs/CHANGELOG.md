@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.9.0] — 2026-11-26
+
+### Changed & Rebuilt
+- **Rebuilt Group Join, Leave, Kick & Admin Succession Architecture from Scratch**:
+  - **Single Authoritative Source of Truth (Firestore + Tombstones)**: Eliminated peer-to-peer stale member array unioning (`room_meta_sync` / `member_joined`) that caused departed flatmates or stepped-down Admins to reappear on other users' screens. Ntfy broadcasts now act strictly as lightweight invalidation triggers (`room_roster_changed`) to pull atomic cloud state.
+  - **Tombstone & Monotonic Versioning (`leftMembers` + `kickedMembers` + `membershipVersion`)**: Voluntarily leaving a flat now writes a permanent `leftMembers` tombstone and increments `membershipVersion`, making ghost resurrection mathematically impossible across devices while still allowing voluntary members to rejoin later with their original meal ledger history intact. Kicked users remain strictly blacklisted in `kickedMembers`.
+  - **Atomic Transactions + HTTPS REST Optimistic-Concurrency Fallback (`runRoomMutation`)**: All room mutations (`createRoom`, `joinRoom`, `leaveRoom`, `addMemberToRoom`, `removeMemberFromRoom`, `transferAdminRole`, `updateAdminPin`, `updateRoomMetadata`) execute through an 8s-timeout Firestore SDK transaction with automatic HTTPS REST `PATCH`/`DELETE` (`currentDocument.updateTime` precondition) fallback—preventing silent offline-cache drops on Android WebView.
+  - **Fail-Safe Leave & Robust Admin Succession**: `leaveRoom()` matches the departing user across ID, 10-digit phone, lowercase name, and `adminId`, promotes the most senior remaining member to Admin atomically (or dissolves the flat if empty), deletes their FCM token, and never clears the local session unless the cloud commit is confirmed.
+  - **Fixed Critical Admin Crash (`ReferenceError: wasAdmin`) & Auto-Resurrection Loops**: Fixed an undefined `wasAdmin` error in `handleCloudSyncUpdate` that crashed snapshot processing for Admins, and removed all client-side "re-assert missing user / re-add missing admin" loops.
+  - **Separated "Log Out (Stay in Group)" vs "Leave Flat Permanently"**: Added two distinct actions in Settings > Room & Members so users can switch devices without leaving the flat, or permanently leave the roster for everyone.
+  - **Unique 4-Digit Room Code Allocation**: `createRoom` verifies `!doc.exists` atomically to eliminate random 4-digit room code collisions.
+
+---
+
 ## [5.8.8] — 2026-11-26
 
 ### Fixed

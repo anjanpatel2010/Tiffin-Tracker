@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.8.8';
+  const APP_VERSION = '5.9.0';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -325,20 +325,22 @@
     renderAll();
 
     // 1. Firebase Cloud Realtime Engine (Primary)
+    // Note: Membership changes are committed atomically by RoomManager/FirebaseSync directly.
+    // persistAndBroadcast only syncs ledger state (meals, sabzi, rates, provider, amul).
     if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
       const roomKey = (actionPayload?.roomCode || getActiveRoomCode() || '').toString().toUpperCase();
-      if (!roomKey) return;
-      if (actionPayload) {
-        if (actionPayload.type === 'room_meta_sync' || actionPayload.type === 'member_added' || actionPayload.type === 'member_removed' || actionPayload.type === 'member_joined') {
-          if (typeof RoomManager !== 'undefined' && RoomManager.activeRoom) {
-            FirebaseSync.saveRoomData(roomKey, RoomManager.activeRoom);
+      if (roomKey && actionPayload) {
+        const isMembershipEvent = [
+          'member_added', 'member_removed', 'member_joined',
+          'member_left', 'member_kicked', 'admin_promoted', 'room_roster_changed'
+        ].includes(actionPayload.type);
+
+        if (!isMembershipEvent) {
+          if (actionPayload.type === 'room_meta_sync') {
+            if (actionPayload.state) FirebaseSync.saveLedgerState(roomKey, actionPayload.state);
+          } else {
+            FirebaseSync.saveLedgerState(roomKey, appState);
           }
-          // Do NOT save ledger state on member join/add/remove - only on explicit ledger actions
-          if (actionPayload.type === 'room_meta_sync' && actionPayload.state) {
-            FirebaseSync.saveLedgerState(roomKey, actionPayload.state);
-          }
-        } else {
-          FirebaseSync.saveLedgerState(roomKey, appState);
         }
       }
     }
@@ -897,10 +899,14 @@
 
     async broadcastFullState(reason) {
       logActivity(this.identity, 'Broadcast Full Ledger', reason || 'Full cloud sync');
+      const code = this.roomCode || RoomManager.activeRoom?.code || RoomManager.session?.roomCode;
+      if (code && typeof FirebaseSync !== 'undefined') {
+        FirebaseSync.saveLedgerState(code, appState);
+        FirebaseSync.fetchRoomFromServer(code);
+      }
       await this.broadcast({
         type: 'room_meta_sync',
         roomCode: this.roomCode,
-        roomData: RoomManager.activeRoom,
         state: getCompactSyncState(appState)
       });
       showToast('Broadcasted complete ledger to all flatmates');
@@ -1056,248 +1062,51 @@
             modified = true;
           }
         }
-      } else if (action.type === 'member_joined') {
+      } else if (
+        action.type === 'member_joined' ||
+        action.type === 'member_left' ||
+        action.type === 'member_added' ||
+        action.type === 'member_kicked' ||
+        action.type === 'admin_promoted' ||
+        action.type === 'room_roster_changed'
+      ) {
+        if (isCatchUp) return; // Never replay old 12h NTFY roster events; Firestore holds authoritative roster
         const targetRoom = (action.roomCode || '').toString().toUpperCase().trim();
         const myRoom = (RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
-        if ((targetRoom === myRoom || !targetRoom || !myRoom) && action.member) {
-          if (!RoomManager.activeRoom) {
-            RoomManager.activeRoom = {
-              code: targetRoom || myRoom,
-              name: 'My Flat',
-              adminName: 'Admin',
-              members: []
-            };
-          }
+        if (targetRoom && myRoom && targetRoom !== myRoom) return;
 
-          const existingMatch = RoomManager.findMatchingMember(RoomManager.activeRoom.members, action.member);
-
-          if (!existingMatch) {
-            RoomManager.activeRoom.members.push(action.member);
-            RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
-            RoomManager.saveActiveRoom();
-            ROOMMATES = RoomManager.activeRoom.members;
-
-            // Ensure meal slots exist in appState for the new roommate
-            if (appState && appState.days) {
-              for (let d = 1; d <= CONFIG.daysInMonth; d++) {
-                if (appState.days[d]) {
-                  if (!appState.days[d].meals) appState.days[d].meals = {};
-                  if (!appState.days[d].meals[action.member.id]) {
-                    appState.days[d].meals[action.member.id] = { lunch: '', dinner: '' };
-                  }
-                }
-              }
-              saveStateToStorage(appState);
-            }
-
-            RoomManager.renderSettingsMembersTab();
-            populateHeaderIdentityDropdown();
-            renderAll();
-
-            // Alert ALL roommates instantly when a new flatmate joins
-            const joinNotifKey = 'tiffin_notified_join_' + (targetRoom || myRoom).toLowerCase() + '_' + (action.member.id || action.member.name).toLowerCase();
-            const alreadyReminded = localStorage.getItem(joinNotifKey);
-
-            if (!isCatchUp && !alreadyReminded) {
-              localStorage.setItem(joinNotifKey, 'true');
-              playJoinAlertChime();
-              showToast(`${action.member.name} joined the flat! 👥`);
-
-              NotificationManager.send('Flatmate Joined! 🍱', {
-                body: `${action.member.name} joined #${targetRoom || myRoom}!`,
-                tag: `joined_${action.member.id}`
-              });
-              logActivity(action.member.name, 'Member Joined', `${action.member.name} joined room #${targetRoom || myRoom}`);
-            }
-          } else {
-            // Already present: update missing phone or details without duplicating
-            if (!existingMatch.phone && action.member.phone) {
-              existingMatch.phone = action.member.phone;
-              RoomManager.saveActiveRoom();
-            }
-          }
-
-          // Reply with authoritative room metadata & ledger state so new member receives full history
-          if (!isCatchUp && (RoomManager.session?.status === 'approved' || RoomManager.isAdmin())) {
-            SyncEngine.broadcast({
-              type: 'room_meta_sync',
-              roomCode: targetRoom || myRoom,
-              roomData: RoomManager.activeRoom,
-              state: getCompactSyncState(appState)
-            });
-          }
-        }
-      } else if (action.type === 'member_left') {
-        const targetRoom = (action.roomCode || '').toString().toUpperCase().trim();
-        const myRoom = (RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
-        if ((targetRoom === myRoom || !targetRoom || !myRoom) && RoomManager.activeRoom) {
-          const leftId = action.memberId;
-          const leftName = action.memberName || 'A roommate';
-          RoomManager.activeRoom.members = (RoomManager.activeRoom.members || []).filter(m => m.id !== leftId);
-          RoomManager.saveActiveRoom();
-          ROOMMATES = RoomManager.activeRoom.members;
-          RoomManager.renderSettingsMembersTab();
-          populateHeaderIdentityDropdown();
-          renderAll();
-          showToast(`${leftName} left the flat 👋`, 'info');
-        }
-      } else if (action.type === 'member_added') {
-        const targetRoom = (action.roomCode || '').toString().toUpperCase().trim();
-        const myRoom = (RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
-        if ((targetRoom === myRoom || !targetRoom || !myRoom) && RoomManager.activeRoom && action.member) {
-          const exists = RoomManager.findMatchingMember(RoomManager.activeRoom.members, action.member);
-          if (!exists) {
-            RoomManager.activeRoom.members.push(action.member);
-            RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
-            RoomManager.saveActiveRoom();
-            ROOMMATES = RoomManager.activeRoom.members;
-            RoomManager.renderSettingsMembersTab();
-            populateHeaderIdentityDropdown();
-            renderAll();
-          }
-        }
-      } else if (action.type === 'member_kicked') {
-        if (isCatchUp) return; // Do not replay old 12h kicked members during catch-up
-        const targetRoom = (action.roomCode || '').toString().toUpperCase().trim();
-        const myRoom = (RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
-        if (targetRoom === myRoom) {
-          const myId = RoomManager.session?.memberId || RoomManager.sanitizeId(RoomManager.session?.name || '');
-          const isMe = action.memberId === myId ||
-                       (RoomManager.session && RoomManager.session.name.toLowerCase() === (action.memberName || '').toLowerCase());
-          if (isMe) {
-            // ADMIN CAN NEVER BE KICKED!
-            if (RoomManager.isAdmin() || RoomManager.session?.role === 'admin') {
-              console.warn('[SyncEngine] Received member_kicked targeting Admin. Admin cannot be kicked.');
-              return;
-            }
-            alert('You have been removed from this flat by the Admin.');
-            RoomManager.hardResetLocalSession();
-            RoomManager.showGateModal('join');
-            RoomManager.updateHeaderRoomUI();
-            RoomManager.renderSettingsMembersTab();
-            renderAll();
-            return;
-          }
-          if (RoomManager.activeRoom) {
-            RoomManager.activeRoom.members = (RoomManager.activeRoom.members || []).filter(m => m.id !== action.memberId);
-            RoomManager.activeRoom.kickedMembers = Array.isArray(RoomManager.activeRoom.kickedMembers) ? RoomManager.activeRoom.kickedMembers : [];
-            if (!RoomManager.activeRoom.kickedMembers.some(km => km.id === action.memberId)) {
-              RoomManager.activeRoom.kickedMembers.push({ id: action.memberId, name: action.memberName || '', kickedAt: Date.now() });
-            }
-            RoomManager.saveActiveRoom();
-            ROOMMATES = RoomManager.activeRoom.members;
-            RoomManager.renderSettingsMembersTab();
-            populateHeaderIdentityDropdown();
-            modified = true;
-            showToast(`${action.memberName || 'A member'} was removed from the flat.`);
-          }
+        const syncCode = targetRoom || myRoom;
+        if (syncCode && typeof FirebaseSync !== 'undefined' && FirebaseSync.fetchRoomFromServer) {
+          // Pull authoritative atomic roster from Cloud Firestore instead of doing unreliable peer array unions
+          FirebaseSync.fetchRoomFromServer(syncCode).catch(e => {
+            console.warn('[SyncEngine] Roster refresh error:', e);
+          });
         }
       } else if (action.type === 'request_room_sync') {
         const myRoomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode;
         if (myRoomCode && myRoomCode.toUpperCase() === (action.roomCode || '').toUpperCase()) {
-          if ((RoomManager.session?.status === 'approved' || RoomManager.isAdmin()) && RoomManager.activeRoom) {
+          if (RoomManager.session?.status === 'approved' && RoomManager.activeRoom) {
             SyncEngine.broadcast({
               type: 'room_meta_sync',
               roomCode: myRoomCode,
-              roomData: RoomManager.activeRoom,
               state: getCompactSyncState(appState)
             });
           }
         }
       } else if (action.type === 'room_meta_sync') {
-        if (isCatchUp) return; // Do not replay old 12h room membership states during catch-up
+        if (isCatchUp) return; // Do not replay old 12h states during catch-up
         const myRoomCode = (RoomManager.activeRoom?.code || RoomManager.session?.roomCode || SyncEngine.roomCode || '').toString().toUpperCase().trim();
         const actionCode = (action.roomCode || '').toString().toUpperCase().trim();
         if (actionCode === myRoomCode || !myRoomCode || !actionCode) {
-          if (action.roomData) {
-            const current = RoomManager.activeRoom || {};
-            const incomingMembers = Array.isArray(action.roomData.members) ? action.roomData.members : [];
-            const currentMembers = Array.isArray(current.members) ? current.members : [];
-
-            // Combine and preserve kickedMembers
-            const kickedList = [
-              ...(Array.isArray(current.kickedMembers) ? current.kickedMembers : []),
-              ...(Array.isArray(action.roomData.kickedMembers) ? action.roomData.kickedMembers : [])
-            ];
-
-            const isMemberKicked = (m) => {
-              if (!m) return true;
-              return kickedList.some(km =>
-                (km.id && m.id && km.id === m.id) ||
-                (km.phone && m.phone && km.phone.slice(-10) === m.phone.slice(-10)) ||
-                (km.name && m.name && km.name.trim().toLowerCase() === m.name.trim().toLowerCase())
-              );
-            };
-
-            // Check if active session user was kicked
-            if (RoomManager.session && RoomManager.session.roomCode && !RoomManager.isAdmin()) {
-              const myId = RoomManager.session.memberId;
-              const myName = (RoomManager.session.name || '').trim().toLowerCase();
-              const myPhone = RoomManager.session.phone ? RoomManager.session.phone.slice(-10) : '';
-              const amIKicked = kickedList.some(km =>
-                (myId && km.id === myId) ||
-                (myPhone && km.phone && km.phone.slice(-10) === myPhone) ||
-                (myName && km.name && km.name.trim().toLowerCase() === myName)
-              );
-              if (amIKicked) {
-                console.warn('[SyncEngine] Active user is in kickedList. Removing user.');
-                alert('You have been removed from this flat by the Admin.');
-                RoomManager.hardResetLocalSession();
-                RoomManager.showGateModal('join');
-                RoomManager.updateHeaderRoomUI();
-                RoomManager.renderSettingsMembersTab();
-                renderAll();
-                return;
-              }
+          if (action.roomData && (actionCode || myRoomCode) && typeof FirebaseSync !== 'undefined' && FirebaseSync.fetchRoomFromServer) {
+            const incomingVer = Number(action.roomData.membershipVersion || 0);
+            const currentVer = Number(RoomManager.activeRoom?.membershipVersion || 0);
+            if (incomingVer > currentVer) {
+              FirebaseSync.fetchRoomFromServer(actionCode || myRoomCode).catch(() => {});
             }
-
-            // Union members excluding any kicked members
-            const memberMap = new Map();
-            currentMembers.forEach(m => { if (m && (m.id || m.name) && !isMemberKicked(m)) memberMap.set(m.id || m.name.toLowerCase(), m); });
-            incomingMembers.forEach(m => { if (m && (m.id || m.name) && !isMemberKicked(m)) memberMap.set(m.id || m.name.toLowerCase(), m); });
-            const deduplicated = RoomManager.deduplicateMembers(Array.from(memberMap.values()), action.roomData.adminName || current.adminName);
-
-            // Synchronize active session if matched in merged members
-            if (RoomManager.session && RoomManager.session.roomCode) {
-              const myId = RoomManager.session.memberId;
-              const myName = (RoomManager.session.name || '').trim().toLowerCase();
-              const myPhone = RoomManager.session.phone ? RoomManager.session.phone.slice(-10) : '';
-              const matchedSessionMember = deduplicated.find(m =>
-                (myId && m.id === myId) ||
-                (myPhone && m.phone && m.phone.slice(-10) === myPhone) ||
-                (myName && m.name && m.name.trim().toLowerCase() === myName)
-              );
-              if (matchedSessionMember) {
-                RoomManager.session.role = matchedSessionMember.role || RoomManager.session.role || 'member';
-                RoomManager.session.name = matchedSessionMember.name;
-                RoomManager.session.memberId = matchedSessionMember.id;
-                if (matchedSessionMember.phone && !RoomManager.session.phone) {
-                  RoomManager.session.phone = matchedSessionMember.phone;
-                }
-                localStorage.setItem('tiffin_user_session', JSON.stringify(RoomManager.session));
-                localStorage.setItem('tiffin_session', JSON.stringify(RoomManager.session));
-              }
-            }
-
-            RoomManager.activeRoom = {
-              ...current,
-              ...action.roomData,
-              members: deduplicated,
-              kickedMembers: kickedList
-            };
-            RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
-            RoomManager.saveActiveRoom();
-            ROOMMATES = RoomManager.activeRoom.members;
-
-            if (action.roomData.adminPin) {
-              CONFIG.adminPassword = action.roomData.adminPin;
-            }
-            RoomManager.updateHeaderRoomUI();
-            RoomManager.renderSettingsMembersTab();
-            populateHeaderIdentityDropdown();
           }
 
-          // Ensure meal slots exist in appState for all roommates
+          // Ensure meal slots exist in appState for all active roommates
           if (appState && appState.days) {
             for (let d = 1; d <= CONFIG.daysInMonth; d++) {
               if (appState.days[d]) {
@@ -1416,122 +1225,107 @@
   function handleCloudSyncUpdate(cloudData) {
     if (!cloudData) return;
     if (cloudData._roomDeleted) {
-      console.warn('[Sync] Active flat room was dissolved or deleted from cloud.');
-      alert('This flat has been removed or reset. Returning to the main screen.');
-      RoomManager.hardResetLocalSession();
-      RoomManager.showGateModal('join');
-      RoomManager.updateHeaderRoomUI();
-      RoomManager.renderSettingsMembersTab();
-      renderAll();
-      return;
-    }
-    if (!cloudData.roomData) return;
-    const cloudRoom = cloudData.roomData;
-    const cloudMembers = Array.isArray(cloudRoom.members) ? cloudRoom.members : [];
-
-    const activeCode = (RoomManager.session?.roomCode || RoomManager.activeRoom?.code || SyncEngine.roomCode || localStorage.getItem('tiffin_sync_room') || '').toString().toUpperCase().trim();
-    if (activeCode && String(cloudRoom.code).toUpperCase() !== activeCode) {
-      return; // Snapshot is from another room
-    }
-
-    // Active logged-in member or admin
-    if (RoomManager.session && RoomManager.session.roomCode) {
-      const isAdmin = RoomManager.isAdmin();
-      const myId = RoomManager.session.memberId;
-      const myName = (RoomManager.session.name || '').trim().toLowerCase();
-      const myPhone = RoomManager.session.phone ? RoomManager.session.phone.slice(-10) : '';
-
-      // 1. First: Check if user is in kickedMembers list (Admin cannot be kicked)
-      const isExplicitlyKicked = !isAdmin && Array.isArray(cloudRoom.kickedMembers) && cloudRoom.kickedMembers.some(km =>
-        (myId && km.id === myId) ||
-        (myPhone && km.phone && km.phone.slice(-10) === myPhone) ||
-        (myName && km.name && km.name.trim().toLowerCase() === myName)
-      );
-
-      if (isExplicitlyKicked) {
-        console.warn('[RoomManager] Current user was kicked from flat by Admin.');
-        alert(`You have been removed from flat #${cloudRoom.code} by the admin.`);
+      if (RoomManager.session || RoomManager.activeRoom) {
+        console.warn('[Sync] Active flat room was dissolved or deleted from cloud.');
+        alert('This flat has been dissolved or removed. Returning to the main screen.');
         RoomManager.hardResetLocalSession();
         RoomManager.showGateModal('join');
         RoomManager.updateHeaderRoomUI();
         RoomManager.renderSettingsMembersTab();
         renderAll();
+      }
+      return;
+    }
+    if (!cloudData.roomData) return;
+
+    const cloudRoom = { ...cloudData.roomData };
+    const activeCode = (RoomManager.session?.roomCode || RoomManager.activeRoom?.code || SyncEngine.roomCode || localStorage.getItem('tiffin_sync_room') || '').toString().toUpperCase().trim();
+    if (activeCode && String(cloudRoom.code || '').toUpperCase() !== activeCode) {
+      return; // Snapshot is from another room
+    }
+
+    // Ignore out-of-order stale snapshots if we already hold a strictly newer membershipVersion
+    const incomingVer = Number(cloudRoom.membershipVersion || 0);
+    const localVer = Number(RoomManager.activeRoom?.membershipVersion || 0);
+    if (incomingVer > 0 && localVer > 0 && incomingVer < localVer) {
+      return;
+    }
+
+    const kickedList = Array.isArray(cloudRoom.kickedMembers) ? cloudRoom.kickedMembers : [];
+    const leftList = Array.isArray(cloudRoom.leftMembers) ? cloudRoom.leftMembers : [];
+    const rawMembers = Array.isArray(cloudRoom.members) ? cloudRoom.members : [];
+
+    // Canonical clean roster strictly obeying server truth (never re-insert departed users)
+    const sanitizedMembers = rawMembers.filter(m => {
+      if (!m || (!m.name && !m.id)) return false;
+      if (kickedList.some(km => RoomManager.findMatchingMember([m], km))) return false;
+      const leftRec = leftList.find(lm => RoomManager.findMatchingMember([m], lm));
+      if (leftRec) {
+        const joinedTs = m.joinedAt ? new Date(m.joinedAt).getTime() : 0;
+        if (Number(leftRec.leftAt || 0) >= joinedTs) return false;
+      }
+      return true;
+    });
+
+    // Enforce single authoritative admin role matching cloudRoom.adminId
+    const authAdminId = cloudRoom.adminId || sanitizedMembers.find(m => m.role === 'admin')?.id || '';
+    sanitizedMembers.forEach(m => {
+      if (authAdminId) {
+        m.role = (m.id === authAdminId) ? 'admin' : 'member';
+      } else {
+        m.role = (m.role === 'admin') ? 'admin' : 'member';
+      }
+    });
+
+    const previousMembers = Array.isArray(RoomManager.activeRoom?.members) ? RoomManager.activeRoom.members : [];
+    const newMembers = sanitizedMembers.filter(cm => !previousMembers.some(pm => pm.id === cm.id));
+    const departedMembers = previousMembers.filter(pm => !sanitizedMembers.some(cm => cm.id === pm.id));
+
+    if (RoomManager.session && RoomManager.session.roomCode) {
+      const wasAdmin = Boolean(RoomManager.session.role === 'admin');
+      const sessionCandidate = {
+        id: RoomManager.session.memberId,
+        name: RoomManager.session.name,
+        phone: RoomManager.session.phone
+      };
+
+      const matchedMember = RoomManager.findMatchingMember(sanitizedMembers, sessionCandidate);
+
+      if (!matchedMember) {
+        // Current user is no longer in the authoritative cloud roster -> NEVER resurrect!
+        const isKicked = kickedList.some(km => RoomManager.findMatchingMember([sessionCandidate], km));
+        const isLeft = leftList.some(lm => RoomManager.findMatchingMember([sessionCandidate], lm));
+
+        RoomManager.hardResetLocalSession();
+        RoomManager.showGateModal('join');
+        RoomManager.updateHeaderRoomUI();
+        RoomManager.renderSettingsMembersTab();
+        renderAll();
+
+        if (isKicked) {
+          alert(`You have been removed from flat #${cloudRoom.code} by the admin.`);
+        } else if (isLeft) {
+          showToast(`You have left flat #${cloudRoom.code}.`, 'info');
+        } else {
+          showToast(`Your membership in flat #${cloudRoom.code} has ended.`, 'info');
+        }
         return;
       }
 
-      let matchedMember = cloudMembers.find(m => myId && m.id === myId);
-      if (!matchedMember) {
-        matchedMember = cloudMembers.find(m => {
-          if (!isAdmin && m.role === 'admin') return false; // Strict: Non-admin never matches admin
-          if (myPhone && m.phone && m.phone.slice(-10) === myPhone) return true;
-          if (myName && m.name && m.name.trim().toLowerCase() === myName) return true;
-          return false;
-        });
+      // Sync session identity & authoritative role (handles admin promotion OR step-down seamlessly)
+      RoomManager.session.role = matchedMember.role || 'member';
+      RoomManager.session.memberId = matchedMember.id;
+      RoomManager.session.name = matchedMember.name;
+      if (matchedMember.phone && !RoomManager.session.phone) {
+        RoomManager.session.phone = matchedMember.phone;
       }
 
-      if (!matchedMember) {
-        if (isAdmin) {
-          // Admin session active; retain local admin representation
-          console.log('[RoomManager] Admin session active; preserving admin representation.');
-          matchedMember = {
-            id: myId || ('m_' + (myName ? RoomManager.sanitizeId(myName) : 'admin')),
-            name: RoomManager.session.name || 'Admin',
-            phone: RoomManager.session.phone || '',
-            role: 'admin',
-            avatarColor: '#00d26a',
-            joinedAt: new Date().toISOString()
-          };
-          cloudMembers.unshift(matchedMember);
-        } else {
-          // Member is approved locally and not in kickedList - re-assert in cloud members so they never disappear
-          console.log('[RoomManager] Re-asserting local active member in cloud snapshot:', myName);
-          matchedMember = {
-            id: myId || ('m_' + RoomManager.sanitizeId(myName || 'member') + '_' + Date.now().toString().slice(-4)),
-            name: RoomManager.session.name || 'Flatmate',
-            phone: RoomManager.session.phone || '',
-            role: 'member',
-            avatarColor: '#00d4ff',
-            joinedAt: new Date().toISOString()
-          };
-          cloudMembers.push(matchedMember);
-          if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
-            FirebaseSync.saveRoomData(cloudRoom.code, { ...cloudRoom, members: cloudMembers });
-          }
-        }
-      }
-
-      // Filter out any kicked members from cloudMembers so they NEVER appear in UI
-      const kickedList = Array.isArray(cloudRoom.kickedMembers) ? cloudRoom.kickedMembers : [];
-      const sanitizedMembers = cloudMembers.filter(m => {
-        if (!m) return false;
-        if (m.role === 'admin') return true;
-        return !kickedList.some(km =>
-          (km.id && m.id && km.id === m.id) ||
-          (km.phone && m.phone && km.phone.slice(-10) === m.phone.slice(-10)) ||
-          (km.name && m.name && km.name.trim().toLowerCase() === m.name.trim().toLowerCase())
-        );
-      });
-
-      // Detect new flatmates that joined and flatmates that left
-      const previousMembers = Array.isArray(RoomManager.activeRoom?.members) ? RoomManager.activeRoom.members : [];
-      const newMembers = sanitizedMembers.filter(cm => !previousMembers.some(pm => pm.id === cm.id));
-      const leftMembers = previousMembers.filter(pm => !sanitizedMembers.some(cm => cm.id === pm.id));
-
-      // Update local room data directly from authoritative cloud
       RoomManager.activeRoom = {
         ...cloudRoom,
         members: sanitizedMembers,
+        leftMembers: leftList,
         kickedMembers: kickedList
       };
-      RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
-      if (isAdmin || RoomManager.session.role === 'admin') {
-        RoomManager.session.role = 'admin';
-        matchedMember.role = 'admin';
-      } else {
-        RoomManager.session.role = matchedMember.role || 'member';
-      }
-      RoomManager.session.memberId = matchedMember.id;
-      RoomManager.session.name = matchedMember.name;
       RoomManager.saveActiveRoom();
       try {
         localStorage.setItem(`tiffin_room_${cloudRoom.code}`, JSON.stringify(RoomManager.activeRoom));
@@ -1540,20 +1334,32 @@
       } catch (e) {}
       ROOMMATES = RoomManager.activeRoom.members;
 
-      // Invalidate render signatures so new/updated members immediately display in all views
+      if (cloudRoom.adminPin) {
+        CONFIG.adminPassword = cloudRoom.adminPin;
+      }
+
+      if (appState && Array.isArray(appState.amulMembers)) {
+        const activeIds = new Set(ROOMMATES.map(r => r.id));
+        const goneIds = new Set([...leftList, ...kickedList].map(x => x.id).filter(Boolean));
+        appState.amulMembers = appState.amulMembers.filter(id => activeIds.has(id) || !goneIds.has(id));
+      }
+
+      if (activeSheetFilter !== 'all' && !ROOMMATES.some(r => r.id === activeSheetFilter)) {
+        activeSheetFilter = 'all';
+      }
+
       const roommatesGrid = document.getElementById('roommatesLoggerGrid');
       if (roommatesGrid) delete roommatesGrid.dataset.lastSig;
       lastMasterSheetSignature = '';
       lastAnalyticsSignature = '';
 
-      // Check if current user was promoted to Admin and needs to generate a new PIN
-      const isPromotedAdmin = matchedMember.role === 'admin' && (
+      // Prompt new Admin to set PIN if they were promoted
+      const isPromotedAdmin = matchedMember.role === 'admin' && cloudRoom.adminPinNeedsReset && (
         cloudRoom.newAdminId === matchedMember.id ||
-        (cloudRoom.adminPinNeedsReset && !RoomManager.pinPromptDismissed) ||
-        (!wasAdmin && cloudRoom.adminPinNeedsReset)
+        !wasAdmin ||
+        !RoomManager.pinPromptDismissed
       );
-
-      if (isPromotedAdmin && cloudRoom.adminPinNeedsReset) {
+      if (isPromotedAdmin) {
         RoomManager.showNewAdminPinModal(cloudRoom.name || 'My Flat');
       }
 
@@ -1598,42 +1404,25 @@
       }
       renderAll();
 
-      // Alert when new members join
       if (newMembers.length > 0 && previousMembers.length > 0) {
         newMembers.forEach(nm => {
           playJoinAlertChime();
           showToast(`${nm.name} joined the flat! 👥`, 'success', 3500);
         });
       }
-
-      // Alert when members leave
-      if (leftMembers.length > 0 && previousMembers.length > 0) {
-        leftMembers.forEach(lm => {
-          showToast(`${lm.name} left the flat 👋`, 'info', 3500);
+      if (departedMembers.length > 0 && previousMembers.length > 0) {
+        departedMembers.forEach(dm => {
+          showToast(`${dm.name} left the flat 👋`, 'info', 3500);
         });
       }
     } else {
-      // Session not yet restored; still keep authoritative room data ready
-      const kickedList = Array.isArray(cloudRoom.kickedMembers) ? cloudRoom.kickedMembers : [];
-      const sanitizedMembers = cloudMembers.filter(m => {
-        if (!m) return false;
-        if (m.role === 'admin') return true;
-        return !kickedList.some(km =>
-          (km.id && m.id && km.id === m.id) ||
-          (km.phone && m.phone && km.phone.slice(-10) === m.phone.slice(-10)) ||
-          (km.name && m.name && km.name.trim().toLowerCase() === m.name.trim().toLowerCase())
-        );
-      });
       RoomManager.activeRoom = {
         ...cloudRoom,
         members: sanitizedMembers,
+        leftMembers: leftList,
         kickedMembers: kickedList
       };
-      RoomManager.cleanupAdminDuplicates(RoomManager.activeRoom);
       RoomManager.saveActiveRoom();
-      try {
-        localStorage.setItem(`tiffin_room_${cloudRoom.code}`, JSON.stringify(RoomManager.activeRoom));
-      } catch (e) {}
       ROOMMATES = RoomManager.activeRoom.members;
       setupSheetFilterControls();
       renderAll();
@@ -4118,33 +3907,32 @@
 
     isAdmin() {
       if (!this.session) return false;
-      // 1. Phone match with room adminPhone
+      // 1. Authoritative check against activeRoom roster when loaded
+      if (this.activeRoom && Array.isArray(this.activeRoom.members) && this.activeRoom.members.length > 0) {
+        const me = this.findMatchingMember(this.activeRoom.members, {
+          id: this.session.memberId,
+          name: this.session.name,
+          phone: this.session.phone
+        });
+        if (me) {
+          const authAdminId = this.activeRoom.adminId || this.activeRoom.members.find(x => x.role === 'admin')?.id;
+          const isAuthAdmin = authAdminId ? (me.id === authAdminId) : (me.role === 'admin');
+          this.session.role = isAuthAdmin ? 'admin' : 'member';
+          return isAuthAdmin;
+        }
+        return false;
+      }
+
+      // 2. Fallback before roster finishes loading
       const myPhone = this.normalizePhone(this.session.phone);
       const adminPhone = this.normalizePhone(this.activeRoom?.adminPhone);
       if (myPhone && adminPhone && myPhone.length >= 10 && myPhone === adminPhone) {
-        this.session.role = 'admin';
         return true;
       }
-      // 2. Name match with room adminName
       const myName = (this.session.name || '').trim().toLowerCase();
       const adminName = (this.activeRoom?.adminName || '').trim().toLowerCase();
       if (myName && adminName && myName === adminName) {
-        this.session.role = 'admin';
         return true;
-      }
-      // 3. Member in activeRoom check
-      if (this.activeRoom && Array.isArray(this.activeRoom.members)) {
-        const m = this.activeRoom.members.find(x =>
-          x && (
-            (this.session.memberId && x.id === this.session.memberId) ||
-            (myPhone && x.phone && this.normalizePhone(x.phone) === myPhone) ||
-            (myName && x.name && x.name.trim().toLowerCase() === myName)
-          )
-        );
-        if (m && m.role === 'admin') {
-          this.session.role = 'admin';
-          return true;
-        }
       }
       return this.session.role === 'admin';
     },
@@ -4257,10 +4045,9 @@
 
     cleanupAdminDuplicates(roomData) {
       if (!roomData || !Array.isArray(roomData.members)) return;
-      const adminName = (this.session?.role === 'admin' && this.session.name ? this.session.name : (roomData.adminName || '')).trim();
-      const cleanAdminFirst = getFirstName(adminName).toLowerCase();
+      const adminName = (roomData.adminName || '').trim();
 
-      // 1. Identify real non-dummy members
+      // 1. Purge dummy "Admin" / "admin" placeholder if real named members exist
       const realNamedMembers = roomData.members.filter(m => {
         const n = (m.name || '').trim().toLowerCase();
         const id = (m.id || '').trim().toLowerCase();
@@ -4268,64 +4055,37 @@
       });
 
       if (realNamedMembers.length > 0) {
-        // Purge dummy "Admin" / "admin" member(s) so only real names show
         roomData.members = roomData.members.filter(m => {
           const n = (m.name || '').trim().toLowerCase();
           const id = (m.id || '').trim().toLowerCase();
           return n !== 'admin' && id !== 'admin';
         });
-      } else if (roomData.members.length === 1 && adminName && adminName.toLowerCase() !== 'admin') {
-        const m = roomData.members[0];
-        if (m.name.toLowerCase() === 'admin' || m.id === 'admin') {
-          m.name = adminName;
-          m.id = this.sanitizeId(adminName);
-          m.role = 'admin';
-        }
       }
 
-      // 2. Ensure the actual admin is marked role === 'admin'
-      if (adminName && adminName.toLowerCase() !== 'admin') {
-        let foundAdmin = false;
-        const adminPhone = this.normalizePhone(this.session?.phone || roomData.adminPhone);
-        roomData.members.forEach(m => {
-          const mFull = (m.name || '').trim().toLowerCase();
-          const mPhone = this.normalizePhone(m.phone);
-          if (mFull === adminName.toLowerCase() || (adminPhone && mPhone && adminPhone.length >= 10 && mPhone === adminPhone)) {
-            m.role = 'admin';
-            foundAdmin = true;
-          }
-        });
-
-        if (!foundAdmin && this.session?.role === 'admin') {
-          roomData.members.unshift({
-            id: this.sanitizeId(adminName),
-            name: adminName,
-            phone: this.session.phone || roomData.adminPhone || '',
-            role: 'admin',
-            avatarColor: '#00d26a',
-            joinedAt: new Date().toISOString()
-          });
-        }
-      }
-
-      // 3. Robust deduplication by phone, name, first name, and id
+      // 2. Deduplicate without ever inventing or re-inserting absent users
       roomData.members = this.deduplicateMembers(roomData.members, adminName);
 
-      // 4. Update roomData.adminName if it was 'Admin' and a real admin member exists
-      const adminMember = roomData.members.find(m => m.role === 'admin');
-      if (adminMember && (!roomData.adminName || roomData.adminName.toLowerCase() === 'admin')) {
-        roomData.adminName = adminMember.name;
+      // 3. Enforce single authoritative Admin role matching roomData.adminId (or adminName/Phone)
+      const adminId = roomData.adminId;
+      if (adminId) {
+        roomData.members.forEach(m => {
+          m.role = (m.id === adminId) ? 'admin' : 'member';
+        });
       }
 
-      // 5. Strictly purge any kicked members from active members list
+      // 4. Strictly purge any kicked or left members from active members list
       if (Array.isArray(roomData.kickedMembers) && roomData.kickedMembers.length > 0) {
+        roomData.members = roomData.members.filter(m =>
+          m && !roomData.kickedMembers.some(km => this.findMatchingMember([m], km))
+        );
+      }
+      if (Array.isArray(roomData.leftMembers) && roomData.leftMembers.length > 0) {
         roomData.members = roomData.members.filter(m => {
-          if (!m || m.role === 'admin') return true;
-          return !roomData.kickedMembers.some(km =>
-            (km.id && m.id && km.id === m.id) ||
-            (km.phone && m.phone && km.phone.slice(-10) === m.phone.slice(-10)) ||
-            (km.name && m.name && km.name.trim().toLowerCase() === m.name.trim().toLowerCase())
-          );
+          if (!m) return false;
+          const leftRec = roomData.leftMembers.find(lm => this.findMatchingMember([m], lm));
+          if (!leftRec) return true;
+          const joinedTs = m.joinedAt ? new Date(m.joinedAt).getTime() : 0;
+          return Number(leftRec.leftAt || 0) < joinedTs;
         });
       }
     },
@@ -4527,108 +4287,136 @@
       if (!this.activeRoom) return;
       try {
         if (Array.isArray(this.activeRoom.kickedMembers) && Array.isArray(this.activeRoom.members)) {
+          this.activeRoom.members = this.activeRoom.members.filter(m =>
+            m && !this.activeRoom.kickedMembers.some(km => this.findMatchingMember([m], km))
+          );
+        }
+        if (Array.isArray(this.activeRoom.leftMembers) && Array.isArray(this.activeRoom.members)) {
           this.activeRoom.members = this.activeRoom.members.filter(m => {
-            if (!m || m.role === 'admin') return true;
-            return !this.activeRoom.kickedMembers.some(km =>
-              (km.id && m.id && km.id === m.id) ||
-              (km.phone && m.phone && km.phone.slice(-10) === m.phone.slice(-10)) ||
-              (km.name && m.name && km.name.trim().toLowerCase() === m.name.trim().toLowerCase())
-            );
+            if (!m) return false;
+            const leftRec = this.activeRoom.leftMembers.find(lm => this.findMatchingMember([m], lm));
+            if (!leftRec) return true;
+            const joinedTs = m.joinedAt ? new Date(m.joinedAt).getTime() : 0;
+            return Number(leftRec.leftAt || 0) < joinedTs;
           });
         }
         localStorage.setItem(`tiffin_room_${this.activeRoom.code}`, JSON.stringify(this.activeRoom));
-        if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
-          const cachedFcm = localStorage.getItem('tiffin_fcm_token');
-          if (cachedFcm) {
-            FirebaseSync.registerFcmToken(cachedFcm);
-          }
-        }
       } catch (e) {}
     },
 
     async createRoom(adminName, adminPhone, groupName, adminPin) {
-      // Simple, easy-to-remember 4-digit room code like 4821
-      const roomCode = String(Math.floor(1000 + Math.random() * 9000));
       const cleanName = (adminName || 'Admin').trim();
       const cleanPhone = (adminPhone || '').trim();
       const cleanGroup = (groupName || 'My Flat').trim();
       const cleanPin = (adminPin || '').trim();
-      const requireApproval = document.getElementById('gateCreateRequireApproval')?.checked !== false;
 
-      const memberId = 'm_' + this.sanitizeId(cleanName) + '_' + Date.now().toString().slice(-4);
-      const adminMember = {
-        id: memberId,
-        name: cleanName,
-        phone: cleanPhone,
-        role: 'admin',
-        avatarColor: '#00d26a',
-        joinedAt: new Date().toISOString()
-      };
+      const createBtn = document.getElementById('gateCreateSubmitBtn');
+      const createBtnSpan = createBtn?.querySelector('span');
+      if (createBtn) createBtn.disabled = true;
+      if (createBtnSpan) createBtnSpan.textContent = 'Creating Flat...';
 
-      this.activeRoom = {
-        code: roomCode,
-        name: cleanGroup,
-        adminName: cleanName,
-        adminPhone: cleanPhone,
-        adminPin: cleanPin,
-        createdAt: new Date().toISOString(),
-        members: [adminMember]
-      };
+      try {
+        const memberId = 'm_' + this.sanitizeId(cleanName) + '_' + Date.now().toString().slice(-4);
+        const nowIso = new Date().toISOString();
+        const adminMember = {
+          id: memberId,
+          name: cleanName,
+          phone: cleanPhone,
+          role: 'admin',
+          avatarColor: '#00d26a',
+          joinedAt: nowIso
+        };
 
-      this.cleanupAdminDuplicates(this.activeRoom);
+        const initialState = getDefaultDataForMonth(currentYear, currentMonth);
+        let createdRoomData = null;
+        let finalCode = '';
 
-      this.session = {
-        memberId: adminMember.id,
-        name: cleanName,
-        phone: cleanPhone,
-        role: 'admin',
-        groupName: cleanGroup,
-        roomCode: roomCode,
-        status: 'approved'
-      };
+        if (typeof FirebaseSync !== 'undefined' && typeof FirebaseSync.createRoom === 'function') {
+          for (let attempt = 0; attempt < 8; attempt++) {
+            const candidateCode = String(Math.floor(1000 + Math.random() * 9000));
+            const roomPayload = {
+              code: candidateCode,
+              name: cleanGroup,
+              adminId: memberId,
+              adminName: cleanName,
+              adminPhone: cleanPhone,
+              adminPin: cleanPin,
+              adminPinNeedsReset: false,
+              membershipVersion: 1,
+              createdAt: nowIso,
+              members: [adminMember],
+              leftMembers: [],
+              kickedMembers: []
+            };
+            const res = await FirebaseSync.createRoom(roomPayload, initialState, currentYear, currentMonth);
+            if (res && res.success) {
+              createdRoomData = res.roomData;
+              finalCode = candidateCode;
+              break;
+            }
+            if (res && res.collision) {
+              continue; // Retry another random 4-digit code
+            }
+            alert(res?.error || 'Could not create flat in cloud. Check internet connection and try again.');
+            return false;
+          }
+        } else {
+          alert('Cloud service unavailable. Please check internet connection.');
+          return false;
+        }
 
-      localStorage.setItem('tiffin_session', JSON.stringify(this.session));
-      localStorage.setItem('tiffin_user_session', JSON.stringify(this.session));
-      localStorage.setItem('tiffin_sync_room', roomCode);
-      localStorage.setItem('tiffin_my_identity', cleanName);
-      this.saveActiveRoom();
+        if (!createdRoomData || !finalCode) {
+          alert('Failed to allocate a unique room code. Please try again.');
+          return false;
+        }
 
-      ROOMMATES = [adminMember];
-      CONFIG.adminPassword = cleanPin;
+        this.activeRoom = createdRoomData;
+        this.session = {
+          memberId: adminMember.id,
+          name: cleanName,
+          phone: cleanPhone,
+          role: 'admin',
+          groupName: cleanGroup,
+          roomCode: finalCode,
+          status: 'approved',
+          joinedAtTs: Date.now()
+        };
 
-      // Refresh default month data for clean slate
-      appState = getDefaultDataForMonth(currentYear, currentMonth);
-      saveStateToStorage(appState);
+        localStorage.setItem('tiffin_session', JSON.stringify(this.session));
+        localStorage.setItem('tiffin_user_session', JSON.stringify(this.session));
+        localStorage.setItem('tiffin_sync_room', finalCode);
+        localStorage.setItem('tiffin_my_identity', cleanName);
+        this.saveActiveRoom();
 
-      // Persist to Firebase Cloud immediately so anyone joining can find it
-      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
-        await FirebaseSync.saveRoomData(roomCode, this.activeRoom);
-        await FirebaseSync.saveLedgerState(roomCode, appState);
-        FirebaseSync.subscribeRoom(roomCode);
-        const cachedFcm = localStorage.getItem('tiffin_fcm_token');
-        if (cachedFcm) FirebaseSync.registerFcmToken(cachedFcm);
+        ROOMMATES = [adminMember];
+        CONFIG.adminPassword = cleanPin;
+        appState = initialState;
+        saveStateToStorage(appState);
+
+        if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
+          FirebaseSync.subscribeRoom(finalCode);
+          const cachedFcm = localStorage.getItem('tiffin_fcm_token');
+          if (cachedFcm) FirebaseSync.registerFcmToken(cachedFcm);
+        }
+
+        SyncEngine.setRoomCode(finalCode);
+        SyncEngine.setIdentity(cleanName);
+        setupSheetFilterControls();
+
+        this.hideGateModal();
+        this.updateHeaderRoomUI();
+        this.updatePendingBadges();
+        this.renderSettingsMembersTab();
+        updateIdentityUI(cleanName);
+        renderAll();
+
+        showToast(`Group "${cleanGroup}" created! Room Code: ${finalCode}`, 'success', 4000);
+        setTimeout(() => showStartupWelcomePrompt(), 500);
+        return true;
+      } finally {
+        if (createBtn) createBtn.disabled = false;
+        if (createBtnSpan) createBtnSpan.textContent = 'Create Flat';
       }
-
-      SyncEngine.setRoomCode(roomCode);
-      SyncEngine.setIdentity(cleanName);
-
-      SyncEngine.broadcast({
-        type: 'room_meta_sync',
-        roomCode: roomCode,
-        roomData: this.activeRoom,
-        state: getCompactSyncState(appState)
-      });
-
-      this.hideGateModal();
-      this.updateHeaderRoomUI();
-      this.updatePendingBadges();
-      this.renderSettingsMembersTab();
-      updateIdentityUI(cleanName);
-
-      renderAll();
-
-      showToast(`Group "${cleanGroup}" created! Room Code: ${roomCode}`);
-      setTimeout(() => showStartupWelcomePrompt(), 500);
     },
 
     async enterRoom(roomCode, phone, pin, name, isDirectSync = false) {
@@ -4663,47 +4451,42 @@
           joinedAt: new Date().toISOString()
         };
 
-        let result = null;
-        if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
-          result = await FirebaseSync.joinRoom(cleanCode, newMemberCandidate, cleanPin);
-        }
-
-        if (result && !result.success) {
-          alert(result.error || `Room #${cleanCode} was not found. Please verify the 4-digit code.`);
+        if (typeof FirebaseSync === 'undefined' || typeof FirebaseSync.joinRoom !== 'function') {
+          alert('Cloud connection unavailable. Please check internet connection.');
           return false;
         }
 
-        let targetRoom = result?.roomData;
-        let serverState = result?.state;
-
-        if (!targetRoom) {
-          try {
-            const raw = localStorage.getItem(`tiffin_room_${cleanCode}`);
-            if (raw) targetRoom = JSON.parse(raw);
-          } catch (e) {}
-        }
-
-        if (!targetRoom) {
-          alert(`Room #${cleanCode} was not found. Please verify the 4-digit room code.`);
+        const result = await FirebaseSync.joinRoom(cleanCode, newMemberCandidate, cleanPin);
+        if (!result || !result.success) {
+          alert(result?.error || `Could not join Room #${cleanCode}. Please check the room code and internet connection.`);
           return false;
         }
 
-        // Clear any applicant localStorage keys
+        const targetRoom = result.roomData;
+        const serverState = result.state;
+        const allMonths = result.months;
+
+        if (!targetRoom) {
+          alert(`Room #${cleanCode} data could not be retrieved. Please try again.`);
+          return false;
+        }
+
         localStorage.removeItem('tiffin_applicant');
         localStorage.removeItem('tiffin_pending_join_req');
 
-        const finalMember = result?.member || newMemberCandidate;
-        const actualRole = cleanPin ? 'admin' : 'member';
-        const actualName = cleanName || finalMember.name || 'Flatmate';
+        const finalMember = result.member || newMemberCandidate;
+        const actualRole = finalMember.role || (cleanPin ? 'admin' : 'member');
+        const actualName = finalMember.name || cleanName || 'Flatmate';
 
         this.session = {
           memberId: finalMember.id,
           name: actualName,
-          phone: cleanPhone || finalMember.phone || '',
+          phone: finalMember.phone || cleanPhone || '',
           role: actualRole,
           groupName: targetRoom.name || 'My Flat',
           roomCode: cleanCode,
-          status: 'approved'
+          status: 'approved',
+          joinedAtTs: Date.now()
         };
         localStorage.setItem('tiffin_session', JSON.stringify(this.session));
         localStorage.setItem('tiffin_user_session', JSON.stringify(this.session));
@@ -4715,8 +4498,19 @@
         this.saveActiveRoom();
 
         ROOMMATES = this.activeRoom.members || [];
+        if (targetRoom.adminPin) {
+          CONFIG.adminPassword = targetRoom.adminPin;
+        }
 
-        // Adopt existing ledger state from server so user immediately has all logged meals & sabzi
+        // Adopt existing month ledgers cleanly from server
+        if (allMonths && typeof allMonths === 'object') {
+          Object.keys(allMonths).forEach(mKey => {
+            const parts = mKey.split('_');
+            if (parts.length === 2 && allMonths[mKey]?.days) {
+              saveStateForMonth(Number(parts[0]), Number(parts[1]), allMonths[mKey]);
+            }
+          });
+        }
         if (serverState && serverState.days) {
           saveStateForMonth(currentYear, currentMonth, serverState);
           appState = serverState;
@@ -4724,7 +4518,6 @@
           appState = loadStateForMonth(currentYear, currentMonth);
         }
 
-        // Initialize meal slots in appState for all roommates
         if (appState && appState.days) {
           for (let d = 1; d <= (CONFIG.daysInMonth || 31); d++) {
             if (appState.days[d]) {
@@ -4746,27 +4539,30 @@
         }
         SyncEngine.setRoomCode(cleanCode);
         SyncEngine.setIdentity(actualName);
+        setupSheetFilterControls();
 
-        // Broadcast to flatmates immediately (member_joined only; do not broadcast blank ledger state)
+        // Notify peers to pull the updated atomic roster from Firestore
         SyncEngine.broadcast({
-          type: 'member_joined',
+          type: 'room_roster_changed',
           roomCode: cleanCode,
-          member: finalMember
+          reason: 'member_joined',
+          memberId: finalMember.id,
+          memberName: actualName
         });
 
         this.hideGateModal();
         this.updateHeaderRoomUI();
         this.renderSettingsMembersTab();
+        populateHeaderIdentityDropdown();
         updateIdentityUI(actualName);
-
         renderAll();
 
-        showToast(`Connected to "${targetRoom.name}" (Room #${cleanCode})`);
+        showToast(`Connected to "${targetRoom.name}" (Room #${cleanCode})`, 'success');
         setTimeout(() => showStartupWelcomePrompt(), 500);
         return true;
       } finally {
         if (submitBtn) submitBtn.disabled = false;
-        if (submitText) submitText.textContent = 'Join Flat';
+        if (submitText) submitText.textContent = cleanPin ? 'Admin Login' : 'Join Flat';
       }
     },
 
@@ -4914,38 +4710,63 @@
     },
 
     async leaveRoom() {
-      const settingsModal = document.getElementById('settingsModal');
-      if (settingsModal) settingsModal.classList.remove('active');
-
       const roomCode = this.activeRoom?.code || this.session?.roomCode;
       const memberId = this.session?.memberId;
       const memberName = this.session?.name;
+      const memberPhone = this.session?.phone;
 
-      if (roomCode && memberId) {
-        // 1. Broadcast member_left immediately via peer sync
-        SyncEngine.broadcast({
-          type: 'member_left',
-          roomCode: roomCode,
-          memberId: memberId,
-          memberName: memberName
+      if (roomCode && (memberId || memberName || memberPhone)) {
+        if (typeof FirebaseSync === 'undefined' || typeof FirebaseSync.leaveRoom !== 'function') {
+          alert('Cloud sync unavailable. Please check your internet connection and try again.');
+          return false;
+        }
+
+        showToast('Leaving flat...', 'info');
+        const res = await FirebaseSync.leaveRoom(roomCode, {
+          id: memberId || '',
+          name: memberName || '',
+          phone: memberPhone || ''
         });
 
-        // 2. Remove member from cloud Firestore (handles admin succession if admin leaves)
-        if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable && FirebaseSync.leaveRoom) {
-          try {
-            await FirebaseSync.leaveRoom(roomCode, memberId);
-          } catch (e) {
-            console.warn('[RoomManager] Failed to notify leaveRoom in cloud:', e);
-          }
+        if (!res || !res.success) {
+          alert(`Could not leave flat #${roomCode}: ${res?.error || 'Network error'}. Please check your internet connection and try again.`);
+          return false;
         }
+
+        // Notify peers AFTER server commit so they fetch the updated atomic roster
+        SyncEngine.broadcast({
+          type: 'room_roster_changed',
+          roomCode: roomCode,
+          reason: res.dissolved ? 'room_dissolved' : 'member_left',
+          memberId: memberId || '',
+          memberName: memberName || ''
+        });
       }
 
+      const settingsModal = document.getElementById('settingsModal');
+      if (settingsModal) settingsModal.classList.remove('active');
+
       this.hardResetLocalSession();
+      setupSheetFilterControls();
       this.showGateModal('join');
       this.updateHeaderRoomUI();
       this.renderSettingsMembersTab();
       renderAll();
-      showToast('You have left the flat. Enter a Room Code or create a new flat.');
+      showToast('You have permanently left the flat.');
+      return true;
+    },
+
+    logoutDeviceOnly() {
+      const settingsModal = document.getElementById('settingsModal');
+      if (settingsModal) settingsModal.classList.remove('active');
+
+      this.hardResetLocalSession();
+      setupSheetFilterControls();
+      this.showGateModal('join');
+      this.updateHeaderRoomUI();
+      this.renderSettingsMembersTab();
+      renderAll();
+      showToast('Logged out on this device. Your profile remains in the flat.');
     },
 
     showNewAdminPinModal(flatName) {
@@ -5007,13 +4828,14 @@
         return;
       }
 
-      let res = null;
-      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable && FirebaseSync.transferAdminRole) {
-        res = await FirebaseSync.transferAdminRole(this.activeRoom.code, targetMemberId);
+      if (typeof FirebaseSync === 'undefined' || typeof FirebaseSync.transferAdminRole !== 'function') {
+        showToast('Cloud sync unavailable.', 'warning');
+        return;
       }
 
-      if (res && !res.success) {
-        showToast(res.error || 'Failed to transfer admin role.', 'warning');
+      const res = await FirebaseSync.transferAdminRole(this.activeRoom.code, targetMemberId);
+      if (!res || !res.success) {
+        showToast(res?.error || 'Failed to transfer admin role.', 'warning');
         return;
       }
 
@@ -5023,17 +4845,29 @@
         localStorage.setItem('tiffin_user_session', JSON.stringify(this.session));
       }
 
-      if (this.activeRoom) {
+      if (res.roomData) {
+        this.activeRoom = res.roomData;
+      } else if (this.activeRoom) {
         (this.activeRoom.members || []).forEach(m => {
           if (m.id === targetMemberId) m.role = 'admin';
           else if (m.role === 'admin') m.role = 'member';
         });
+        this.activeRoom.adminId = targetMemberId;
         this.activeRoom.adminName = target.name;
-        this.saveActiveRoom();
       }
+      this.saveActiveRoom();
+      ROOMMATES = this.activeRoom.members || [];
+
+      SyncEngine.broadcast({
+        type: 'room_roster_changed',
+        roomCode: this.activeRoom.code,
+        reason: 'admin_promoted',
+        newAdminId: targetMemberId
+      });
 
       this.renderSettingsMembersTab();
       populateHeaderIdentityDropdown();
+      setupSheetFilterControls();
       updateIdentityUI(RoomManager.session?.name);
       renderAll();
       showToast(`👑 ${target.name} is now the Flat Admin.`, 'success');
@@ -5154,7 +4988,7 @@
       if (!cleanName) return;
 
       const avatarColors = ['#00d4ff', '#a78bfa', '#ff3b5c', '#ffb800', '#10b981', '#38bdf8', '#f43f5e', '#ec4899'];
-      const avatarColor = avatarColors[this.activeRoom.members.length % avatarColors.length];
+      const avatarColor = avatarColors[(this.activeRoom.members || []).length % avatarColors.length];
       const memberId = 'm_' + this.sanitizeId(cleanName) + '_' + Date.now().toString().slice(-4);
 
       const newMember = {
@@ -5166,7 +5000,23 @@
         joinedAt: new Date().toISOString()
       };
 
-      this.activeRoom.members.push(newMember);
+      if (typeof FirebaseSync === 'undefined' || typeof FirebaseSync.addMemberToRoom !== 'function') {
+        showToast('Cloud sync unavailable.', 'warning');
+        return;
+      }
+
+      const res = await FirebaseSync.addMemberToRoom(this.activeRoom.code, newMember);
+      if (!res || !res.success) {
+        showToast(res?.error || 'Failed to add member.', 'warning');
+        return;
+      }
+
+      const added = res.member || newMember;
+      if (res.roomData) {
+        this.activeRoom = res.roomData;
+      } else {
+        this.activeRoom.members.push(added);
+      }
       this.cleanupAdminDuplicates(this.activeRoom);
       this.saveActiveRoom();
       ROOMMATES = this.activeRoom.members;
@@ -5175,29 +5025,28 @@
         for (let d = 1; d <= (CONFIG.daysInMonth || 31); d++) {
           if (appState.days[d]) {
             if (!appState.days[d].meals) appState.days[d].meals = {};
-            if (!appState.days[d].meals[newMember.id]) {
-              appState.days[d].meals[newMember.id] = { lunch: '', dinner: '' };
+            if (!appState.days[d].meals[added.id]) {
+              appState.days[d].meals[added.id] = { lunch: '', dinner: '' };
             }
           }
         }
         saveStateToStorage(appState);
       }
 
-      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
-        await FirebaseSync.saveRoomData(this.activeRoom.code, this.activeRoom);
-      }
-
       SyncEngine.broadcast({
-        type: 'member_added',
+        type: 'room_roster_changed',
         roomCode: this.activeRoom.code,
-        member: newMember
+        reason: 'member_added',
+        memberId: added.id,
+        memberName: added.name
       });
 
       this.renderSettingsMembersTab();
       populateHeaderIdentityDropdown();
+      setupSheetFilterControls();
       updateIdentityUI(RoomManager.session?.name);
       renderAll();
-      showToast(`Added ${getFirstName(cleanName)} to flat!`);
+      showToast(`Added ${getFirstName(added.name)} to flat!`, 'success');
     },
 
     async removeMember(memberId) {
@@ -5208,50 +5057,49 @@
       }
       const target = (this.activeRoom.members || []).find(m => m.id === memberId);
       if (!target) return;
-      if (target.role === 'admin') {
+      if (target.role === 'admin' || (this.activeRoom.adminId && target.id === this.activeRoom.adminId)) {
         alert('Cannot kick the room Admin.');
         return;
       }
 
-      if (!confirm(`Are you sure you want to kick ${getFirstName(target.name)} from this flat? They will be removed immediately.`)) return;
+      if (!confirm(`Are you sure you want to kick ${getFirstName(target.name)} from this flat? They will be removed immediately and blocked from rejoining.`)) return;
 
-      // 1. Remove from local activeRoom immediately and add to kickedMembers
-      const targetPhone = target.phone ? target.phone.slice(-10) : '';
-      const targetName = (target.name || '').trim().toLowerCase();
-
-      this.activeRoom.members = (this.activeRoom.members || []).filter(m => {
-        if (m.id === memberId) return false;
-        if (targetPhone && m.phone && m.phone.slice(-10) === targetPhone) return false;
-        if (targetName && m.name && m.name.trim().toLowerCase() === targetName) return false;
-        return true;
-      });
-
-      this.activeRoom.kickedMembers = Array.isArray(this.activeRoom.kickedMembers) ? this.activeRoom.kickedMembers : [];
-      this.activeRoom.kickedMembers = this.activeRoom.kickedMembers.filter(km => km.id !== memberId);
-      this.activeRoom.kickedMembers.push({
-        id: memberId,
-        name: target.name || 'Member',
-        phone: target.phone || '',
-        kickedAt: Date.now()
-      });
-      this.saveActiveRoom();
-      ROOMMATES = this.activeRoom.members;
-
-      // 2. Persist removal to Cloud Firestore
-      if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable && FirebaseSync.removeMemberFromRoom) {
-        await FirebaseSync.removeMemberFromRoom(this.activeRoom.code, memberId);
+      if (typeof FirebaseSync === 'undefined' || typeof FirebaseSync.removeMemberFromRoom !== 'function') {
+        showToast('Cloud sync unavailable.', 'warning');
+        return;
       }
 
-      // 3. Broadcast kick to all connected devices in the room
+      const res = await FirebaseSync.removeMemberFromRoom(this.activeRoom.code, target);
+      if (!res || !res.success) {
+        showToast(res?.error || 'Failed to remove member from cloud.', 'warning');
+        return;
+      }
+
+      if (res.roomData) {
+        this.activeRoom = res.roomData;
+      } else {
+        this.activeRoom.members = (this.activeRoom.members || []).filter(m => !this.findMatchingMember([m], target));
+      }
+      this.saveActiveRoom();
+      ROOMMATES = this.activeRoom.members || [];
+
+      if (appState && Array.isArray(appState.amulMembers)) {
+        appState.amulMembers = appState.amulMembers.filter(id => id !== target.id);
+        saveStateToStorage(appState);
+      }
+      if (activeSheetFilter === target.id) activeSheetFilter = 'all';
+
       SyncEngine.broadcast({
-        type: 'member_kicked',
+        type: 'room_roster_changed',
         roomCode: this.activeRoom.code,
-        memberId: memberId,
+        reason: 'member_kicked',
+        memberId: target.id,
         memberName: target.name
       });
 
       this.renderSettingsMembersTab();
       populateHeaderIdentityDropdown();
+      setupSheetFilterControls();
       updateIdentityUI(RoomManager.session?.name);
       renderAll();
       showToast(`Kicked ${getFirstName(target.name)} from flat.`);
@@ -5826,18 +5674,44 @@
       });
     }
 
+    const logoutDeviceBtn = document.getElementById('logoutDeviceBtn');
+    if (logoutDeviceBtn) {
+      logoutDeviceBtn.addEventListener('click', () => {
+        triggerHaptic();
+        const code = RoomManager.activeRoom?.code || RoomManager.session?.roomCode || '';
+        if (confirm(`Log out on this device only? Your flat profile stays active in #${code} and you can log back in anytime.`)) {
+          RoomManager.logoutDeviceOnly();
+        }
+      });
+    }
+
     const switchRoomBtn = document.getElementById('switchRoomBtn');
     if (switchRoomBtn) {
-      switchRoomBtn.addEventListener('click', () => {
+      switchRoomBtn.addEventListener('click', async () => {
         triggerHaptic();
         const isAdmin = RoomManager.isAdmin();
-        const otherMembers = (RoomManager.activeRoom?.members || []).filter(m => m.id !== RoomManager.session?.memberId);
-        let msg = 'Switch flat or log out? You can rejoin anytime with your Room Code.';
+        const otherMembers = (RoomManager.activeRoom?.members || []).filter(m =>
+          !RoomManager.findMatchingMember([m], {
+            id: RoomManager.session?.memberId,
+            name: RoomManager.session?.name,
+            phone: RoomManager.session?.phone
+          })
+        );
+
+        let msg = 'Leave this flat permanently? You will be removed from the member list for all flatmates.';
         if (isAdmin && otherMembers.length > 0) {
-          msg = `You are the Flat Admin. If you leave, admin ownership will automatically pass to ${otherMembers[0].name}. Are you sure you want to leave?`;
+          msg = `You are the Flat Admin. Leaving permanently will remove you for all flatmates and automatically transfer Admin rights to ${otherMembers[0].name}. Continue?`;
+        } else if (otherMembers.length === 0) {
+          msg = 'You are the last member in this flat. Leaving will delete this flat permanently. Continue?';
         }
+
         if (confirm(msg)) {
-          RoomManager.leaveRoom();
+          switchRoomBtn.disabled = true;
+          try {
+            await RoomManager.leaveRoom();
+          } finally {
+            switchRoomBtn.disabled = false;
+          }
         }
       });
     }
@@ -5892,15 +5766,24 @@
     if (changeAdminPinBtn) {
       changeAdminPinBtn.addEventListener('click', () => {
         triggerHaptic();
-        requireAdminPassword(() => {
+        requireAdminPassword(async () => {
           const newPin = prompt('Enter new Admin Security PIN:');
           if (newPin && newPin.trim()) {
-            CONFIG.adminPassword = newPin.trim();
+            const cleanNewPin = newPin.trim();
+            const roomCode = RoomManager.activeRoom?.code || RoomManager.session?.roomCode;
+            if (roomCode && typeof FirebaseSync !== 'undefined' && typeof FirebaseSync.updateAdminPin === 'function') {
+              const res = await FirebaseSync.updateAdminPin(roomCode, cleanNewPin);
+              if (!res || !res.success) {
+                showToast('Failed to update PIN in cloud. Try again.', 'warning');
+                return;
+              }
+            }
+            CONFIG.adminPassword = cleanNewPin;
             if (RoomManager.activeRoom) {
-              RoomManager.activeRoom.adminPin = newPin.trim();
+              RoomManager.activeRoom.adminPin = cleanNewPin;
               RoomManager.saveActiveRoom();
             }
-            showToast('Admin security PIN updated!');
+            showToast('Admin security PIN updated across all devices!', 'success');
           }
         });
       });
@@ -5926,7 +5809,7 @@
 
     const approvalToggle = document.getElementById('requireApprovalToggle');
     if (approvalToggle) {
-      approvalToggle.addEventListener('change', () => {
+      approvalToggle.addEventListener('change', async () => {
         triggerHaptic();
         if (!RoomManager.isAdmin()) {
           showToast('Only Flat Admin can change approval settings.', 'warning');
@@ -5937,14 +5820,13 @@
         const enabled = approvalToggle.checked;
         RoomManager.activeRoom.requireApproval = enabled;
         RoomManager.saveActiveRoom();
-        if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isAvailable) {
-          FirebaseSync.saveRoomData(RoomManager.activeRoom.code, RoomManager.activeRoom);
+        if (typeof FirebaseSync !== 'undefined' && FirebaseSync.updateRoomMetadata) {
+          await FirebaseSync.updateRoomMetadata(RoomManager.activeRoom.code, { requireApproval: enabled });
         }
         SyncEngine.broadcast({
-          type: 'room_meta_sync',
+          type: 'room_roster_changed',
           roomCode: RoomManager.activeRoom.code,
-          roomData: RoomManager.activeRoom,
-          state: getCompactSyncState(appState)
+          reason: 'metadata_updated'
         });
         showToast(enabled ? 'Admin approval enabled for new members' : 'Admin approval disabled (anyone with code can join)');
       });

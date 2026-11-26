@@ -174,6 +174,247 @@
     },
 
     /**
+     * Pack standard JavaScript values into Firestore REST API structured JSON
+     */
+    packFirestoreValue(val) {
+      if (val === null || val === undefined) return { nullValue: null };
+      if (typeof val === 'boolean') return { booleanValue: val };
+      if (typeof val === 'number') {
+        if (!Number.isFinite(val)) return { integerValue: '0' };
+        if (Number.isInteger(val)) return { integerValue: String(val) };
+        return { doubleValue: val };
+      }
+      if (typeof val === 'string') return { stringValue: val };
+      if (Array.isArray(val)) {
+        return {
+          arrayValue: {
+            values: val.filter(v => v !== undefined).map(v => this.packFirestoreValue(v))
+          }
+        };
+      }
+      if (typeof val === 'object') {
+        return {
+          mapValue: {
+            fields: this.packFirestoreFields(val)
+          }
+        };
+      }
+      return { stringValue: String(val) };
+    },
+
+    packFirestoreFields(obj) {
+      if (!obj || typeof obj !== 'object') return {};
+      const fields = {};
+      for (const k of Object.keys(obj)) {
+        if (obj[k] !== undefined) {
+          fields[k] = this.packFirestoreValue(obj[k]);
+        }
+      }
+      return fields;
+    },
+
+    // --- Identity Matching & Roster Sanitation Helpers ---
+    _normalizePhone(p) {
+      return (p || '').toString().replace(/\D/g, '').slice(-10);
+    },
+
+    _normalizeName(n) {
+      return (n || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+    },
+
+    _matchesCandidate(m, candidate) {
+      if (!m || !candidate) return false;
+      if (candidate.id && m.id && String(candidate.id).trim() === String(m.id).trim()) return true;
+      const cPhone = this._normalizePhone(candidate.phone);
+      const mPhone = this._normalizePhone(m.phone);
+      if (cPhone.length >= 10 && mPhone.length >= 10 && cPhone === mPhone) return true;
+      const cName = this._normalizeName(candidate.name);
+      const mName = this._normalizeName(m.name);
+      if (cName && mName && cName === mName) return true;
+      return false;
+    },
+
+    _sanitizeId(name) {
+      return (name || '').toLowerCase().replace(/[^a-z0-9]/g, '') || `user_${Date.now()}`;
+    },
+
+    _getDocBaseUrl(cleanCode) {
+      return `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/rooms/${encodeURIComponent(cleanCode)}`;
+    },
+
+    async _restGetRoom(cleanCode) {
+      const url = `${this._getDocBaseUrl(cleanCode)}?key=${FIREBASE_CONFIG.apiKey}`;
+      const resp = await fetch(url);
+      if (resp.status === 404) {
+        return { exists: false, data: null, updateTime: null };
+      }
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => '');
+        throw new Error(`HTTP ${resp.status}: ${errText || resp.statusText}`);
+      }
+      const json = await resp.json();
+      return {
+        exists: true,
+        data: this.unpackFirestoreFields(json.fields || {}),
+        updateTime: json.updateTime || null
+      };
+    },
+
+    async _restExecuteMutation(cleanCode, mutatorFn) {
+      const maxRetries = 4;
+      let lastErr = null;
+
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        const current = await this._restGetRoom(cleanCode);
+        const mutation = mutatorFn(current.exists ? current.data : null, {
+          exists: current.exists,
+          usingRest: true
+        });
+
+        if (!mutation || mutation.abort) {
+          return mutation ? mutation.result : { success: false, error: 'Aborted' };
+        }
+
+        if (mutation.deleteDoc) {
+          if (!current.exists) {
+            return mutation.result || { success: true, dissolved: true };
+          }
+          const delUrl = `${this._getDocBaseUrl(cleanCode)}?key=${FIREBASE_CONFIG.apiKey}` +
+            (current.updateTime ? `&currentDocument.updateTime=${encodeURIComponent(current.updateTime)}` : '');
+          const delResp = await fetch(delUrl, { method: 'DELETE' });
+          if (delResp.ok || delResp.status === 404) {
+            return mutation.result || { success: true, dissolved: true };
+          }
+          if (delResp.status === 400 || delResp.status === 409) {
+            lastErr = new Error('Concurrent document change detected during delete, retrying');
+            continue;
+          }
+          throw new Error(`REST delete failed (${delResp.status})`);
+        }
+
+        const payload = { ...(mutation.payload || {}) };
+        if (Array.isArray(mutation.deleteFcmIds) && mutation.deleteFcmIds.length > 0 && current.exists && current.data) {
+          const nextFcmTokens = { ...(current.data.fcmTokens || {}) };
+          let modifiedFcm = false;
+          mutation.deleteFcmIds.forEach(fid => {
+            if (fid && Object.prototype.hasOwnProperty.call(nextFcmTokens, fid)) {
+              delete nextFcmTokens[fid];
+              modifiedFcm = true;
+            }
+          });
+          if (modifiedFcm) {
+            payload.fcmTokens = nextFcmTokens;
+          }
+        }
+
+        const maskParams = Object.keys(payload)
+          .map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`)
+          .join('&');
+        const precondition = current.exists && current.updateTime
+          ? `&currentDocument.updateTime=${encodeURIComponent(current.updateTime)}`
+          : '&currentDocument.exists=false';
+
+        const patchUrl = `${this._getDocBaseUrl(cleanCode)}?key=${FIREBASE_CONFIG.apiKey}&${maskParams}${precondition}`;
+        const patchResp = await fetch(patchUrl, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fields: this.packFirestoreFields(payload)
+          })
+        });
+
+        if (patchResp.ok) {
+          const updatedJson = await patchResp.json().catch(() => null);
+          const mergedLatest = updatedJson && updatedJson.fields
+            ? this.unpackFirestoreFields(updatedJson.fields)
+            : { ...(current.data || {}), ...payload };
+          this.latestSnapshot = mergedLatest;
+          return mutation.result;
+        }
+
+        if (patchResp.status === 400 || patchResp.status === 409) {
+          lastErr = new Error(`Optimistic lock conflict (HTTP ${patchResp.status}), retrying...`);
+          continue;
+        }
+        const errBody = await patchResp.text().catch(() => '');
+        throw new Error(`REST patch failed (${patchResp.status}): ${errBody}`);
+      }
+
+      throw lastErr || new Error('Failed to commit room update after concurrency retries');
+    },
+
+    /**
+     * Execute an atomic room document mutation using Firestore SDK Transaction
+     * with automatic 8s timeout + HTTPS REST optimistic-concurrency fallback.
+     * Guarantees changes reach live Cloud Firestore instead of sitting in offline cache.
+     */
+    async runRoomMutation(roomCode, mutatorFn) {
+      const cleanCode = this.getCleanRoom(roomCode);
+      if (!cleanCode) return { success: false, error: 'Invalid room code.' };
+
+      // 1. Try Firestore SDK Transaction first (with strict timeout so WebView never hangs)
+      if (this.isAvailable && db) {
+        try {
+          const roomRef = db.collection('rooms').doc(cleanCode);
+          let timeoutId = null;
+          const txPromise = db.runTransaction(async (transaction) => {
+            const doc = await transaction.get(roomRef);
+            const currentData = doc.exists ? (doc.data() || {}) : null;
+            const mutation = mutatorFn(currentData, { exists: doc.exists, usingRest: false });
+
+            if (!mutation || mutation.abort) {
+              return mutation ? mutation.result : { success: false, error: 'Aborted' };
+            }
+
+            if (mutation.deleteDoc) {
+              if (doc.exists) transaction.delete(roomRef);
+              return mutation.result || { success: true, dissolved: true };
+            }
+
+            const sdkPayload = { ...(mutation.payload || {}) };
+            if (doc.exists && Array.isArray(mutation.deleteFcmIds) && mutation.deleteFcmIds.length > 0 && currentData && currentData.fcmTokens) {
+              mutation.deleteFcmIds.forEach(fid => {
+                if (fid && currentData.fcmTokens[fid]) {
+                  sdkPayload[`fcmTokens.${fid}`] = firebase.firestore.FieldValue.delete();
+                }
+              });
+              // FieldValue.delete() requires transaction.update when using dotted paths
+              transaction.update(roomRef, sdkPayload);
+            } else {
+              transaction.set(roomRef, sdkPayload, { merge: true });
+            }
+
+            return {
+              ...mutation.result,
+              _committedDoc: mutation.deleteDoc ? null : { ...(currentData || {}), ...(mutation.payload || {}) }
+            };
+          });
+
+          const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error('Firestore transaction timeout')), 8000);
+          });
+
+          const txResult = await Promise.race([txPromise, timeoutPromise]).finally(() => {
+            if (timeoutId) clearTimeout(timeoutId);
+          });
+
+          if (txResult && '_committedDoc' in txResult) {
+            if (txResult._committedDoc) {
+              this.latestSnapshot = txResult._committedDoc;
+            }
+            delete txResult._committedDoc;
+          }
+          return txResult;
+        } catch (sdkErr) {
+          console.warn('[FirebaseSync] SDK runTransaction failed/timed out, using HTTPS REST optimistic concurrency:', sdkErr.message || sdkErr);
+        }
+      }
+
+      // 2. Direct HTTPS REST API Optimistic Concurrency Fallback
+      return await this._restExecuteMutation(cleanCode, mutatorFn);
+    },
+
+    /**
      * Forcefully fetch latest room document directly from Firestore server or REST API
      * (bypasses stale offline IndexedDB snapshots)
      */
@@ -185,12 +426,16 @@
       if (this.isAvailable && db) {
         try {
           const doc = await db.collection('rooms').doc(cleanCode).get({ source: 'server' });
-          if (doc.exists) {
-            const data = doc.data() || {};
-            this.latestSnapshot = data;
-            this.notifySubscribers(data);
-            return data;
+          if (!doc.exists) {
+            this.latestSnapshot = null;
+            const deletedMarker = { _roomDeleted: true, roomCode: cleanCode };
+            this.notifySubscribers(deletedMarker);
+            return deletedMarker;
           }
+          const data = doc.data() || {};
+          this.latestSnapshot = data;
+          this.notifySubscribers(data);
+          return data;
         } catch (sdkErr) {
           console.warn('[FirebaseSync] Direct SDK server fetch failed, trying HTTPS REST fallback:', sdkErr.message || sdkErr);
         }
@@ -198,17 +443,17 @@
 
       // 2. Fallback to HTTPS REST API (Always reaches cloud and bypasses local cache)
       try {
-        const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/rooms/${cleanCode}?key=${FIREBASE_CONFIG.apiKey}`;
-        const resp = await fetch(url);
-        if (resp.ok) {
-          const json = await resp.json();
-          if (json && json.fields) {
-            const data = this.unpackFirestoreFields(json.fields);
-            this.latestSnapshot = data;
-            this.notifySubscribers(data);
-            return data;
-          }
+        const res = await this._restGetRoom(cleanCode);
+        if (!res.exists) {
+          this.latestSnapshot = null;
+          const deletedMarker = { _roomDeleted: true, roomCode: cleanCode };
+          this.notifySubscribers(deletedMarker);
+          return deletedMarker;
         }
+        const data = res.data || {};
+        this.latestSnapshot = data;
+        this.notifySubscribers(data);
+        return data;
       } catch (restErr) {
         console.warn('[FirebaseSync] HTTPS REST API fallback failed:', restErr.message || restErr);
       }
@@ -246,105 +491,156 @@
     },
 
     /**
-     * Join Room Workflow (Instant Direct Entry - No Approval Gates)
+     * Create a brand new flat room atomically (prevents accidental 4-digit code collision)
+     */
+    async createRoom(roomData, initialState, year, month) {
+      if (!roomData || !roomData.code) {
+        return { success: false, error: 'Invalid room payload.' };
+      }
+      const cleanCode = this.getCleanRoom(roomData.code);
+      const monthKey = `${year || new Date().getFullYear()}_${month || (new Date().getMonth() + 1)}`;
+
+      try {
+        return await this.runRoomMutation(cleanCode, (existingData, meta) => {
+          if (meta.exists) {
+            return {
+              abort: true,
+              result: { success: false, collision: true, error: `Room #${cleanCode} already exists.` }
+            };
+          }
+
+          const finalRoomData = {
+            ...roomData,
+            code: cleanCode,
+            membershipVersion: 1,
+            leftMembers: [],
+            kickedMembers: []
+          };
+
+          return {
+            payload: {
+              roomData: finalRoomData,
+              state: initialState,
+              months: { [monthKey]: initialState },
+              lastUpdated: Date.now()
+            },
+            result: {
+              success: true,
+              roomData: finalRoomData
+            }
+          };
+        });
+      } catch (err) {
+        console.error('[FirebaseSync] createRoom error:', err);
+        return { success: false, error: 'Failed to create room in cloud: ' + (err.message || 'Network error') };
+      }
+    },
+
+    /**
+     * Join Room Workflow (Transactional, handles rejoins from leftMembers, blocks kickedMembers, protects Admin)
      */
     async joinRoom(roomCode, candidate, adminPin) {
-      if (!this.isAvailable || !db) {
-        return { success: false, error: 'Cloud sync is offline. Check internet connection.' };
-      }
-      const cleanCode = String(roomCode).trim().toUpperCase();
+      const cleanCode = this.getCleanRoom(roomCode);
       if (!cleanCode) return { success: false, error: 'Invalid room code.' };
 
       try {
-        const roomRef = db.collection('rooms').doc(cleanCode);
-        let joinedMember = null;
-        let roomState = null;
-        let allMonths = null;
-        let finalRoomData = null;
-
-        const result = await db.runTransaction(async (transaction) => {
-          const doc = await transaction.get(roomRef);
-          if (!doc.exists) {
-            return { success: false, notFound: true, error: `Flat #${cleanCode} was not found. Please verify the 4-digit code.` };
+        const res = await this.runRoomMutation(cleanCode, (data, meta) => {
+          if (!meta.exists || !data || !data.roomData) {
+            return {
+              abort: true,
+              result: { success: false, notFound: true, error: `Flat #${cleanCode} was not found. Please verify the 4-digit code.` }
+            };
           }
 
-          const data = doc.data() || {};
-          const roomData = data.roomData || { code: cleanCode, name: 'My Flat', members: [] };
+          const roomData = { ...data.roomData };
           const now = new Date();
           const currentMonthKey = `${now.getFullYear()}_${now.getMonth() + 1}`;
-          roomState = (data.months && data.months[currentMonthKey]) ? data.months[currentMonthKey] : (data.state || null);
-          allMonths = data.months || null;
-          let members = Array.isArray(roomData.members) ? [...roomData.members] : [];
+          const roomState = (data.months && data.months[currentMonthKey]) ? data.months[currentMonthKey] : (data.state || null);
+          const allMonths = data.months || null;
+
+          let members = Array.isArray(roomData.members) ? roomData.members.map(m => ({ ...m })) : [];
+          let leftMembers = Array.isArray(roomData.leftMembers) ? roomData.leftMembers.map(m => ({ ...m })) : [];
+          const kickedMembers = Array.isArray(roomData.kickedMembers) ? roomData.kickedMembers : [];
+
+          let joinedMember = null;
+          const cleanPin = (adminPin || '').trim();
 
           // 1. Admin PIN Verification (if PIN provided)
-          if (adminPin) {
-            if (roomData.adminPin && String(roomData.adminPin).trim() !== String(adminPin).trim()) {
-              return { success: false, error: 'Incorrect Admin Security PIN for this flat.' };
+          if (cleanPin) {
+            if (!roomData.adminPin || String(roomData.adminPin).trim() !== cleanPin) {
+              return { abort: true, result: { success: false, error: 'Incorrect Admin Security PIN for this flat.' } };
             }
-            let adminMember = members.find(m => m.role === 'admin');
+
+            let adminMember = members.find(m => m.role === 'admin' || (roomData.adminId && m.id === roomData.adminId));
             if (adminMember) {
+              // Ensure if candidate gave phone/name they aren't corrupting another admin's record unless it's blank
               if (candidate.phone && !adminMember.phone) adminMember.phone = candidate.phone;
+              adminMember.role = 'admin';
               joinedMember = adminMember;
             } else {
+              // No active admin currently in members (rare recovery case)
+              const cleanName = (candidate.name || roomData.adminName || 'Admin').trim();
               adminMember = {
-                id: candidate.id || ('m_' + Date.now()),
-                name: candidate.name || roomData.adminName || 'Admin',
+                id: candidate.id || roomData.adminId || ('m_' + this._sanitizeId(cleanName) + '_' + Date.now().toString().slice(-4)),
+                name: cleanName,
                 phone: candidate.phone || roomData.adminPhone || '',
                 role: 'admin',
                 avatarColor: '#00d26a',
-                joinedAt: new Date().toISOString()
+                joinedAt: now.toISOString()
               };
               members.unshift(adminMember);
+              roomData.adminId = adminMember.id;
+              roomData.adminName = adminMember.name;
+              roomData.adminPhone = adminMember.phone;
+              leftMembers = leftMembers.filter(lm => !this._matchesCandidate(lm, adminMember));
               joinedMember = adminMember;
             }
           } else {
-            // 2. Member join (WITHOUT Admin PIN):
-            // A. Explicit Kicked Blacklist Check (Permanently blocked from re-entering)
-            if (Array.isArray(roomData.kickedMembers)) {
-              const isKicked = roomData.kickedMembers.some(km =>
-                (candidate.id && km.id === candidate.id) ||
-                (candidate.phone && km.phone && candidate.phone.slice(-10) === km.phone.slice(-10)) ||
-                (candidate.name && km.name && candidate.name.trim().toLowerCase() === km.name.trim().toLowerCase())
-              );
-              if (isKicked) {
-                return { success: false, error: 'You have been removed from this flat by the Admin. You cannot rejoin.' };
-              }
-            }
-
-            // B. Prevent regular member from taking over Admin's profile without the PIN
-            const currentAdmin = members.find(m => m.role === 'admin');
-            if (currentAdmin && candidate.name && currentAdmin.name && candidate.name.trim().toLowerCase() === currentAdmin.name.trim().toLowerCase()) {
+            // 2. Regular Member Join (WITHOUT Admin PIN)
+            // A. Strict Kicked Blacklist Check
+            if (kickedMembers.some(km => this._matchesCandidate(km, candidate))) {
               return {
-                success: false,
-                error: `The name "${candidate.name}" belongs to the Flat Admin. If you are the admin, enter your Admin PIN to log in. Otherwise, please enter your own name.`
+                abort: true,
+                result: { success: false, error: 'You have been removed from this flat by the Admin. You cannot rejoin.' }
               };
             }
 
-            // C. Match only NON-ADMIN existing members
-            let existingMember = members.find(m => {
-              if (m.role === 'admin') return false; // STRICT: Never match admin without PIN
-              if (candidate.id && m.id === candidate.id) return true;
-              if (candidate.phone && m.phone && candidate.phone.slice(-10) === m.phone.slice(-10)) return true;
-              if (candidate.name && m.name && candidate.name.trim().toLowerCase() === m.name.trim().toLowerCase()) return true;
-              return false;
-            });
+            // B. Prevent regular member from logging into active Admin profile without PIN
+            const currentAdmin = members.find(m => m.role === 'admin' || (roomData.adminId && m.id === roomData.adminId));
+            if (currentAdmin && this._matchesCandidate(currentAdmin, candidate)) {
+              return {
+                abort: true,
+                result: {
+                  success: false,
+                  error: `The profile "${currentAdmin.name}" is the current Flat Admin. Tap "Managing this flat? Enter Admin PIN" to log in as Admin, or enter your own name.`
+                }
+              };
+            }
 
-            if (existingMember) {
-              // Returning regular member
-              if (candidate.phone && !existingMember.phone) existingMember.phone = candidate.phone;
-              existingMember.role = 'member'; // GUARANTEED role
-              joinedMember = existingMember;
+            // C. Check if already an active regular member (login on new device / reinstall)
+            const existingActive = members.find(m => m.role !== 'admin' && this._matchesCandidate(m, candidate));
+            if (existingActive) {
+              if (candidate.phone && !existingActive.phone) existingActive.phone = candidate.phone;
+              existingActive.role = 'member';
+              joinedMember = existingActive;
             } else {
-              // 3. Brand New Member - Instant Direct Entry!
+              // D. Check if previously left voluntarily -> restore their canonical ID so past meals remain intact, with role='member'
+              const previouslyLeft = leftMembers.find(lm => this._matchesCandidate(lm, candidate));
+              leftMembers = leftMembers.filter(lm => !this._matchesCandidate(lm, candidate));
+
               const avatarColors = ['#00d4ff', '#a78bfa', '#ff3b5c', '#ffb800', '#10b981', '#38bdf8', '#f43f5e', '#ec4899'];
               const avatarColor = candidate.avatarColor || avatarColors[members.length % avatarColors.length];
+              const resolvedId = (previouslyLeft && previouslyLeft.id)
+                ? previouslyLeft.id
+                : (candidate.id || ('m_' + this._sanitizeId(candidate.name) + '_' + Date.now().toString().slice(-4)));
+
               const newMember = {
-                id: candidate.id || ('m_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4)),
+                id: resolvedId,
                 name: candidate.name,
-                phone: candidate.phone || '',
-                role: 'member', // GUARANTEED role
+                phone: candidate.phone || (previouslyLeft?.phone || ''),
+                role: 'member',
                 avatarColor: avatarColor,
-                joinedAt: new Date().toISOString()
+                joinedAt: now.toISOString()
               };
               members.push(newMember);
               joinedMember = newMember;
@@ -352,43 +648,42 @@
           }
 
           roomData.members = members;
-          finalRoomData = roomData;
+          roomData.leftMembers = leftMembers;
+          roomData.kickedMembers = kickedMembers;
+          roomData.membershipVersion = (Number(roomData.membershipVersion) || 1) + 1;
 
-          transaction.set(roomRef, {
-            roomData: roomData,
-            lastUpdated: Date.now()
-          }, { merge: true });
-
-          return { success: true };
+          return {
+            payload: {
+              roomData: roomData,
+              lastUpdated: Date.now()
+            },
+            result: {
+              success: true,
+              roomData: roomData,
+              state: roomState,
+              months: allMonths,
+              member: joinedMember
+            }
+          };
         });
 
-        if (result && !result.success) {
-          return result;
+        if (res && res.success && res.member) {
+          console.log(`[FirebaseSync] Joined #${cleanCode} atomically: ${res.member.name} (${res.member.id})`);
+          this.sendRoomNotification({
+            roomCode: cleanCode,
+            title: 'Flatmate Joined! 🍱',
+            body: `${res.member.name} joined room #${cleanCode}!`,
+            tag: `join-${res.member.id}`,
+            data: {
+              roomCode: cleanCode,
+              memberName: res.member.name,
+              memberId: res.member.id,
+              type: 'member_joined'
+            }
+          });
         }
 
-        console.log(`[FirebaseSync] Instant direct join to #${cleanCode}: ${joinedMember.name}`);
-
-        // Dispatch instant push notification to all other roommates
-        this.sendRoomNotification({
-          roomCode: cleanCode,
-          title: 'Flatmate Joined! 🍱',
-          body: `${joinedMember.name} joined room #${cleanCode}!`,
-          tag: `join-${joinedMember.id}`,
-          data: {
-            roomCode: cleanCode,
-            memberName: joinedMember.name,
-            memberId: joinedMember.id,
-            type: 'member_joined'
-          }
-        });
-
-        return {
-          success: true,
-          roomData: finalRoomData,
-          state: roomState,
-          months: allMonths,
-          member: joinedMember
-        };
+        return res;
       } catch (err) {
         console.error('[FirebaseSync] joinRoom error:', err);
         return { success: false, error: 'Failed to connect: ' + (err.message || 'Network error') };
@@ -403,217 +698,319 @@
     async cancelJoinRequest() { return { success: true }; },
 
     /**
-     * Admin: Remove Member from Flat (Atomic & Immediate)
+     * Admin: Add Member Directly (Atomic & handles clearing previous left/kicked status)
      */
-    async removeMemberFromRoom(roomCode, memberId) {
-      if (!this.isAvailable || !db) return { success: false, error: 'Database offline.' };
-      const cleanCode = String(roomCode).trim().toUpperCase();
+    async addMemberToRoom(roomCode, newMember) {
+      const cleanCode = this.getCleanRoom(roomCode);
+      if (!cleanCode || !newMember || !newMember.name) {
+        return { success: false, error: 'Invalid member details.' };
+      }
 
       try {
-        const roomRef = db.collection('rooms').doc(cleanCode);
-        const doc = await roomRef.get();
-        if (!doc.exists) return { success: false, error: 'Flat not found.' };
-
-        const data = doc.data() || {};
-        const roomData = data.roomData || {};
-        const members = Array.isArray(roomData.members) ? roomData.members : [];
-
-        const target = members.find(m => m.id === memberId);
-        if (target && target.role === 'admin') {
-          return { success: false, error: 'Cannot remove the room Admin.' };
-        }
-
-        roomData.members = members.filter(m => m.id !== memberId);
-
-        // Record explicitly in kickedMembers list to prevent ghost resurrection
-        roomData.kickedMembers = Array.isArray(roomData.kickedMembers) ? roomData.kickedMembers : [];
-        roomData.kickedMembers = roomData.kickedMembers.filter(km => km.id !== memberId);
-        if (target) {
-          roomData.kickedMembers.push({
-            id: memberId,
-            name: target.name || 'Member',
-            phone: target.phone || '',
-            kickedAt: Date.now()
-          });
-        }
-
-        const updatePayload = {
-          roomData: roomData,
-          lastUpdated: Date.now()
-        };
-
-        // Remove their FCM token from the room document
-        if (data[`fcmTokens.${memberId}`] || (data.fcmTokens && data.fcmTokens[memberId])) {
-          updatePayload[`fcmTokens.${memberId}`] = firebase.firestore.FieldValue.delete();
-        }
-
-        await roomRef.update(updatePayload);
-
-        console.log(`[FirebaseSync] Removed member ${memberId} from #${cleanCode}`);
-
-        // Dispatch notification to inform room of member kick
-        this.sendRoomNotification({
-          roomCode: cleanCode,
-          title: 'Member Removed 👋',
-          body: `${target ? target.name : 'A member'} was removed from the flat by Admin.`,
-          tag: `kick-${memberId}`,
-          data: {
-            roomCode: cleanCode,
-            memberId: memberId,
-            memberName: target ? target.name : '',
-            type: 'member_kicked'
+        return await this.runRoomMutation(cleanCode, (data, meta) => {
+          if (!meta.exists || !data || !data.roomData) {
+            return { abort: true, result: { success: false, error: 'Flat not found.' } };
           }
+
+          const roomData = { ...data.roomData };
+          const members = Array.isArray(roomData.members) ? roomData.members.map(m => ({ ...m })) : [];
+          let leftMembers = Array.isArray(roomData.leftMembers) ? [...roomData.leftMembers] : [];
+          let kickedMembers = Array.isArray(roomData.kickedMembers) ? [...roomData.kickedMembers] : [];
+
+          const existing = members.find(m => this._matchesCandidate(m, newMember));
+          if (existing) {
+            return { abort: true, result: { success: true, member: existing, roomData: roomData, alreadyExists: true } };
+          }
+
+          // Clear from tombstones if Admin is explicitly re-adding them
+          const prevLeft = leftMembers.find(lm => this._matchesCandidate(lm, newMember));
+          const prevKicked = kickedMembers.find(km => this._matchesCandidate(km, newMember));
+          leftMembers = leftMembers.filter(lm => !this._matchesCandidate(lm, newMember));
+          kickedMembers = kickedMembers.filter(km => !this._matchesCandidate(km, newMember));
+
+          const added = {
+            ...newMember,
+            id: prevLeft?.id || prevKicked?.id || newMember.id,
+            role: 'member',
+            joinedAt: new Date().toISOString()
+          };
+          members.push(added);
+
+          roomData.members = members;
+          roomData.leftMembers = leftMembers;
+          roomData.kickedMembers = kickedMembers;
+          roomData.membershipVersion = (Number(roomData.membershipVersion) || 1) + 1;
+
+          return {
+            payload: {
+              roomData: roomData,
+              lastUpdated: Date.now()
+            },
+            result: {
+              success: true,
+              member: added,
+              roomData: roomData
+            }
+          };
         });
-        return { success: true };
       } catch (err) {
-        console.error('[FirebaseSync] removeMemberFromRoom error:', err);
-        return { success: false, error: err.message };
+        console.error('[FirebaseSync] addMemberToRoom error:', err);
+        return { success: false, error: err.message || 'Network error' };
       }
     },
 
     /**
-     * Member / Admin: Leave Room cleanly with automatic Admin succession
+     * Admin: Remove/Kick Member from Flat (Atomic & Immediate)
      */
-    async leaveRoom(roomCode, memberId) {
-      if (!this.isAvailable || !db || !roomCode) return { success: false };
+    async removeMemberFromRoom(roomCode, targetInfo) {
       const cleanCode = this.getCleanRoom(roomCode);
-      const roomRef = db.collection('rooms').doc(cleanCode);
+      if (!cleanCode || !targetInfo) return { success: false, error: 'Invalid request.' };
+
+      const candidate = (typeof targetInfo === 'object') ? targetInfo : { id: String(targetInfo) };
 
       try {
-        const result = await db.runTransaction(async (transaction) => {
-          const doc = await transaction.get(roomRef);
-          if (!doc.exists) {
-            return { success: true };
+        const res = await this.runRoomMutation(cleanCode, (data, meta) => {
+          if (!meta.exists || !data || !data.roomData) {
+            return { abort: true, result: { success: false, error: 'Flat not found.' } };
           }
-          const data = doc.data() || {};
-          const roomData = data.roomData || {};
-          let members = Array.isArray(roomData.members) ? [...roomData.members] : [];
 
-          // Find the member who is leaving
-          const leavingMember = members.find(m => m.id === memberId);
-          const remainingMembers = members.filter(m => m.id !== memberId);
+          const roomData = { ...data.roomData };
+          const members = Array.isArray(roomData.members) ? roomData.members.map(m => ({ ...m })) : [];
 
-          const isLeavingAdmin = leavingMember && (
-            leavingMember.role === 'admin' ||
-            (roomData.adminName && leavingMember.name && roomData.adminName.toLowerCase() === leavingMember.name.toLowerCase())
+          const matches = members.filter(m => this._matchesCandidate(m, candidate));
+          const target = matches[0];
+
+          if (matches.some(m => m.role === 'admin' || (roomData.adminId && m.id === roomData.adminId))) {
+            return { abort: true, result: { success: false, error: 'Cannot kick the room Admin.' } };
+          }
+
+          const remainingMembers = members.filter(m => !this._matchesCandidate(m, candidate));
+          let kickedMembers = Array.isArray(roomData.kickedMembers) ? [...roomData.kickedMembers] : [];
+          let leftMembers = Array.isArray(roomData.leftMembers) ? [...roomData.leftMembers] : [];
+
+          kickedMembers = kickedMembers.filter(km => !this._matchesCandidate(km, candidate));
+          leftMembers = leftMembers.filter(lm => !this._matchesCandidate(lm, candidate));
+
+          kickedMembers.push({
+            id: target?.id || candidate.id || '',
+            name: target?.name || candidate.name || 'Member',
+            phone: target?.phone || candidate.phone || '',
+            kickedAt: Date.now()
+          });
+
+          roomData.members = remainingMembers;
+          roomData.kickedMembers = kickedMembers;
+          roomData.leftMembers = leftMembers;
+          roomData.membershipVersion = (Number(roomData.membershipVersion) || 1) + 1;
+
+          const fcmIds = Array.from(new Set([...matches.map(m => m.id), candidate.id].filter(Boolean)));
+
+          return {
+            payload: {
+              roomData: roomData,
+              lastUpdated: Date.now()
+            },
+            deleteFcmIds: fcmIds,
+            result: {
+              success: true,
+              roomData: roomData,
+              removedMember: target || candidate
+            }
+          };
+        });
+
+        if (res && res.success) {
+          const target = res.removedMember;
+          console.log(`[FirebaseSync] Kicked member ${target?.name || candidate.id} from #${cleanCode}`);
+          this.sendRoomNotification({
+            roomCode: cleanCode,
+            title: 'Member Removed 👋',
+            body: `${target?.name || 'A member'} was removed from the flat by Admin.`,
+            tag: `kick-${target?.id || candidate.id}`,
+            data: {
+              roomCode: cleanCode,
+              memberId: target?.id || candidate.id || '',
+              memberName: target?.name || '',
+              type: 'member_kicked'
+            }
+          });
+        }
+
+        return res;
+      } catch (err) {
+        console.error('[FirebaseSync] removeMemberFromRoom error:', err);
+        return { success: false, error: err.message || 'Network error' };
+      }
+    },
+
+    /**
+     * Member / Admin: Leave Room cleanly with robust matching, leftMembers tombstone, and atomic Admin succession
+     */
+    async leaveRoom(roomCode, memberInfo) {
+      if (!roomCode) return { success: false, error: 'Missing room code.' };
+      const cleanCode = this.getCleanRoom(roomCode);
+      const candidate = (typeof memberInfo === 'object' && memberInfo)
+        ? memberInfo
+        : { id: String(memberInfo || '') };
+
+      try {
+        const result = await this.runRoomMutation(cleanCode, (data, meta) => {
+          if (!meta.exists || !data || !data.roomData) {
+            return { abort: true, result: { success: true, dissolved: true } };
+          }
+
+          const roomData = { ...data.roomData };
+          const members = Array.isArray(roomData.members) ? roomData.members.map(m => ({ ...m })) : [];
+
+          const leavingMatches = members.filter(m => this._matchesCandidate(m, candidate));
+          const leavingMember = leavingMatches[0] || {
+            id: candidate.id || '',
+            name: candidate.name || 'Flatmate',
+            phone: candidate.phone || '',
+            role: 'member'
+          };
+
+          const remainingMembers = members.filter(m => !this._matchesCandidate(m, candidate));
+          const currentAdminId = roomData.adminId || members.find(m => m.role === 'admin')?.id;
+
+          const isLeavingAdmin = Boolean(
+            leavingMatches.some(m => m.role === 'admin' || (currentAdminId && m.id === currentAdminId)) ||
+            (currentAdminId && candidate.id && candidate.id === currentAdminId) ||
+            (roomData.adminPhone && this._normalizePhone(candidate.phone).length >= 10 &&
+             this._normalizePhone(roomData.adminPhone) === this._normalizePhone(candidate.phone)) ||
+            (roomData.adminName && this._normalizeName(candidate.name) &&
+             this._normalizeName(roomData.adminName) === this._normalizeName(candidate.name) &&
+             !remainingMembers.some(m => m.role === 'admin'))
           );
 
-          // CASE 1: No members left in the room (Flat is abandoned)
+          // CASE 1: Last member leaves -> Dissolve room permanently
           if (remainingMembers.length === 0) {
-            transaction.delete(roomRef);
-            return { success: true, dissolved: true };
+            return {
+              deleteDoc: true,
+              result: { success: true, dissolved: true, leavingMember }
+            };
           }
 
           let newAdmin = null;
 
-          // CASE 2: The leaving member was the Admin, and other members remain
+          // CASE 2: Leaving user was the Admin -> Promote most senior remaining member cleanly
           if (isLeavingAdmin) {
-            // Sort remaining members by joinedAt ascending (seniority)
             remainingMembers.sort((a, b) => {
               const tA = a.joinedAt ? new Date(a.joinedAt).getTime() : 0;
               const tB = b.joinedAt ? new Date(b.joinedAt).getTime() : 0;
               return tA - tB;
             });
 
-            // Promote first remaining flatmate
             newAdmin = remainingMembers[0];
-            newAdmin.role = 'admin';
+            remainingMembers.forEach((m, idx) => {
+              m.role = (idx === 0) ? 'admin' : 'member';
+            });
 
+            roomData.adminId = newAdmin.id;
             roomData.adminName = newAdmin.name;
             roomData.adminPhone = newAdmin.phone || '';
-            roomData.adminPinNeedsReset = true; // Signals client to prompt for new PIN
+            roomData.adminPinNeedsReset = true;
             roomData.newAdminId = newAdmin.id;
           }
 
+          // Record in leftMembers tombstone so stale clients can NEVER resurrect them
+          let leftMembers = Array.isArray(roomData.leftMembers) ? [...roomData.leftMembers] : [];
+          leftMembers = leftMembers.filter(lm => !this._matchesCandidate(lm, leavingMember) && !this._matchesCandidate(lm, candidate));
+          leftMembers.push({
+            id: leavingMember.id || candidate.id || '',
+            name: leavingMember.name || candidate.name || 'Flatmate',
+            phone: leavingMember.phone || candidate.phone || '',
+            leftAt: Date.now()
+          });
+
           roomData.members = remainingMembers;
+          roomData.leftMembers = leftMembers;
+          roomData.membershipVersion = (Number(roomData.membershipVersion) || 1) + 1;
 
-          const updatePayload = {
-            roomData: roomData,
-            lastUpdated: Date.now()
-          };
-          if (memberId) {
-            updatePayload[`fcmTokens.${memberId}`] = firebase.firestore.FieldValue.delete();
-          }
-
-          transaction.set(roomRef, updatePayload, { merge: true });
+          const fcmIds = Array.from(new Set([...leavingMatches.map(m => m.id), candidate.id].filter(Boolean)));
 
           return {
-            success: true,
-            promotedAdmin: newAdmin,
-            remainingMembers: remainingMembers,
-            leavingMember: leavingMember
+            payload: {
+              roomData: roomData,
+              lastUpdated: Date.now()
+            },
+            deleteFcmIds: fcmIds,
+            result: {
+              success: true,
+              dissolved: false,
+              promotedAdmin: newAdmin,
+              remainingMembers: remainingMembers,
+              leavingMember: leavingMember,
+              roomData: roomData
+            }
           };
         });
 
-        // Dispatch notification to notify all other flatmates that member left
-        if (result.success && !result.dissolved) {
-          const leftName = result.leavingMember ? result.leavingMember.name : 'A flatmate';
+        if (result && result.success && !result.dissolved) {
+          const leftName = result.leavingMember?.name || candidate.name || 'A flatmate';
           this.sendRoomNotification({
             roomCode: cleanCode,
             title: 'Flatmate Left 👋',
             body: `${leftName} left the flat.`,
-            tag: `leave-${memberId}`,
+            tag: `leave-${result.leavingMember?.id || candidate.id || 'member'}`,
             data: {
               roomCode: cleanCode,
-              memberId: memberId,
+              memberId: result.leavingMember?.id || candidate.id || '',
               memberName: leftName,
               type: 'member_left'
             }
           });
-        }
 
-        // Broadcast notifications if admin was promoted
-        if (result.promotedAdmin) {
-          this.sendRoomNotification({
-            roomCode: cleanCode,
-            title: `👑 New Flat Admin: ${result.promotedAdmin.name}`,
-            body: `${result.promotedAdmin.name} is now the Flat Admin.`,
-            tag: `admin-promoted-${result.promotedAdmin.id}`,
-            data: {
+          if (result.promotedAdmin) {
+            this.sendRoomNotification({
               roomCode: cleanCode,
-              newAdminId: result.promotedAdmin.id,
-              type: 'admin_promoted'
-            }
-          });
+              title: `👑 New Flat Admin: ${result.promotedAdmin.name}`,
+              body: `${result.promotedAdmin.name} is now the Flat Admin.`,
+              tag: `admin-promoted-${result.promotedAdmin.id}`,
+              data: {
+                roomCode: cleanCode,
+                newAdminId: result.promotedAdmin.id,
+                type: 'admin_promoted'
+              }
+            });
+          }
         }
 
-        this.unsubscribeRoom();
+        if (result && result.success) {
+          this.unsubscribeRoom();
+        }
         return result;
       } catch (err) {
         console.error('[FirebaseSync] leaveRoom error:', err);
-        this.unsubscribeRoom();
-        return { success: false, error: err.message };
+        return { success: false, error: err.message || 'Network error while leaving room.' };
       }
     },
 
     /**
-     * Update Admin Security PIN (called by new admin on PIN generation)
+     * Update Admin Security PIN cleanly (SDK + REST fallback)
      */
     async updateAdminPin(roomCode, newPin) {
-      if (!this.isAvailable || !db || !roomCode) return { success: false };
+      if (!roomCode || !newPin) return { success: false, error: 'Missing PIN.' };
       const cleanCode = this.getCleanRoom(roomCode);
-      const roomRef = db.collection('rooms').doc(cleanCode);
 
       try {
-        await db.runTransaction(async (transaction) => {
-          const doc = await transaction.get(roomRef);
-          if (!doc.exists) return;
-          const data = doc.data() || {};
-          const roomData = data.roomData || {};
-
+        return await this.runRoomMutation(cleanCode, (data, meta) => {
+          if (!meta.exists || !data || !data.roomData) {
+            return { abort: true, result: { success: false, error: 'Room not found.' } };
+          }
+          const roomData = { ...data.roomData };
           roomData.adminPin = String(newPin).trim();
           roomData.adminPinNeedsReset = false;
           delete roomData.newAdminId;
 
-          transaction.update(roomRef, {
-            'roomData.adminPin': String(newPin).trim(),
-            'roomData.adminPinNeedsReset': false,
-            'roomData.newAdminId': firebase.firestore.FieldValue.delete(),
-            lastUpdated: Date.now()
-          });
+          return {
+            payload: {
+              roomData: roomData,
+              lastUpdated: Date.now()
+            },
+            result: { success: true, roomData }
+          };
         });
-
-        return { success: true };
       } catch (err) {
         console.error('[FirebaseSync] updateAdminPin error:', err);
         return { success: false, error: err.message };
@@ -621,124 +1018,186 @@
     },
 
     /**
-     * Transfer Admin Role manually to another member
+     * Transfer Admin Role manually to another member atomically
      */
     async transferAdminRole(roomCode, targetMemberId) {
-      if (!this.isAvailable || !db || !roomCode || !targetMemberId) return { success: false };
+      if (!roomCode || !targetMemberId) return { success: false, error: 'Invalid target member.' };
       const cleanCode = this.getCleanRoom(roomCode);
-      const roomRef = db.collection('rooms').doc(cleanCode);
 
       try {
-        let promotedMember = null;
-        await db.runTransaction(async (transaction) => {
-          const doc = await transaction.get(roomRef);
-          if (!doc.exists) throw new Error('Room not found');
-          const data = doc.data() || {};
-          const roomData = data.roomData || {};
-          const members = Array.isArray(roomData.members) ? [...roomData.members] : [];
+        const res = await this.runRoomMutation(cleanCode, (data, meta) => {
+          if (!meta.exists || !data || !data.roomData) {
+            return { abort: true, result: { success: false, error: 'Room not found.' } };
+          }
+          const roomData = { ...data.roomData };
+          const members = Array.isArray(roomData.members) ? roomData.members.map(m => ({ ...m })) : [];
 
+          let promotedMember = null;
           members.forEach(m => {
             if (m.id === targetMemberId) {
               m.role = 'admin';
               promotedMember = m;
-            } else if (m.role === 'admin') {
+            } else {
               m.role = 'member';
             }
           });
 
-          if (!promotedMember) throw new Error('Target member not found in flat');
+          if (!promotedMember) {
+            return { abort: true, result: { success: false, error: 'Target member not found in flat.' } };
+          }
 
+          roomData.adminId = promotedMember.id;
           roomData.adminName = promotedMember.name;
           roomData.adminPhone = promotedMember.phone || '';
           roomData.adminPinNeedsReset = true;
           roomData.newAdminId = promotedMember.id;
           roomData.members = members;
+          roomData.membershipVersion = (Number(roomData.membershipVersion) || 1) + 1;
 
-          transaction.update(roomRef, {
-            'roomData.adminName': promotedMember.name,
-            'roomData.adminPhone': promotedMember.phone || '',
-            'roomData.adminPinNeedsReset': true,
-            'roomData.newAdminId': promotedMember.id,
-            'roomData.members': members,
-            lastUpdated: Date.now()
-          });
+          return {
+            payload: {
+              roomData: roomData,
+              lastUpdated: Date.now()
+            },
+            result: { success: true, targetMember: promotedMember, roomData }
+          };
         });
 
-        if (promotedMember) {
+        if (res && res.success && res.targetMember) {
           this.sendRoomNotification({
             roomCode: cleanCode,
-            title: `👑 New Flat Admin: ${promotedMember.name}`,
-            body: `${promotedMember.name} has been appointed Flat Admin.`,
-            tag: `admin-promoted-${promotedMember.id}`,
+            title: `👑 New Flat Admin: ${res.targetMember.name}`,
+            body: `${res.targetMember.name} has been appointed Flat Admin.`,
+            tag: `admin-promoted-${res.targetMember.id}`,
             data: {
               roomCode: cleanCode,
-              newAdminId: promotedMember.id,
+              newAdminId: res.targetMember.id,
               type: 'admin_promoted'
             }
           });
         }
 
-        return { success: true, targetMember: promotedMember };
+        return res;
       } catch (err) {
         console.error('[FirebaseSync] transferAdminRole error:', err);
         return { success: false, error: err.message };
       }
     },
 
-    async saveRoomData(roomCode, roomData) {
-      if (!this.isAvailable || !db || !roomData) return;
+    /**
+     * Update non-membership room metadata (flat name, settings) without risking stale member overwrites
+     */
+    async updateRoomMetadata(roomCode, metadataPatch) {
+      if (!roomCode || !metadataPatch) return { success: false };
       const cleanCode = this.getCleanRoom(roomCode);
+
       try {
-        const roomRef = db.collection('rooms').doc(cleanCode);
-        await db.runTransaction(async (transaction) => {
-          const doc = await transaction.get(roomRef);
-          let currentMembers = [];
-          let currentKicked = [];
-          if (doc.exists) {
-            const currentData = doc.data()?.roomData || {};
-            if (Array.isArray(currentData.members)) currentMembers = currentData.members;
-            if (Array.isArray(currentData.kickedMembers)) currentKicked = currentData.kickedMembers;
+        return await this.runRoomMutation(cleanCode, (data, meta) => {
+          if (!meta.exists || !data || !data.roomData) {
+            return { abort: true, result: { success: false } };
           }
+          const roomData = { ...data.roomData, ...metadataPatch };
+          return {
+            payload: {
+              roomData: roomData,
+              lastUpdated: Date.now()
+            },
+            result: { success: true, roomData }
+          };
+        });
+      } catch (err) {
+        console.warn('[FirebaseSync] updateRoomMetadata error:', err);
+        return { success: false, error: err.message };
+      }
+    },
+
+    async saveRoomData(roomCode, roomData) {
+      // Safe metadata/roster sync respecting leftMembers and kickedMembers tombstones
+      if (!roomData) return;
+      const cleanCode = this.getCleanRoom(roomCode);
+      if (!cleanCode) return;
+
+      try {
+        await this.runRoomMutation(cleanCode, (existingData, meta) => {
+          if (!meta.exists) {
+            return {
+              payload: {
+                roomData: {
+                  ...roomData,
+                  membershipVersion: roomData.membershipVersion || 1,
+                  leftMembers: roomData.leftMembers || [],
+                  kickedMembers: roomData.kickedMembers || []
+                },
+                lastUpdated: Date.now()
+              },
+              result: { success: true }
+            };
+          }
+
+          const currentData = existingData.roomData || {};
+          const incomingVersion = Number(roomData.membershipVersion || 0);
+          const currentVersion = Number(currentData.membershipVersion || 0);
+
+          // If cloud has a newer membershipVersion, NEVER overwrite cloud's authoritative roster!
+          if (currentVersion > incomingVersion && currentVersion > 0) {
+            const safeMetaOnly = {
+              ...currentData,
+              name: roomData.name || currentData.name,
+              requireApproval: roomData.requireApproval !== undefined ? roomData.requireApproval : currentData.requireApproval
+            };
+            return {
+              payload: { roomData: safeMetaOnly, lastUpdated: Date.now() },
+              result: { success: true }
+            };
+          }
+
+          const currentMembers = Array.isArray(currentData.members) ? currentData.members : [];
+          const currentKicked = Array.isArray(currentData.kickedMembers) ? currentData.kickedMembers : [];
+          const currentLeft = Array.isArray(currentData.leftMembers) ? currentData.leftMembers : [];
           const incomingKicked = Array.isArray(roomData.kickedMembers) ? roomData.kickedMembers : [];
-          // Combine kicked lists safely
+          const incomingLeft = Array.isArray(roomData.leftMembers) ? roomData.leftMembers : [];
+
           const mergedKickedMap = new Map();
-          currentKicked.forEach(km => { if (km && (km.id || km.name)) mergedKickedMap.set(km.id || km.name, km); });
-          incomingKicked.forEach(km => { if (km && (km.id || km.name)) mergedKickedMap.set(km.id || km.name, km); });
+          [...currentKicked, ...incomingKicked].forEach(km => {
+            if (km && (km.id || km.name)) mergedKickedMap.set(km.id || this._normalizeName(km.name), km);
+          });
           const mergedKicked = Array.from(mergedKickedMap.values());
 
-          // Merge members preserving anyone already in cloud
+          const mergedLeftMap = new Map();
+          [...currentLeft, ...incomingLeft].forEach(lm => {
+            if (lm && (lm.id || lm.name)) mergedLeftMap.set(lm.id || this._normalizeName(lm.name), lm);
+          });
+          const mergedLeft = Array.from(mergedLeftMap.values());
+
           const memberMap = new Map();
-          currentMembers.forEach(m => {
-            if (m && m.id) memberMap.set(m.id, m);
-          });
+          currentMembers.forEach(m => { if (m && m.id) memberMap.set(m.id, m); });
           (Array.isArray(roomData.members) ? roomData.members : []).forEach(m => {
-            if (m && m.id) {
-              const existing = memberMap.get(m.id);
-              if (existing) {
-                memberMap.set(m.id, { ...existing, ...m });
-              } else {
-                memberMap.set(m.id, m);
-              }
-            }
+            if (m && m.id) memberMap.set(m.id, { ...(memberMap.get(m.id) || {}), ...m });
           });
 
-          // Filter out explicitly kicked members (except admin)
           const mergedMembers = Array.from(memberMap.values()).filter(m => {
-            if (!m || m.role === 'admin') return true;
-            return !mergedKicked.some(km =>
-              (km.id && m.id && km.id === m.id) ||
-              (km.phone && m.phone && km.phone.slice(-10) === m.phone.slice(-10)) ||
-              (km.name && m.name && km.name.trim().toLowerCase() === m.name.trim().toLowerCase())
-            );
+            if (!m) return false;
+            if (mergedKicked.some(km => this._matchesCandidate(m, km))) return false;
+            const leftRec = mergedLeft.find(lm => this._matchesCandidate(m, lm));
+            if (leftRec) {
+              const joinedTs = m.joinedAt ? new Date(m.joinedAt).getTime() : 0;
+              if (Number(leftRec.leftAt || 0) >= joinedTs) return false;
+            }
+            return true;
           });
 
-          roomData.members = mergedMembers;
-          roomData.kickedMembers = mergedKicked;
+          const nextRoomData = {
+            ...currentData,
+            ...roomData,
+            members: mergedMembers,
+            kickedMembers: mergedKicked,
+            leftMembers: mergedLeft
+          };
 
-          transaction.set(roomRef, {
-            roomData: roomData,
-            lastUpdated: Date.now()
-          }, { merge: true });
+          return {
+            payload: { roomData: nextRoomData, lastUpdated: Date.now() },
+            result: { success: true }
+          };
         });
       } catch (err) {
         console.warn('[FirebaseSync] saveRoomData error:', err);

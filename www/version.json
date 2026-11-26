@@ -1,12 +1,12 @@
 {
-  "version": "5.8.8",
-  "versionCode": 50808,
+  "version": "5.9.0",
+  "versionCode": 50900,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
   "releaseDate": "2026-11-26",
-  "message": "Tiffin Tracker v5.8.8 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.8.8.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.8.apk",
+  "message": "Tiffin Tracker v5.9.0 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.9.0.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.9.0.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker",
   "releaseNotes": [
     "Admin Visibility Fix: Anchored Admin credentials to flat adminPhone/adminName, ensuring new flatmates appear immediately in Admin view",
@@ -15,6 +15,17 @@
     "Ledger Recovery: Restored missing meals and menu notes for Room 1249"
   ],
   "history": [
+    {
+      "version": "5.8.8",
+      "versionCode": 50808,
+      "releaseDate": "2026-11-26",
+      "releaseNotes": [
+        "Admin Visibility Fix: Anchored Admin credentials to flat adminPhone/adminName, ensuring new flatmates appear immediately in Admin view",
+        "Data Wipeout Protection: Atomic transactional deep merge in Firestore sync prevents newly joined users or partial syncs from erasing ledger history",
+        "Role-Based Day Locking: Admin can edit any date without password; regular members edit current day freely, other dates require Admin PIN",
+        "Ledger Recovery: Restored missing meals and menu notes for Room 1249"
+      ]
+    },
     {
       "version": "5.8.7",
       "versionCode": 50807,
@@ -112,17 +123,6 @@
         "Real-time Enter/Leave Sync: Immediate bidirectional synchronization across all roommate devices when someone joins or leaves the flat",
         "Zero Ghost Resurrection: Authoritative Firestore membership with kickedMembers blacklist for permanent admin removals",
         "Clean Core Logic: Streamlined flat lifecycle without approval gates, pending queues, or modal waiting screens"
-      ]
-    },
-    {
-      "version": "5.7.8",
-      "versionCode": 50708,
-      "releaseDate": "2026-11-11",
-      "releaseNotes": [
-        "Security Hardening: Completely removed all service account private keys from client codebase and assets",
-        "Kick Fix: Permanent and immediate member removal with explicit kickedMembers registry preventing ghost resurrection",
-        "Admin Immunity: Protects flat admin from accidental disconnection during peer synchronization or multi-device joins",
-        "Firestore Queue Sync: Clean background notification queuing without client-side credential exposure"
       ]
     }
   ]
