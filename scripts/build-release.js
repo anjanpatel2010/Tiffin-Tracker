@@ -126,10 +126,10 @@ const updateVersionManifest = (filePath) => {
     data.githubReleaseUrl = 'https://github.com/anjanpatel2010/Tiffin-Tracker';
     data.message = `Tiffin Tracker v${targetVersion} is now available!`;
     data.releaseNotes = [
-      `Universal UPI Payment Fix: Fixed 'Could not fetch profile or amount' errors across PhonePe, Paytm, BHIM, and Cred`,
-      `Strict NPCI Formatting: Unencoded VPA '@' symbol, two-decimal positive amounts, and clean alphanumeric transaction notes`,
-      `Direct App Quick Launchers: Added 1-tap dedicated payment buttons for Google Pay, PhonePe, and Paytm alongside the system chooser`,
-      `Android Package Visibility: Added native UPI queries declaration in manifest for seamless multi-app intent resolution`
+      `Admin Visibility Fix: Anchored Admin credentials to flat adminPhone/adminName, ensuring new flatmates appear immediately in Admin view`,
+      `Data Wipeout Protection: Atomic transactional deep merge in Firestore sync prevents newly joined users or partial syncs from erasing ledger history`,
+      `Role-Based Day Locking: Admin can edit any date without password; regular members edit current day freely, other dates require Admin PIN`,
+      `Ledger Recovery: Restored missing meals and menu notes for Room 1249`
     ];
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');

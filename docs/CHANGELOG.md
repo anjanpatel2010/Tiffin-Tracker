@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.8.7] — 2026-11-26
+
+### Fixed
+- **Admin Visibility & Identity Protection**: Anchored Admin privileges to the room's registered `adminPhone` and `adminName`. Fixed session demotion bugs that stripped Admin role and prevented newly joined flatmates (such as Alok) from appearing in the Admin's view. Render signature caches now immediately bust upon member sync.
+- **Data Wipeout & Overwrite Prevention**: Implemented transactional deep merge in `FirebaseSync.saveLedgerState`. Incoming blank meal slots and empty dishes are strictly prevented from overwriting populated cloud ledger entries. Members joining a room no longer broadcast empty state or overwrite cloud data.
+- **Role-Based Day Locking Rules**:
+  - **Flat Admin**: Never requires a password or PIN to edit meals on ANY date (past, today, or future).
+  - **Normal Members**: Can freely log and edit meals for the **current day** without a password. Editing any other date (past or future) strictly requires the Admin Security PIN.
+- **Room 1249 Data Recovery**: Restored wiped November 24 dinner records (`Half` for Anjan, Saurabh, Rohit, Chetan Anghan) and `Tindori` sabzi in Firestore.
+
+---
+
 ## [5.8.6] — 2026-11-24
 
 ### Fixed

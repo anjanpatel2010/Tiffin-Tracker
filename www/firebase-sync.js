@@ -180,6 +180,7 @@
         const roomRef = db.collection('rooms').doc(cleanCode);
         let joinedMember = null;
         let roomState = null;
+        let allMonths = null;
         let finalRoomData = null;
 
         const result = await db.runTransaction(async (transaction) => {
@@ -190,7 +191,10 @@
 
           const data = doc.data() || {};
           const roomData = data.roomData || { code: cleanCode, name: 'My Flat', members: [] };
-          roomState = data.state || null;
+          const now = new Date();
+          const currentMonthKey = `${now.getFullYear()}_${now.getMonth() + 1}`;
+          roomState = (data.months && data.months[currentMonthKey]) ? data.months[currentMonthKey] : (data.state || null);
+          allMonths = data.months || null;
           let members = Array.isArray(roomData.members) ? [...roomData.members] : [];
 
           // 1. Admin PIN Verification (if PIN provided)
@@ -303,6 +307,7 @@
           success: true,
           roomData: finalRoomData,
           state: roomState,
+          months: allMonths,
           member: joinedMember
         };
       } catch (err) {
@@ -664,6 +669,7 @@
     async saveLedgerState(roomCode, state) {
       if (!this.isAvailable || !db || !state) return;
       const cleanCode = this.getCleanRoom(roomCode);
+      if (!cleanCode) return;
       try {
         const compactFn = (typeof getCompactSyncState === 'function')
           ? getCompactSyncState
@@ -675,19 +681,141 @@
         const month = compact.month || state.month || ((new Date()).getMonth() + 1);
         const monthKey = `${year}_${month}`;
 
-        const payload = {
-          state: compact,
-          lastUpdated: Date.now()
-        };
-        payload[`months.${monthKey}`] = compact;
+        const roomRef = db.collection('rooms').doc(cleanCode);
 
-        await db.collection('rooms').doc(cleanCode).update(payload).catch(async () => {
-          // Fallback if doc or nested months field is created for first time
-          await db.collection('rooms').doc(cleanCode).set({
-            state: compact,
-            months: { [monthKey]: compact },
+        await db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(roomRef);
+          if (!doc.exists) {
+            transaction.set(roomRef, {
+              state: compact,
+              months: { [monthKey]: compact },
+              lastUpdated: Date.now()
+            }, { merge: true });
+            return;
+          }
+
+          const data = doc.data() || {};
+          const existingMonth = (data.months && data.months[monthKey])
+            ? data.months[monthKey]
+            : (data.state?.year === year && data.state?.month === month ? data.state : null);
+          const existingDays = existingMonth?.days || {};
+
+          // Deep merge days: incoming empty values MUST NEVER overwrite existing non-empty values
+          const mergedDays = { ...existingDays };
+          const incomingDays = compact.days || {};
+
+          for (const dKey in incomingDays) {
+            const incD = incomingDays[dKey];
+            const exD = existingDays[dKey] || {};
+
+            if (!mergedDays[dKey]) {
+              mergedDays[dKey] = incD;
+              continue;
+            }
+
+            // Sabzi merge
+            const incSabzi = (incD.sabzi || '').trim();
+            const exSabzi = (exD.sabzi || '').trim();
+            const incSabziT = Number(incD.sabziUpdatedAt || 0);
+            const exSabziT = Number(exD.sabziUpdatedAt || 0);
+
+            let finalSabzi = exSabzi;
+            let finalSabziT = exSabziT;
+
+            if (incSabziT > exSabziT) {
+              finalSabzi = incSabzi;
+              finalSabziT = incSabziT;
+            } else if (!exSabzi && incSabzi) {
+              finalSabzi = incSabzi;
+              finalSabziT = incSabziT || Date.now();
+            }
+
+            // Meals merge
+            const incMeals = incD.meals || {};
+            const exMeals = exD.meals || {};
+            const incTimes = incD.mealTimestamps || {};
+            const exTimes = exD.mealTimestamps || {};
+
+            const finalMeals = { ...exMeals };
+            const finalTimes = { ...exTimes };
+
+            const allPIds = new Set([...Object.keys(exMeals), ...Object.keys(incMeals)]);
+            allPIds.forEach(pId => {
+              if (!finalMeals[pId]) finalMeals[pId] = { lunch: '', dinner: '' };
+              const incM = incMeals[pId] || { lunch: '', dinner: '' };
+              const exM = exMeals[pId] || { lunch: '', dinner: '' };
+
+              ['lunch', 'dinner'].forEach(slot => {
+                const k = `${pId}_${slot}`;
+                const incVal = incM[slot] || '';
+                const exVal = exM[slot] || '';
+                const incT = Number(incTimes[k] || 0);
+                const exT = Number(exTimes[k] || 0);
+
+                if (incT > exT) {
+                  finalMeals[pId][slot] = incVal;
+                  finalTimes[k] = incT;
+                } else if (incT > 0 && exT === 0) {
+                  finalMeals[pId][slot] = incVal;
+                  finalTimes[k] = incT;
+                } else if (exT > 0 && incT === 0) {
+                  finalMeals[pId][slot] = exVal;
+                  finalTimes[k] = exT;
+                } else {
+                  // Timestamps equal or zero: PRESERVE POPULATED VALUE
+                  if (incVal) {
+                    finalMeals[pId][slot] = incVal;
+                  } else if (exVal) {
+                    finalMeals[pId][slot] = exVal;
+                  }
+                }
+              });
+            });
+
+            // Amul merge
+            const incAmul = incD.amul || {};
+            const exAmul = exD.amul || {};
+            const incAmulT = incD.amulTimestamps || {};
+            const exAmulT = exD.amulTimestamps || {};
+            const finalAmul = { ...exAmul };
+            const finalAmulT = { ...exAmulT };
+
+            const allAmulIds = new Set([...Object.keys(exAmul), ...Object.keys(incAmul)]);
+            allAmulIds.forEach(pId => {
+              const incT = Number(incAmulT[pId] || 0);
+              const exT = Number(exAmulT[pId] || 0);
+              if (incT >= exT && incAmul[pId] !== undefined) {
+                finalAmul[pId] = incAmul[pId];
+                if (incT) finalAmulT[pId] = incT;
+              } else if (exAmul[pId] !== undefined) {
+                finalAmul[pId] = exAmul[pId];
+              }
+            });
+
+            mergedDays[dKey] = {
+              ...exD,
+              ...incD,
+              sabzi: finalSabzi,
+              sabziUpdatedAt: finalSabziT,
+              meals: finalMeals,
+              mealTimestamps: finalTimes,
+              amul: finalAmul,
+              amulTimestamps: finalAmulT
+            };
+          }
+
+          const mergedCompact = {
+            ...compact,
+            days: mergedDays
+          };
+
+          const payload = {
+            state: mergedCompact,
             lastUpdated: Date.now()
-          }, { merge: true });
+          };
+          payload[`months.${monthKey}`] = mergedCompact;
+
+          transaction.set(roomRef, payload, { merge: true });
         });
       } catch (err) {
         console.warn('[FirebaseSync] saveLedgerState error:', err);

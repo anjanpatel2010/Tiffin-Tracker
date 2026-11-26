@@ -7,7 +7,7 @@
   'use strict';
 
   // --- Application Version & Automatic Cache Sentinel ---
-  const APP_VERSION = '5.8.6';
+  const APP_VERSION = '5.8.7';
 
   // --- Firebase Crashlytics Runtime Error Tracker ---
   window.addEventListener('error', (event) => {
@@ -333,7 +333,10 @@
           if (typeof RoomManager !== 'undefined' && RoomManager.activeRoom) {
             FirebaseSync.saveRoomData(roomKey, RoomManager.activeRoom);
           }
-          FirebaseSync.saveLedgerState(roomKey, actionPayload.state || appState);
+          // Do NOT save ledger state on member join/add/remove - only on explicit ledger actions
+          if (actionPayload.type === 'room_meta_sync' && actionPayload.state) {
+            FirebaseSync.saveLedgerState(roomKey, actionPayload.state);
+          }
         } else {
           FirebaseSync.saveLedgerState(roomKey, appState);
         }
@@ -1519,16 +1522,26 @@
         members: sanitizedMembers,
         kickedMembers: kickedList
       };
-      const wasAdmin = RoomManager.session.role === 'admin';
-      // Strict: Never elevate non-admin session to admin without explicit PIN
-      if (RoomManager.session.role !== 'admin' && matchedMember.role === 'admin') {
-        matchedMember.role = 'member';
+      if (isAdmin || RoomManager.session.role === 'admin') {
+        RoomManager.session.role = 'admin';
+        matchedMember.role = 'admin';
+      } else {
+        RoomManager.session.role = matchedMember.role || 'member';
       }
-      RoomManager.session.role = matchedMember.role || RoomManager.session.role || 'member';
       RoomManager.session.memberId = matchedMember.id;
       RoomManager.session.name = matchedMember.name;
       RoomManager.saveActiveRoom();
+      try {
+        localStorage.setItem('tiffin_session', JSON.stringify(RoomManager.session));
+        localStorage.setItem('tiffin_user_session', JSON.stringify(RoomManager.session));
+      } catch (e) {}
       ROOMMATES = sanitizedMembers;
+
+      // Invalidate render signatures so new/updated members immediately display in all views
+      const roommatesGrid = document.getElementById('roommatesLoggerGrid');
+      if (roommatesGrid) delete roommatesGrid.dataset.lastSig;
+      lastMasterSheetSignature = '';
+      lastAnalyticsSignature = '';
 
       // Check if current user was promoted to Admin and needs to generate a new PIN
       const isPromotedAdmin = matchedMember.role === 'admin' && (
@@ -3912,22 +3925,14 @@
   }
 
   function isDayLocked(year, month, day) {
-    // 1. Flat Admin is never locked
+    // 1. Flat Admin NEVER requires a password to edit ANY day (past, today, or future)
     if (typeof RoomManager !== 'undefined' && RoomManager.isAdmin()) return false;
-    // 2. Today is always editable
+    // 2. Normal user: Today (current day) is always freely editable without password
     if (isSameDay(year, month, day)) return false;
-    // 3. Unlocked for this session
+    // 3. Normal user: Unlocked for this session via admin password entry
     const key = `${year}-${month}-${day}`;
     if (adminUnlockedDays.has(key)) return false;
-    // 4. If no Admin PIN is configured for this flat, do not lock
-    const currentPin = (CONFIG.adminPassword || RoomManager?.activeRoom?.adminPin || '').trim();
-    if (!currentPin) return false;
-    // 5. Grace window: Allow editing within current month's past 3 days freely
-    const today = new Date();
-    if (today.getFullYear() === year && (today.getMonth() + 1) === month) {
-      const diff = today.getDate() - day;
-      if (diff >= 0 && diff <= 3) return false;
-    }
+    // 4. Normal user editing ANY other date (past or future) REQUIRES Admin Password
     return true;
   }
 
@@ -3937,6 +3942,12 @@
   }
 
   function requireAdminPassword(onSuccess, customTitle, customDesc) {
+    // Flat Admin NEVER needs password
+    if (typeof RoomManager !== 'undefined' && RoomManager.isAdmin()) {
+      if (typeof onSuccess === 'function') onSuccess();
+      return;
+    }
+
     pendingPasswordCallback = onSuccess;
     const modal = document.getElementById('passwordPromptModal');
     const input = document.getElementById('adminPasswordInput');
@@ -3944,8 +3955,8 @@
     const titleEl = modal?.querySelector('.modal-title');
     const descEl = modal?.querySelector('.card-desc');
 
-    if (titleEl) titleEl.textContent = customTitle || 'Admin Authentication';
-    if (descEl) descEl.textContent = customDesc || 'Sensitive ledger action. Only authorized flat admin can confirm.';
+    if (titleEl) titleEl.textContent = customTitle || 'Admin Password Required';
+    if (descEl) descEl.textContent = customDesc || 'Only Flat Admin can edit meals for other dates. Enter Admin Password:';
 
     if (input) input.value = '';
     if (err) err.style.display = 'none';
@@ -3999,16 +4010,35 @@
 
     isAdmin() {
       if (!this.session) return false;
-      if (this.session.role !== 'admin') return false;
-      // If session claims admin, double check with activeRoom if members are loaded
-      if (this.activeRoom && Array.isArray(this.activeRoom.members) && this.session.memberId) {
-        const m = this.activeRoom.members.find(x => x && x.id === this.session.memberId);
-        if (m && m.role !== 'admin') {
-          this.session.role = 'member';
-          return false;
+      // 1. Phone match with room adminPhone
+      const myPhone = this.normalizePhone(this.session.phone);
+      const adminPhone = this.normalizePhone(this.activeRoom?.adminPhone);
+      if (myPhone && adminPhone && myPhone.length >= 10 && myPhone === adminPhone) {
+        this.session.role = 'admin';
+        return true;
+      }
+      // 2. Name match with room adminName
+      const myName = (this.session.name || '').trim().toLowerCase();
+      const adminName = (this.activeRoom?.adminName || '').trim().toLowerCase();
+      if (myName && adminName && myName === adminName) {
+        this.session.role = 'admin';
+        return true;
+      }
+      // 3. Member in activeRoom check
+      if (this.activeRoom && Array.isArray(this.activeRoom.members)) {
+        const m = this.activeRoom.members.find(x =>
+          x && (
+            (this.session.memberId && x.id === this.session.memberId) ||
+            (myPhone && x.phone && this.normalizePhone(x.phone) === myPhone) ||
+            (myName && x.name && x.name.trim().toLowerCase() === myName)
+          )
+        );
+        if (m && m.role === 'admin') {
+          this.session.role = 'admin';
+          return true;
         }
       }
-      return true;
+      return this.session.role === 'admin';
     },
 
     hardResetLocalSession() {
@@ -4318,6 +4348,12 @@
       }
 
       // Synchronize ROOMMATES
+      if (FirebaseSync && FirebaseSync.latestSnapshot && FirebaseSync.latestSnapshot.roomData) {
+        const snapRoom = FirebaseSync.latestSnapshot.roomData;
+        if (Array.isArray(snapRoom.members) && snapRoom.members.length > 0) {
+          this.activeRoom.members = snapRoom.members;
+        }
+      }
       if (this.activeRoom.members && this.activeRoom.members.length > 0) {
         ROOMMATES = this.activeRoom.members;
       } else if (this.session && this.session.status === 'approved') {
@@ -4582,17 +4618,11 @@
         SyncEngine.setRoomCode(cleanCode);
         SyncEngine.setIdentity(actualName);
 
-        // Broadcast to flatmates immediately
+        // Broadcast to flatmates immediately (member_joined only; do not broadcast blank ledger state)
         SyncEngine.broadcast({
           type: 'member_joined',
           roomCode: cleanCode,
           member: finalMember
-        });
-        SyncEngine.broadcast({
-          type: 'room_meta_sync',
-          roomCode: cleanCode,
-          roomData: this.activeRoom,
-          state: getCompactSyncState(appState)
         });
 
         this.hideGateModal();

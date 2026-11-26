@@ -1,20 +1,31 @@
 {
-  "version": "5.8.6",
-  "versionCode": 50806,
+  "version": "5.8.7",
+  "versionCode": 50807,
   "minRequiredVersion": "5.0.0",
   "title": "Tiffin Tracker Update",
-  "releaseDate": "2026-11-24",
-  "message": "Tiffin Tracker v5.8.6 is now available!",
-  "apkFilename": "Tiffin-Tracker-v5.8.6.apk",
-  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.6.apk",
+  "releaseDate": "2026-11-26",
+  "message": "Tiffin Tracker v5.8.7 is now available!",
+  "apkFilename": "Tiffin-Tracker-v5.8.7.apk",
+  "downloadUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker/raw/master/Tiffin-Tracker-v5.8.7.apk",
   "githubReleaseUrl": "https://github.com/anjanpatel2010/Tiffin-Tracker",
   "releaseNotes": [
-    "Universal UPI Payment Fix: Fixed 'Could not fetch profile or amount' errors across PhonePe, Paytm, BHIM, and Cred",
-    "Strict NPCI Formatting: Unencoded VPA '@' symbol, two-decimal positive amounts, and clean alphanumeric transaction notes",
-    "Direct App Quick Launchers: Added 1-tap dedicated payment buttons for Google Pay, PhonePe, and Paytm alongside the system chooser",
-    "Android Package Visibility: Added native UPI queries declaration in manifest for seamless multi-app intent resolution"
+    "Admin Visibility Fix: Anchored Admin credentials to flat adminPhone/adminName, ensuring new flatmates appear immediately in Admin view",
+    "Data Wipeout Protection: Atomic transactional deep merge in Firestore sync prevents newly joined users or partial syncs from erasing ledger history",
+    "Role-Based Day Locking: Admin can edit any date without password; regular members edit current day freely, other dates require Admin PIN",
+    "Ledger Recovery: Restored missing meals and menu notes for Room 1249"
   ],
   "history": [
+    {
+      "version": "5.8.6",
+      "versionCode": 50806,
+      "releaseDate": "2026-11-24",
+      "releaseNotes": [
+        "Universal UPI Payment Fix: Fixed 'Could not fetch profile or amount' errors across PhonePe, Paytm, BHIM, and Cred",
+        "Strict NPCI Formatting: Unencoded VPA '@' symbol, two-decimal positive amounts, and clean alphanumeric transaction notes",
+        "Direct App Quick Launchers: Added 1-tap dedicated payment buttons for Google Pay, PhonePe, and Paytm alongside the system chooser",
+        "Android Package Visibility: Added native UPI queries declaration in manifest for seamless multi-app intent resolution"
+      ]
+    },
     {
       "version": "5.8.5",
       "versionCode": 50805,
@@ -112,17 +123,6 @@
         "Autonomous FCM v1 Push: Direct Google Play Services notification dispatch working even when app is killed/closed",
         "Safe Peer Synchronization: Automatically merges flat members without destructive ghost-kicks",
         "Multi-Device Test Button: Send instant test push notifications directly from Settings to check all phones"
-      ]
-    },
-    {
-      "version": "5.7.6",
-      "versionCode": 50706,
-      "releaseDate": "2026-11-09",
-      "releaseNotes": [
-        "FCM Push Notifications: Ground-up rebuild using Google FCM HTTP v1 API with high-priority background delivery",
-        "Smart Flatmate Alerts: Real-time status bar notifications when meals, dishes, expenses, or deposits are logged",
-        "Dedicated Notification Channel: High importance 'tiffin_notifications' with heads-up display, sound, and vibration",
-        "Automatic Token Lifecycle: Robust device token binding and room sync in Cloud Firestore with sender exclusion"
       ]
     }
   ]
